@@ -148,3 +148,11 @@
   gap: 4px;
 }
 .stage-card-actions button[aria-pressed="true"] { border-color: #f4cf73; }
+
+/* Player 2 faces Player 1: rotate card faces, not the board coordinates. */
+.board[data-player="1"] .zone:not(.stage) .zone-preview,
+.board[data-player="1"] .zone-fan-card { transform: rotate(180deg); }
+.board[data-player="1"] .zone.stage .zone-preview { --stage-angle: 180deg; }
+.board[data-player="1"] .stage[data-orientation="90"] .zone-preview { --stage-angle: 270deg; }
+.board[data-player="1"] .stage[data-orientation="180"] .zone-preview { --stage-angle: 0deg; }
+.player[data-player="1"] .hand .card { transform: rotate(180deg); }
