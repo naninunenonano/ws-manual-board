@@ -60,7 +60,7 @@ async function main() {
         change.dispatchEvent(new Event("change"));
         for(const z of destinations) {
           const cards = players[p];
-          if (z === "cx") {
+          if (z === "cx" || (z === "level" && cards.level.length === 0)) {
             const index = cards.deck.findIndex(card => /-(T09|022)$/.test(card.id));
             if (index !== -1) cards.deck.push(...cards.deck.splice(index,1));
           }
@@ -121,6 +121,36 @@ async function main() {
     assert.ok(lower.level[0].y<lower.level[1].y&&upper.level[0].y>upper.level[1].y);
     assert.ok(lower.level[0].x>lower.level[1].x&&upper.level[0].x<upper.level[1].x);
     assert.equal(geometry.images,10);
+    const lowerMat = page.locator('.board[data-player="0"]');
+    const front = lowerMat.locator('[data-z="front0"]');
+    const back = lowerMat.locator('[data-z="back0"]');
+    const assertAngle = async (locator, angle)=>{
+      const [cos,sin] = await locator.evaluate(el=>{
+        const matrix = new DOMMatrix(getComputedStyle(el).transform);
+        return [matrix.a,matrix.b];
+      });
+      assert.ok(Math.abs(cos-Math.cos(angle*Math.PI/180))<0.01);
+      assert.ok(Math.abs(sin-Math.sin(angle*Math.PI/180))<0.01);
+    };
+    for(const [zone,label,angle] of [[front,"右90°",90],[back,"180°",180]]) {
+      await zone.click();
+      await page.getByRole("button",{name:label,exact:true}).click();
+      assert.equal(await zone.getAttribute("data-orientation"),String(angle));
+      await assertAngle(zone.locator(".zone-preview"),angle);
+    }
+    const sideways = await front.locator(".zone-preview").boundingBox();
+    assert.ok(sideways.width>sideways.height);
+    await page.reload();
+    assert.equal(await front.getAttribute("data-orientation"),"90");
+    assert.equal(await back.getAttribute("data-orientation"),"180");
+    await loadBoardImages();
+    const climax = lowerMat.locator('[data-z="level"] img.landscape-card').first();
+    await climax.waitFor();
+    await assertAngle(climax,180);
+    await page.screenshot({path:"layout-screenshots/rotated.png",fullPage:true});
+    await front.click();
+    await page.getByRole("button",{name:"縦向き",exact:true}).click();
+    assert.equal(await front.getAttribute("data-orientation"),"0");
     assert.deepEqual(errors,[]);
     console.log(JSON.stringify(geometry));
   } finally {
