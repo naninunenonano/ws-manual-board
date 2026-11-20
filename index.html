@@ -69,24 +69,29 @@
 #battleScreen .board .zone[data-z="memory"],
 #battleScreen .board .zone[data-z="stock"]{justify-content:center}
 
-/* v0.26: actual card artwork, not miniature thumbnails, is the primary board display. */
-#battleScreen .board{--board-row:clamp(108px,13dvh,132px);grid-template-rows:repeat(3,var(--board-row))}
-#battleScreen .board .zone{position:relative;justify-content:flex-start}
-#battleScreen .board .zone .zone-thumb{display:block;width:100%;height:calc(100% - 24px);max-height:none;max-width:100%;object-fit:contain}
-#battleScreen .board .zone.has-card .zone-thumb{height:calc(100% - 24px)}
-#battleScreen .board .zone[data-z^="front"] .zone-thumb,
-#battleScreen .board .zone[data-z^="back"] .zone-thumb{height:calc(100% - 24px);object-fit:cover;object-position:top}
-#battleScreen .board .zone[data-z="cx"] .zone-thumb{width:100%;height:calc(100% - 24px);max-height:none;object-fit:contain}
-#battleScreen .board .zone .zone-zoom{position:absolute;right:2px;bottom:2px;z-index:10}
-#battleScreen .board .zone[data-z="clock"] .zone-fan,
-#battleScreen .board .zone[data-z="level"] .zone-fan{height:calc(100% - 24px);min-height:60px;overflow:hidden}
-#battleScreen .board .zone[data-z="level"] .zone-fan-card{position:absolute;box-sizing:border-box;left:0!important;top:calc(var(--fan-index) * min(20px,(100% - 78px) / max(1,var(--fan-count) - 1)));height:78px;width:100%!important;max-width:none;min-height:0;border:0;border-radius:3px;background:transparent;overflow:hidden}
-#battleScreen .board .zone[data-z="level"] .zone-fan-card img,
-#battleScreen .board .zone[data-z="level"] .zone-fan-card img.landscape-card{position:absolute;left:50%;top:50%;width:78px;height:118px;max-width:none;object-fit:fill;transform:translate(-50%,-50%) rotate(90deg)!important;border:1px solid #b3c3d7;border-radius:3px}
-#battleScreen .board .zone[data-z="clock"] .zone-fan-card{width:clamp(39px,10vw,58px)!important;left:calc(var(--fan-index) * (100% - clamp(39px,10vw,58px)) / max(1,var(--fan-count) - 1))!important}
-#battleScreen .board .zone[data-z="clock"] .zone-fan-card img{object-fit:cover;object-position:top}
-@media(max-height:750px){#battleScreen .board{--board-row:100px}#battleScreen .board .zone .zone-thumb{height:calc(100% - 22px)}}
-</style></head><body><header><h1>WS 手動盤面 <small>Ver.0.26</small></h1></header>
+/* v0.27: playmat-sized card geometry based on the supplied second photo. */
+#battleScreen .board{--board-row:clamp(100px,12dvh,126px);grid-template-rows:repeat(3,var(--board-row));gap:3px}
+#battleScreen .board .zone{position:relative;justify-content:center;overflow:hidden}
+#battleScreen .board .zone.has-card>strong,#battleScreen .board .zone.has-card>.count{display:none}
+#battleScreen .board .zone .zone-preview{position:absolute;inset:2px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#battleScreen .board .zone .zone-thumb{width:100%;height:100%;max-height:none;max-width:none;object-fit:contain}
+#battleScreen .board .zone[data-z^="front"] .zone-thumb,#battleScreen .board .zone[data-z^="back"] .zone-thumb{object-fit:contain}
+#battleScreen .board .zone[data-z="cx"] .zone-thumb{object-fit:contain}
+#battleScreen .board .zone[data-z="memory"] .zone-preview{inset:0}
+#battleScreen .board .zone[data-z="memory"] .zone-thumb{position:absolute;width:76px;height:112px;max-width:none;max-height:none;object-fit:fill;transform:rotate(90deg)!important}
+#battleScreen .board .zone[data-z="memory"] .zone-thumb.landscape-card{transform:none!important;width:100%;height:auto}
+#battleScreen .board .zone .zone-zoom{position:absolute;right:2px;bottom:2px;z-index:20;font-size:9px;padding:1px 3px}
+#battleScreen .board .zone[data-z="level"] .zone-fan,#battleScreen .board .zone[data-z="clock"] .zone-fan{position:relative;display:block;width:100%;height:calc(100% - 21px);min-height:60px;overflow:hidden}
+#battleScreen .board .zone[data-z="level"] .zone-fan-card{position:absolute;left:0!important;top:calc(var(--fan-index) * 17px);width:100%!important;height:95px;max-width:none;min-height:0;border:0;background:transparent;overflow:hidden}
+#battleScreen .board .zone[data-z="level"] .zone-fan-card img,#battleScreen .board .zone[data-z="level"] .zone-fan-card img.landscape-card{position:absolute;left:50%;top:50%;width:94px;height:142px;max-width:none;object-fit:fill;transform:translate(-50%,-50%) rotate(90deg)!important;border:1px solid #b3c3d7;border-radius:3px}
+#battleScreen .board .zone[data-z="clock"] .zone-fan-card{position:absolute;top:0;left:calc(var(--fan-index) * 23px)!important;width:58px!important;height:100%;min-height:0;overflow:hidden}
+#battleScreen .board .zone[data-z="clock"] .zone-fan-card img{width:100%;height:100%;object-fit:cover;object-position:top;transform:none!important}
+#battleScreen .board .zone[data-z="clock"] .zone-fan-card img.landscape-card{object-fit:contain;transform:none!important}
+#battleScreen .board .zone[data-z="clock"] .zone-fan-card:last-child,#battleScreen .board .zone[data-z="level"] .zone-fan-card:last-child{z-index:1}
+#battleScreen .board .zone[data-z="deck"] strong,#battleScreen .board .zone[data-z="waiting"] strong,#battleScreen .board .zone[data-z="memory"] strong,#battleScreen .board .zone[data-z="stock"] strong,#battleScreen .board .zone[data-z="deck"] .count,#battleScreen .board .zone[data-z="waiting"] .count,#battleScreen .board .zone[data-z="memory"] .count,#battleScreen .board .zone[data-z="stock"] .count{display:none}
+#battleScreen .board .zone[data-z="deck"],#battleScreen .board .zone[data-z="waiting"],#battleScreen .board .zone[data-z="memory"],#battleScreen .board .zone[data-z="stock"]{justify-content:center}
+@media(max-height:750px){#battleScreen .board{--board-row:100px}}
+</style></head><body><header><h1>WS 手動盤面 <small>Ver.0.27</small></h1></header>
 <main class="shell"><p id="storageWarning" role="status" hidden></p><section id="setupScreen"><h2>デッキ設定</h2><p class="muted">デッキを登録してから対戦を開始してください。プレイヤーごとに登録できます。</p><div class="toolbar"><label>操作する側 <select id="side"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label></div><section class="player" id="importer"><h2>Deck Log デッキ登録（試験機能）</h2><div class="toolbar"><input id="deckCode" value="1TK8A8" aria-label="Deck Logコード" maxlength="12" style="width:125px;padding:9px"><button id="importDeck">デッキ取得</button><button id="openDeckLog">Deck Logを開く</button><button id="applyDeck" disabled>操作側に50枚登録</button></div><div id="deckTransferStatus" role="status"></div><p class="muted">SafariでDeck Logのデッキページを開き、共有メニューの「WSデッキ転送」を実行してください。受信後、登録先を確認して50枚を登録できます。</p><details><summary>初回設定：Deck Log転送用ブックマークレット</summary><p class="muted">「転送コードをコピー」→Safariで任意のページをブックマーク→ブックマークを編集しURL欄を貼り付けたコードに置換。以後はDeck Logのデッキページでそのブックマークを押します。</p><button id="copyDeckTransfer">転送コードをコピー</button><textarea id="transferCode" readonly rows="3" style="width:100%;background:#101827;color:white" aria-label="転送用ブックマークレット"></textarea></details><details open><summary>カード番号と枚数を貼り付け（手動登録）</summary><p class="muted">1行に1種類。例：FRI/S100-001 × 4 または FRI/S100-001,4。合計50枚になるよう入力してください。</p><textarea id="deckText" rows="6" style="width:100%;background:#101827;color:white" placeholder="FRI/S100-001 × 4"></textarea><button id="parseDeckText">テキストから50枚を確認</button></details><details><summary>JSON貼り付け（従来方式）</summary><textarea id="deckJson" rows="4" style="width:100%;background:#101827;color:white" placeholder='{"list":[{"card_number":"...","num":4}]}'></textarea><button id="parseDeck">JSONを解析</button></details><div class="toolbar"><button id="loadSavedDeck">保存デッキを読み込む</button><button id="clearSavedDeck">保存デッキを削除</button></div><p class="muted" id="savedDeckStatus">保存デッキ：未確認</p><div id="deckPreview" class="muted" aria-live="polite"></div></section><div class="screen-actions"><button id="startBattle">対戦開始</button></div><p id="setupNotice" role="status"></p></section><section id="mulliganScreen" hidden><h2>マリガン</h2><p id="mulliganProgress" role="status"></p><p class="muted">交換するカードを0〜5枚選択。選択カードを控え室へ置き、同じ枚数を引いた後、山札をシャッフルします。</p><div id="mulliganCards" class="modalcards"></div><div class="screen-actions"><button id="confirmMulligan">マリガン確定</button></div></section><section id="battleScreen" hidden><div class="screen-actions"><button id="viewDecks">デッキ内容確認</button><button id="surrender">降参</button><button id="leaveBattle">対戦を離れる</button><span id="firstPlayerResult" class="turn-result" role="status"></span></div><div class="toolbar"><label>操作する側 <select id="battleSide"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label><button id="shuffle">山札シャッフル</button><button id="draw">1枚ドロー</button></div><p class="notice" id="notice" role="status">カードをタップして移動先を選択。ドラッグでも移動できます。</p><div id="boards"></div><div class="controls"><button id="refresh">控え室→山札（シャッフル）</button><button id="damage">山札→クロック 1枚</button><button id="level">レベルアップ</button></div><p class="muted">ローカル操作試作版。カード画像は縦横比を維持して表示します。手札の🔍、盤面や一覧の「拡大」で公式画像を大きく確認できます。オンライン同期・カード能力の自動処理は未実装です。レベルアップはクロック下から7枚を対象とします。</p></section><section id="resultScreen" hidden><h2>対戦終了</h2><p id="battleResult" role="status"></p><button id="nextBattle">次の対戦へ</button></section></main>
 <dialog id="dialog"><h3 id="dialogTitle"></h3><div id="dialogBody"></div><div class="controls"><button id="close">閉じる</button></div></dialog>
 <script>
@@ -151,7 +156,7 @@ function appendZonePreview(el,card,z,p){
   el.classList.add("has-card");
   const hidden=(z==="deck"||z==="stock"||(!card.faceUp&&p!==side));
   if(hidden){const back=document.createElement("div");back.className="card-back";el.append(back);return}
-  const holder=document.createElement("div");holder.style.cssText="display:flex;justify-content:center;width:100%";
+  const holder=document.createElement("div");holder.className="zone-preview";
   if(addCardImage(holder,card,card.id)){const img=holder.querySelector("img");if(img)img.className="zone-thumb"}
   else holder.textContent=card.id;
   el.append(holder);
