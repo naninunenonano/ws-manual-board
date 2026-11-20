@@ -230,19 +230,26 @@ function showRegisteredDecks() {
   matchElement("dialogTitle").textContent = "デッキ内容確認";
   const body = matchElement("dialogBody");
   body.replaceChildren();
-  match.decks.forEach((deck, p) => {
+  const p = side;
+  const deck = match.decks[p];
+  {
     const title = document.createElement("h4");
     const total = deck.cards.reduce((sum, card) => sum + card.num, 0);
     title.textContent = "プレイヤー" + (p + 1) + "｜" + deck.title + "｜合計" + total + "枚";
-    const list = document.createElement("ul");
+    const list = document.createElement("div");
+    list.className="modalcards";
     for (const { id, num } of [...deck.cards].sort((a, b) => a.id.localeCompare(b.id))) {
-      const row = document.createElement("li");
-      const name = cardCatalog[id]?.name;
-      row.textContent = id + (name ? "｜" + name : "") + " × " + num;
+      const row = document.createElement("div");
+      row.style.cssText="width:105px;text-align:center";
+      const img=document.createElement("img");
+      const url=officialImageUrl(id);
+      if(url){img.src=url;img.alt=cardCatalog[id]?.name||id;img.style.cssText="width:100%;aspect-ratio:0.71;object-fit:contain";img.onerror=()=>{img.replaceWith(document.createTextNode(id))};row.append(img)}
+      else row.append(document.createTextNode(id));
+      const count=document.createElement("strong");count.textContent=" ×"+num;row.append(count);
       list.append(row);
     }
     body.append(title, list);
-  });
+  }
   dialog.showModal();
 }
 
