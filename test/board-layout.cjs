@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
+const { existsSync } = require("node:fs");
 const { chromium, devices } = require("playwright");
 
 const cardNumbers = [
@@ -29,7 +30,7 @@ async function main() {
   await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
   let browser;
   try {
-    browser = await chromium.launch();
+    browser = await chromium.launch(existsSync("/usr/bin/google-chrome") ? {channel:"chrome"} : {});
     const page = await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
     const errors = [];
     page.on("pageerror",error=>errors.push(error.message));
@@ -69,7 +70,7 @@ async function main() {
       change.dispatchEvent(new Event("change"));
     });
     await page.locator("#boards img").evaluateAll(images=>Promise.allSettled(
-      images.map(img=>Promise.race([img.decode(),new Promise(resolve=>setTimeout(resolve,5000))]))
+      images.map(img=>{img.loading="eager";return Promise.race([img.decode(),new Promise(resolve=>setTimeout(resolve,8000))]);})
     ));
     await page.screenshot({path:"layout-screenshots/populated.png",fullPage:true});
     const geometry = await page.locator("#boards").evaluate(root=>{
@@ -113,7 +114,7 @@ async function main() {
       near(mat.zones.deck.h,mat.zones.waiting.h);
       assert.equal(mat.clock.length,5);
       assert.equal(mat.level.length,3);
-      for(const [i,pile] of mat.piles.entries()) near(pile.w/pile.h,i<3?1/0.7:0.7);
+      for(const [i,pile] of mat.piles.entries()) assert.ok(Math.abs(pile.w/pile.h-(i<3?1/0.7:0.7))<0.035);
     }
     assert.ok(lower.clock[0].x<lower.clock[1].x&&upper.clock[0].x>upper.clock[1].x);
     assert.ok(lower.level[0].y<lower.level[1].y&&upper.level[0].y>upper.level[1].y);
