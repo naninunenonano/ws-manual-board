@@ -258,7 +258,30 @@ function runDamage(p,count){
    deckButton(body,"キャンセルなしとしてクロック",()=>{for(const c of pending){c.faceUp=true;b.clock.push(c)}d.close();updateBoard()});
    d.showModal();return;
  }
- for(const c of pending){c.faceUp=true;b[cancelled?"waiting":"clock"].push(c)}
+ // Show the actual damage cards and their registered CX classification before resolving.
+ const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
+ d.classList.remove("zoom-mode");
+ document.getElementById("dialogTitle").textContent="ダメージ判定："+(cancelled?"CXキャンセル":"キャンセルなし");
+ body.replaceChildren();
+ const explanation=document.createElement("p");
+ explanation.textContent="公開カードとCX登録を確認してください。誤判定の場合は下の結果を変更できます。";
+ body.append(explanation);
+ const list=document.createElement("div");list.className="modalcards";
+ for(const c of pending){
+   const item=document.createElement("div");item.className="modal-card";
+   const img=document.createElement("img");img.src=officialImageUrl(c.id)||"";img.alt=c.id;item.append(img);
+   const label=document.createElement("span");label.textContent=c.id+" ／ 登録："+(c.cx===true?"CX":"CX以外");item.append(label);list.append(item);
+ }
+ body.append(list);
+ const apply=(isCancelled)=>{
+   for(const c of pending){c.faceUp=true;b[isCancelled?"waiting":"clock"].push(c)}
+   d.close();if(!b.deck.length)refreshDeck(p);updateBoard();
+   message(isCancelled?"CXでダメージキャンセルしました":"ダメージ "+pending.length+"枚をクロックに置きました");
+ };
+ deckButton(body,cancelled?"キャンセルを確定":"キャンセルなしを確定",()=>apply(cancelled));
+ deckButton(body,cancelled?"キャンセルなしに訂正":"CXキャンセルに訂正",()=>apply(!cancelled));
+ d.showModal();
+ return;
  if(!b.deck.length)refreshDeck(p);updateBoard();
  message(cancelled?"CXでダメージキャンセルしました":"ダメージ "+pending.length+"枚をクロックに置きました");
 }
