@@ -13,7 +13,7 @@
     imageTypeCache.set(id,promise);return promise;
   }
   async function classify(deck){
-    const results=await Promise.all(deck.cards.map(async card=>({id:card.id,num:card.num,cx:typeof card.cx==="boolean"?card.cx:await detectLandscape(card.id)})));
+    const results=await Promise.all(deck.cards.map(async card=>({id:card.id,num:card.num,cx:typeof card.cx==="boolean"?card.cx:typeof card.cx==="boolean"?card.cx:await detectLandscape(card.id)})));
     return {...deck,cards:results};
   }
   function cxCount(deck){return deck.cards.reduce((n,c)=>n+(c.cx===true?c.num:0),0)}
