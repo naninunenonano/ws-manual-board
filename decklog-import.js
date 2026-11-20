@@ -23,20 +23,42 @@
   }
   function updateSavedStatus(){const d=savedDeck(side);$("savedDeckStatus").textContent="プレイヤー"+(side+1)+"の保存デッキ："+(d?d.title+"（50枚）":"なし。初回はデッキ登録が必要です")}
   function apply(deck,ask=true){
-    if(ask&&!confirm("プレイヤー"+(side+1)+"の現在の盤面を破棄して、50枚のデッキに置き換えますか？"))return;
-    const p=side,z=Object.fromEntries(zones.map(x=>[x,[]]));
-    for(const {id,num} of deck.cards)for(let i=0;i<num;i++)z.deck.push({uid:p+"-"+id+"-"+i,id,level:cardCatalog[id]?.level??"?",orientation:0,faceUp:false});
-    shuffle(z.deck);players[p]=z;selected=null;render();
+    if (!isDeckSetup()) return;
+    if (ask && !confirm("プレイヤー"+(side+1)+"のデッキとして50枚を登録しますか？")) return;
+    try {
+      localStorage.setItem(storageKey(side), JSON.stringify({
+        title:deck.title,list:deck.cards.map(card=>({card_number:card.id,num:card.num}))
+      }));
+    } catch (e) {
+      message("デッキを保存できませんでした。端末の保存設定を確認してください");
+      return;
+    }
     $("deckTransferStatus").textContent="";
-    try{localStorage.setItem(storageKey(p),JSON.stringify({title:deck.title,list:deck.cards.map(c=>({card_number:c.id,num:c.num}))}))}catch(e){message("登録しましたが端末への保存に失敗しました: "+e.message);return}
-    updateSavedStatus();message("プレイヤー"+(p+1)+"に"+deck.total+"枚を登録・保存しました。次回から自動で読み込みます");
+    updateSavedStatus();
+    message("プレイヤー"+(side+1)+"に"+deck.total+"枚を登録・保存しました");
   }
-  $("loadSavedDeck").onclick=()=>{const d=savedDeck(side);if(d)apply(d);else if(confirm("保存デッキがありません。以前取得したフリーレン（1TK8A8）を登録しますか？"))apply(defaultDeck)};
-  $("clearSavedDeck").onclick=()=>{if(!savedDeck(side))return;if(!confirm("プレイヤー"+(side+1)+"の保存デッキを削除しますか？（現在の盤面は維持）"))return;localStorage.removeItem(storageKey(side));updateSavedStatus();message("保存デッキを削除しました")};
+  $("loadSavedDeck").onclick=()=>{
+    if (!isDeckSetup()) return;
+    const deck=savedDeck(side);
+    if (deck) preview(deck);
+    else if (confirm("保存デッキがありません。以前取得したフリーレン（1TK8A8）を登録しますか？")) apply(defaultDeck,false);
+  };
+  $("clearSavedDeck").onclick=()=>{
+    if (!isDeckSetup() || !savedDeck(side)) return;
+    if (!confirm("プレイヤー"+(side+1)+"の保存デッキを削除しますか？")) return;
+    try {
+      localStorage.removeItem(storageKey(side));
+    } catch (e) {
+      message("保存デッキを削除できませんでした");
+      return;
+    }
+    pending=null;
+    $("applyDeck").disabled=true;
+    $("deckPreview").replaceChildren();
+    updateSavedStatus();
+    message("保存デッキを削除しました");
+  };
   $("side").addEventListener("change",updateSavedStatus);
-  $("reset").onclick = () => { if (confirm("盤面を初期化しますか？")) init(savedDeck); };
-  init(savedDeck);
-  updateSavedStatus();
 
   function codeOf(value) {
     const v = value.trim();
@@ -161,6 +183,10 @@
   function receiveTransferredDeck() {
     const prefix = "#decklog=";
     if (!location.hash.startsWith(prefix)) return;
+    if (!isDeckSetup()) {
+      if (isMatchActive()) message("受信したデッキは、この対戦を終了して「次の対戦へ」を押すと確認できます");
+      return;
+    }
     const encoded = location.hash.slice(prefix.length);
     transferRevision++;
     pending = null;
@@ -183,6 +209,9 @@
     $("importer").scrollIntoView({block:"start"});
   }
   window.addEventListener("hashchange", receiveTransferredDeck);
-  receiveTransferredDeck();
+  initializeMatch(savedDeck, () => {
+    updateSavedStatus();
+    receiveTransferredDeck();
+  });
 
 })();

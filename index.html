@@ -1,14 +1,14 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.16</title>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.17</title>
 <style>
 :root{font-family:system-ui,-apple-system,sans-serif;color:#edf1f8;background:#101827}*{box-sizing:border-box}body{margin:0}header{padding:12px 14px;background:#1a2840;display:flex;justify-content:space-between;align-items:center;gap:8px}h1{font-size:17px;margin:0}button,select{background:#263e61;color:white;border:1px solid #6581a5;border-radius:8px;padding:9px;font:inherit}button:disabled{opacity:.4}.shell{max-width:680px;margin:auto;padding:10px}.player{border:1px solid #49617e;border-radius:14px;margin:8px 0;padding:9px;background:#18243a}.player.active{border-color:#83b8ff}.player h2{font-size:14px;margin:0 0 8px;display:flex;justify-content:space-between}.board{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.zone{min-height:58px;border:1px dashed #6480a1;border-radius:6px;background:#24334c;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:3px;font-size:10px;cursor:pointer;overflow:hidden}.zone strong{font-size:12px}.zone .zone-thumb{max-width:100%;width:auto;height:72px;object-fit:contain;border-radius:3px}.zone.has-card{min-height:110px}.zone .card-back{height:64px;width:44px;border-radius:4px;background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px)}.modalcards .modal-card{display:flex;flex-direction:column;align-items:center;gap:4px;width:90px;min-height:128px;padding:5px;font-size:10px;overflow-wrap:anywhere}.modal-card img{height:100px;max-width:74px;object-fit:contain}.modal-card .card-back{height:100px;width:70px;background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px)}.zone.selected{outline:3px solid #f4cf73}.zone.empty{visibility:hidden}.stage{background:#30435e}.hand{display:flex;overflow-x:auto;gap:5px;padding:8px 0;min-height:80px}.card{flex:0 0 46px;height:66px;border:1px solid #9db3cc;border-radius:5px;background:#e4eaf1;color:#19273d;font-size:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:grab;user-select:none}.card.back{background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px);color:#fff}.card.selected{outline:3px solid #f4cf73}.card img{width:100%;height:100%;object-fit:contain;border-radius:4px;-webkit-touch-callout:none;-webkit-user-select:none}.card .cardlabel{font-size:9px;overflow-wrap:anywhere;padding:2px}.carddetail{display:grid;grid-template-columns:1fr;gap:7px;font-size:13px}.carddetail img{display:block;width:100%;max-width:100%;max-height:none;object-fit:contain;height:auto;-webkit-touch-callout:none;-webkit-user-select:none}.carddetail{max-width:100%}.carddetail .zoom-actions{display:flex;gap:8px;flex-wrap:wrap}.modalcards .modal-card img{object-fit:contain}#dialog{max-height:94dvh;overflow:auto}#dialog.zoom-mode{width:min(96vw,720px)}#dialog.zoom-mode .carddetail img{max-height:none}#dialog.zoom-mode{padding:8px}#dialog.zoom-mode #dialogTitle{font-size:14px;margin:2px 0 8px}.zone-zoom{border:0;background:#35557b;padding:2px 4px;font-size:10px;line-height:1.2;border-radius:4px;margin-top:2px}.card-zoom{position:absolute;right:0;bottom:0;background:#183453e8;border:0;border-radius:4px;padding:1px 3px;font-size:12px;line-height:1.4;color:white}.card{position:relative}.carddetail strong{color:#e7f0ff}.controls{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.controls button{font-size:12px}.notice{font-size:12px;color:#d3dfed;min-height:35px}.toolbar{display:flex;gap:5px;align-items:center;flex-wrap:wrap}.toolbar label{font-size:12px}dialog{background:#1a2840;color:white;border:1px solid #7191ba;border-radius:12px;max-width:95vw;width:420px}dialog::backdrop{background:#0009}.modalcards{display:flex;flex-wrap:wrap;gap:5px;max-height:50vh;overflow:auto}.muted{opacity:.7;font-size:11px}.count{font-size:11px;color:#bbd2f4}
 /* Landscape CX artwork is rotated only in compact board views; detail keeps the original orientation. */
 .card img.landscape-card{transform:rotate(90deg) scale(1.4)}
 .zone img.landscape-card{transform:rotate(90deg) scale(1.3)}
 .modalcards img.landscape-card{transform:rotate(90deg) scale(1.35)}
-#battleScreen[hidden],#setupScreen[hidden]{display:none!important}.screen-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.turn-result{font-weight:700;color:#f4cf73;padding:7px 0}#setupScreen .player{margin-top:8px}
-</style></head><body><header><h1>WS 手動盤面 <small>Ver.0.16</small></h1><button id="reset">初期化</button></header>
-<main class="shell"><section id="setupScreen"><h2>デッキ設定</h2><p class="muted">デッキを登録してから対戦を開始してください。プレイヤーごとに登録できます。</p><div class="toolbar"><label>操作する側 <select id="side"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label><button id="shuffle">山札シャッフル</button><button id="draw">1枚ドロー</button></div><section class="player" id="importer"><h2>Deck Log デッキ登録（試験機能）</h2><div class="toolbar"><input id="deckCode" value="1TK8A8" aria-label="Deck Logコード" maxlength="12" style="width:125px;padding:9px"><button id="importDeck">デッキ取得</button><button id="openDeckLog">Deck Logを開く</button><button id="applyDeck" disabled>操作側に50枚登録</button></div><div id="deckTransferStatus" role="status"></div><p class="muted">SafariでDeck Logのデッキページを開き、共有メニューの「WSデッキ転送」を実行してください。受信後、登録先を確認して50枚を登録できます。</p><details><summary>初回設定：Deck Log転送用ブックマークレット</summary><p class="muted">「転送コードをコピー」→Safariで任意のページをブックマーク→ブックマークを編集しURL欄を貼り付けたコードに置換。以後はDeck Logのデッキページでそのブックマークを押します。</p><button id="copyDeckTransfer">転送コードをコピー</button><textarea id="transferCode" readonly rows="3" style="width:100%;background:#101827;color:white" aria-label="転送用ブックマークレット"></textarea></details><details open><summary>カード番号と枚数を貼り付け（手動登録）</summary><p class="muted">1行に1種類。例：FRI/S100-001 × 4 または FRI/S100-001,4。合計50枚になるよう入力してください。</p><textarea id="deckText" rows="6" style="width:100%;background:#101827;color:white" placeholder="FRI/S100-001 × 4"></textarea><button id="parseDeckText">テキストから50枚を確認</button></details><details><summary>JSON貼り付け（従来方式）</summary><textarea id="deckJson" rows="4" style="width:100%;background:#101827;color:white" placeholder='{"list":[{"card_number":"...","num":4}]}'></textarea><button id="parseDeck">JSONを解析</button></details><div class="toolbar"><button id="loadSavedDeck">保存デッキを読み込む</button><button id="clearSavedDeck">保存デッキを削除</button></div><p class="muted" id="savedDeckStatus">保存デッキ：未確認</p><div id="deckPreview" class="muted" aria-live="polite"></div></section><div class="screen-actions"><button id="startBattle">対戦開始（先攻・後攻を抽選）</button></div></section><section id="battleScreen" hidden><div class="screen-actions"><button id="backToSetup">デッキ設定に戻る</button><span id="firstPlayerResult" class="turn-result" role="status"></span></div><div class="toolbar"><label>操作する側 <select id="battleSide"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label><button id="battleShuffle">山札シャッフル</button><button id="battleDraw">1枚ドロー</button></div><p class="notice" id="notice">カードをタップして移動先を選択。ドラッグでも移動できます。</p><div id="boards"></div><div class="controls"><button id="refresh">控え室→山札（シャッフル）</button><button id="damage">山札→クロック 1枚</button><button id="level">レベルアップ</button></div><p class="muted">ローカル操作試作版。カード画像は縦横比を維持して表示します。手札の🔍、盤面や一覧の「拡大」で公式画像を大きく確認できます。オンライン同期・カード能力の自動処理は未実装です。レベルアップはクロック下から7枚を対象とします。</p></section></main>
+[hidden]{display:none!important}.screen-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.turn-result{font-weight:700;color:#f4cf73;padding:7px 0}#setupScreen .player{margin-top:8px}
+</style></head><body><header><h1>WS 手動盤面 <small>Ver.0.17</small></h1></header>
+<main class="shell"><p id="storageWarning" role="status" hidden></p><section id="setupScreen"><h2>デッキ設定</h2><p class="muted">デッキを登録してから対戦を開始してください。プレイヤーごとに登録できます。</p><div class="toolbar"><label>操作する側 <select id="side"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label></div><section class="player" id="importer"><h2>Deck Log デッキ登録（試験機能）</h2><div class="toolbar"><input id="deckCode" value="1TK8A8" aria-label="Deck Logコード" maxlength="12" style="width:125px;padding:9px"><button id="importDeck">デッキ取得</button><button id="openDeckLog">Deck Logを開く</button><button id="applyDeck" disabled>操作側に50枚登録</button></div><div id="deckTransferStatus" role="status"></div><p class="muted">SafariでDeck Logのデッキページを開き、共有メニューの「WSデッキ転送」を実行してください。受信後、登録先を確認して50枚を登録できます。</p><details><summary>初回設定：Deck Log転送用ブックマークレット</summary><p class="muted">「転送コードをコピー」→Safariで任意のページをブックマーク→ブックマークを編集しURL欄を貼り付けたコードに置換。以後はDeck Logのデッキページでそのブックマークを押します。</p><button id="copyDeckTransfer">転送コードをコピー</button><textarea id="transferCode" readonly rows="3" style="width:100%;background:#101827;color:white" aria-label="転送用ブックマークレット"></textarea></details><details open><summary>カード番号と枚数を貼り付け（手動登録）</summary><p class="muted">1行に1種類。例：FRI/S100-001 × 4 または FRI/S100-001,4。合計50枚になるよう入力してください。</p><textarea id="deckText" rows="6" style="width:100%;background:#101827;color:white" placeholder="FRI/S100-001 × 4"></textarea><button id="parseDeckText">テキストから50枚を確認</button></details><details><summary>JSON貼り付け（従来方式）</summary><textarea id="deckJson" rows="4" style="width:100%;background:#101827;color:white" placeholder='{"list":[{"card_number":"...","num":4}]}'></textarea><button id="parseDeck">JSONを解析</button></details><div class="toolbar"><button id="loadSavedDeck">保存デッキを読み込む</button><button id="clearSavedDeck">保存デッキを削除</button></div><p class="muted" id="savedDeckStatus">保存デッキ：未確認</p><div id="deckPreview" class="muted" aria-live="polite"></div></section><div class="screen-actions"><button id="startBattle">対戦開始</button></div><p id="setupNotice" role="status"></p></section><section id="battleScreen" hidden><div class="screen-actions"><button id="viewDecks">デッキ内容確認</button><button id="surrender">降参</button><button id="leaveBattle">対戦を離れる</button><span id="firstPlayerResult" class="turn-result" role="status"></span></div><div class="toolbar"><label>操作する側 <select id="battleSide"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label><button id="shuffle">山札シャッフル</button><button id="draw">1枚ドロー</button></div><p class="notice" id="notice" role="status">カードをタップして移動先を選択。ドラッグでも移動できます。</p><div id="boards"></div><div class="controls"><button id="refresh">控え室→山札（シャッフル）</button><button id="damage">山札→クロック 1枚</button><button id="level">レベルアップ</button></div><p class="muted">ローカル操作試作版。カード画像は縦横比を維持して表示します。手札の🔍、盤面や一覧の「拡大」で公式画像を大きく確認できます。オンライン同期・カード能力の自動処理は未実装です。レベルアップはクロック下から7枚を対象とします。</p></section><section id="resultScreen" hidden><h2>対戦終了</h2><p id="battleResult" role="status"></p><button id="nextBattle">次の対戦へ</button></section></main>
 <dialog id="dialog"><h3 id="dialogTitle"></h3><div id="dialogBody"></div><div class="controls"><button id="close">閉じる</button></div></dialog>
 <script>
 "use strict";
@@ -45,7 +45,6 @@ function showCardDetail(card){
   wrap.append(note);
   body.append(wrap);d.showModal();
 }
-const counts=[["a",0,4],["b",0,4],["c",0,4],["d",0,4],["e",0,1],["f",1,4],["g",1,4],["h",1,3],["i",2,4],["j",3,4],["k",3,4],["l",3,2],["m","CX",4],["n","CX",4]];
 const zones=["deck","hand","waiting","stock","clock","level","memory","cx","front0","front1","front2","back0","back1"];
 const labels={deck:"山札",hand:"手札",waiting:"控え室",stock:"ストック",clock:"クロック",level:"レベル",memory:"思い出",cx:"CX",front0:"前列①",front1:"前列②",front2:"前列③",back0:"後列①",back1:"後列②"};
 let players=[],selected=null,side=0;
@@ -57,25 +56,17 @@ function randomIndex(bound){
   return value%bound;
 }
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=randomIndex(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
-function init(savedDeck){
-  players=[0,1].map(p=>{
-    const z=Object.fromEntries(zones.map(x=>[x,[]]));
-    const saved=savedDeck(p);
-    const entries=saved ? saved.cards.map(({id,num})=>[id,cardCatalog[id]?.level??"?",num]) : counts;
-    for(const [id,level,num] of entries){
-      for(let i=0;i<num;i++)z.deck.push({uid:p+"-"+id+"-"+i,id,level,orientation:0,faceUp:false});
-    }
-    shuffle(z.deck);
-    return z;
-  });
-  selected=null;
-  render();
-  message("保存済みデッキを読み込み、盤面を初期化しました（未保存の側は仮デッキ）");
+function message(text){
+  const id=document.getElementById("setupScreen").hidden ? "notice" : "setupNotice";
+  document.getElementById(id).textContent=text;
 }
-function message(s){document.getElementById("notice").textContent=s}
+function updateBoard(){
+  saveMatchProgress();
+  render();
+}
 function ownerZone(el){return {p:Number(el.dataset.p),z:el.dataset.z}}
-function move(p,from,index,to){if(p!==side){message("操作するプレイヤーを切り替えてください");return}if(!players[p][from][index])return;const card=players[p][from].splice(index,1)[0];card.faceUp=!["deck","stock"].includes(to);players[p][to].push(card);selected=null;render();message(labels[from]+" → "+labels[to])}
-function takeTop(p,from,to,n=1){const a=players[p][from],b=players[p][to];const k=Math.min(n,a.length);for(let i=0;i<k;i++){const c=a.pop();c.faceUp=!["deck","stock"].includes(to);b.push(c)}render();return k}
+function move(p,from,index,to){if(p!==side){message("操作するプレイヤーを切り替えてください");return}if(!players[p][from][index])return;const card=players[p][from].splice(index,1)[0];card.faceUp=!["deck","stock"].includes(to);players[p][to].push(card);selected=null;updateBoard();message(labels[from]+" → "+labels[to])}
+function takeTop(p,from,to,n=1){const a=players[p][from],b=players[p][to];const k=Math.min(n,a.length);for(let i=0;i<k;i++){const c=a.pop();c.faceUp=!["deck","stock"].includes(to);b.push(c)}if(k)updateBoard();return k}
 function appendZonePreview(el,card,z,p){
   if(!card)return;
   el.classList.add("has-card");
@@ -100,65 +91,14 @@ function cardClick(p,z,index){if(p!==side)return;selected={p,z,index};render();m
 function zoneClick(p,z){if(p!==side){message("相手のカードは操作できません");return}if(selected&&selected.p===p&&selected.z!==z){move(p,selected.z,selected.index,z);return}const a=players[p][z];if(!a.length){message(labels[z]+"は空です");return}if(z==="stock"||z==="deck"){openActions(p,z);return}openList(p,z)}
 function openActions(p,z){document.getElementById("dialog").classList.remove("zoom-mode");const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");document.getElementById("dialogTitle").textContent=labels[z]+" ("+players[p][z].length+"枚)";body.replaceChildren();const info=document.createElement("p");info.textContent=z==="stock"?"内容・順序は表示しません。上から指定枚数を控え室へ送ります。":"山札の内容は表示しません。";body.append(info);const num=document.createElement("input");num.type="number";num.min=1;num.max=players[p][z].length;num.value=1;num.style.width="70px";body.append(num);const btn=document.createElement("button");btn.textContent=z==="stock"?"指定枚数を支払う":"指定枚数ドロー";btn.onclick=()=>{takeTop(p,z,z==="stock"?"waiting":"hand",Math.max(1,Math.floor(Number(num.value)||1)));d.close()};body.append(btn);d.showModal()}
 function openList(p,z){document.getElementById("dialog").classList.remove("zoom-mode");const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");document.getElementById("dialogTitle").textContent=labels[z]+" ("+players[p][z].length+"枚)";body.replaceChildren();const list=document.createElement("div");list.className="modalcards";players[p][z].forEach((c,i)=>list.append(makeZoneCardButton(c,p,z,i)));body.append(list);const info=document.createElement("p");info.className="muted";info.textContent="カード画像をタップすると移動対象として選択します。手札のカードは長押しで拡大できます";body.append(info);d.showModal()}
-document.getElementById("side").onchange=e=>{side=Number(e.target.value);selected=null;render()};
-document.getElementById("shuffle").onclick=()=>{shuffle(players[side].deck);render();message("山札をシャッフルしました")};
+document.getElementById("side").onchange=e=>{side=Number(e.target.value);selected=null};
+document.getElementById("shuffle").onclick=()=>{shuffle(players[side].deck);updateBoard();message("山札をシャッフルしました")};
 document.getElementById("draw").onclick=()=>{if(!takeTop(side,"deck","hand"))message("山札がありません")};
-document.getElementById("refresh").onclick=()=>{const p=players[side];p.deck.push(...p.waiting.splice(0));p.deck.forEach(c=>c.faceUp=false);shuffle(p.deck);render();message("控え室を山札に戻してシャッフルしました。リフレッシュダメージは別操作です")};
+document.getElementById("refresh").onclick=()=>{const p=players[side];p.deck.push(...p.waiting.splice(0));p.deck.forEach(c=>c.faceUp=false);shuffle(p.deck);updateBoard();message("控え室を山札に戻してシャッフルしました。リフレッシュダメージは別操作です")};
 document.getElementById("damage").onclick=()=>{if(!takeTop(side,"deck","clock"))message("山札がありません")};
-document.getElementById("level").onclick=()=>{const p=players[side];if(p.clock.length<7){message("クロックが7枚未満です");return}const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");d.classList.remove("zoom-mode");document.getElementById("dialogTitle").textContent="レベルアップ：下から7枚のうち1枚を選択";body.replaceChildren();p.clock.slice(0,7).forEach((c,i)=>{const b=document.createElement("button");b.textContent=cardLabel(c);b.onclick=()=>{const seven=p.clock.splice(0,7),chosen=seven.splice(i,1)[0];p.level.push(chosen);p.waiting.push(...seven);d.close();render();message("レベルアップしました")};body.append(b)});d.showModal()};
+document.getElementById("level").onclick=()=>{const p=players[side];if(p.clock.length<7){message("クロックが7枚未満です");return}const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");d.classList.remove("zoom-mode");document.getElementById("dialogTitle").textContent="レベルアップ：下から7枚のうち1枚を選択";body.replaceChildren();p.clock.slice(0,7).forEach((c,i)=>{const b=document.createElement("button");b.textContent=cardLabel(c);b.onclick=()=>{const seven=p.clock.splice(0,7),chosen=seven.splice(i,1)[0];p.level.push(chosen);p.waiting.push(...seven);d.close();updateBoard();message("レベルアップしました")};body.append(b)});d.showModal()};
 document.getElementById("close").onclick=()=>document.getElementById("dialog").close();
-</script><script src="decklog-import.js?v=0.12"></script>
-<script>
-"use strict";
-(() => {
-  const $=id=>document.getElementById(id);
-  let firstPlayer=null;
-  let openingHandDealt=false;
-  const setup=$("setupScreen"),battle=$("battleScreen");
-  function showBattle(open){
-    setup.hidden=open;
-    battle.hidden=!open;
-    $("reset").hidden=!open;
-    if(open){
-      $("battleSide").value=$("side").value;
-      $("firstPlayerResult").textContent="先攻：プレイヤー"+(firstPlayer+1)+" ／ 後攻：プレイヤー"+(2-firstPlayer);
-    }
-    window.scrollTo(0,0);
-  }
-  $("startBattle").onclick=()=>{
-    if(!openingHandDealt){
-      // A new match begins with a freshly shuffled deck and five cards for each player.
-      for(const p of [0,1]){
-        const zones=players[p];
-        if(zones.hand.length||zones.deck.length<5){
-          message("初手を配れません。両プレイヤーの盤面を初期化してから対戦を開始してください");
-          return;
-        }
-      }
-      for(const p of [0,1]){
-        const zones=players[p];
-        shuffle(zones.deck);
-        for(let i=0;i<5;i++){
-          const card=zones.deck.pop();
-          card.faceUp=true;
-          zones.hand.push(card);
-        }
-      }
-      openingHandDealt=true;
-      render();
-      message("両プレイヤーに初手5枚を配りました");
-    }
-    if(firstPlayer===null)firstPlayer=randomIndex(2);
-    showBattle(true);
-  };
-  $("backToSetup").onclick=()=>showBattle(false);
-  $("battleSide").onchange=()=>{$("side").value=$("battleSide").value;$("side").dispatchEvent(new Event("change",{bubbles:true}));};
-  $("side").addEventListener("change",()=>{$("battleSide").value=$("side").value;});
-  $("battleShuffle").onclick=()=>$("shuffle").click();
-  $("battleDraw").onclick=()=>$("draw").click();
-  $("reset").addEventListener("click",()=>{if(players.every(p=>p.hand.length===0)){firstPlayer=null;openingHandDealt=false;}});
-  showBattle(false);
-  // Deck Log transfers must remain visible on the setup screen.
-  window.addEventListener("hashchange",()=>showBattle(false));
-})();
-</script></body></html>
+</script>
+<script src="match-state.js?v=0.17"></script>
+<script src="decklog-import.js?v=0.17"></script>
+</body></html>
