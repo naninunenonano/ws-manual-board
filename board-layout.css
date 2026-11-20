@@ -1,0 +1,125 @@
+/* Coordinates use the width of one playmat. The upper mat mirrors both axes. */
+.board {
+  position: relative;
+  isolation: isolate;
+  container-type: inline-size;
+  aspect-ratio: 100 / 66;
+}
+.board .zone {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
+  height: var(--h);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  overflow: hidden;
+  border: 1px dashed #6480a1;
+  border-radius: 4px;
+  background: #24334c;
+  font-size: 10px;
+  cursor: pointer;
+}
+.board[data-player="1"] .zone {
+  left: calc(100% - var(--x) - var(--w));
+  top: calc(100% - var(--y) - var(--h));
+}
+.zone[data-z="stock"] { --x: 0%; --y: 1%; --w: 20.5%; --h: 30%; }
+.zone[data-z="cx"] { --x: 0%; --y: 32%; --w: 20.5%; --h: 30%; }
+.zone[data-z="level"] { --x: 0%; --y: 66%; --w: 21.5%; --h: 33%; }
+.zone[data-z="clock"] { --x: 24.5%; --y: 67%; --w: 60%; --h: 32%; }
+.zone[data-z="memory"] { --x: 79.5%; --y: 1%; --w: 20.5%; --h: 32%; }
+.zone[data-z="deck"] { --x: 85.5%; --y: 34%; --w: 14.5%; --h: 32%; }
+.zone[data-z="waiting"] { --x: 85.5%; --y: 67%; --w: 14.5%; --h: 32%; }
+.zone.stage { --w: 15.5%; --h: 33%; border-style: solid; border-color: #83b8ff; }
+.zone[data-z="front0"] { --x: 24%; --y: 1%; }
+.zone[data-z="front1"] { --x: 43%; --y: 1%; }
+.zone[data-z="front2"] { --x: 62%; --y: 1%; }
+.zone[data-z="back0"] { --x: 33.5%; --y: 30%; }
+.zone[data-z="back1"] { --x: 52.5%; --y: 30%; }
+.zone[data-z^="front"] { z-index: 2; }
+.zone.selected { outline: 2px solid #f4cf73; outline-offset: -2px; }
+.zone.has-card { border-color: transparent; background: transparent; }
+.zone .card-back {
+  background: repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px);
+}
+.zone-preview, .zone-fan-card {
+  --card-width: 15cqw;
+  --card-height: 21cqw;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--card-width);
+  height: var(--card-height);
+  overflow: hidden;
+  border-radius: 3px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.zone[data-z="deck"] .zone-preview,
+.zone[data-z="waiting"] .zone-preview {
+  --card-width: 14cqw;
+  --card-height: 19.6cqw;
+}
+.zone[data-z="memory"], .zone[data-z="stock"], .zone[data-z="cx"], .zone[data-z="level"] {
+  --wide-card: 19.8cqw;
+  --short-card: 13.86cqw;
+}
+.zone[data-z="memory"] .zone-preview,
+.zone[data-z="stock"] .zone-preview,
+.zone[data-z="cx"] .zone-preview,
+.zone[data-z="level"] .zone-fan-card {
+  --card-width: var(--wide-card);
+  --card-height: var(--short-card);
+}
+.zone-preview img, .zone-fan-card img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--card-width);
+  height: var(--card-height);
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+}
+.zone .zone-preview.card-back {
+  border: 1px solid #9db3cc;
+}
+.zone .zone-fan-card .card-back {
+  width: 100%;
+  height: 100%;
+}
+/* Turn portrait artwork to the right when the slot is landscape. */
+.zone .sideways img:not(.landscape-card),
+.zone .portrait img.landscape-card {
+  width: var(--card-height);
+  height: var(--card-width);
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+.zone-fan {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.zone[data-z="clock"] .zone-fan-card {
+  position: absolute;
+  inset: 0 auto auto calc(var(--fan-index) * 5.3cqw);
+}
+.board[data-player="1"] .zone[data-z="clock"] .zone-fan-card {
+  inset: auto calc(var(--fan-index) * 5.3cqw) 0 auto;
+}
+.zone[data-z="level"] .zone-fan-card {
+  position: absolute;
+  inset: calc(var(--fan-index) * 3.35cqw) calc(var(--fan-index) * .55cqw) auto auto;
+}
+.board[data-player="1"] .zone[data-z="level"] .zone-fan-card {
+  inset: auto auto calc(var(--fan-index) * 3.35cqw) calc(var(--fan-index) * .55cqw);
+}
+.zone .zone-zoom {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  padding: 2px 3px;
+  background: #183453e8;
+  font-size: 10px;
+}
