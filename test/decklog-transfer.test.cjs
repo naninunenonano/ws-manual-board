@@ -43,10 +43,10 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
   let randomCalls = 0;
   let allowConfirmation = true;
   const element = () => ({
-    textContent:"", children:[], style:{}, dataset:{}, classList:{add(){},remove(){}},
+    textContent:"", children:[], style:{setProperty(){}}, dataset:{}, classList:{add(){},remove(){}},
     append(...children){ this.children.push(...children); },
     replaceChildren(...children){ this.children = children; },
-    addEventListener(){}, scrollIntoView(){}, querySelector(){ return null; },
+    setAttribute(){}, insertBefore(){}, addEventListener(){}, scrollIntoView(){}, querySelector(){ return null; },
     showModal(){ this.open = true; }, close(){ this.open = false; }
   });
   const elements = new Map(Array.from(html.matchAll(/ id="([^"]+)"/g), ([,id]) => [id,element()]));
@@ -77,6 +77,12 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
     confirm:value=>{allowConfirmation=value;},
     randomCalls:()=>randomCalls
   };
+}
+
+function startBattle(page) {
+  page.click("startBattle");
+  page.click("confirmMulligan");
+  page.click("confirmMulligan");
 }
 
 function checkPreview(page,deck) {
@@ -141,12 +147,12 @@ const snapshot = page => JSON.parse(page.storage.get(matchKey));
 
 test("start deals five once, then reload restores every zone, order, flags and player without randomness", () => {
   const page = launch("",deckStorage());
-  page.click("startBattle");
+  startBattle(page);
   const initial = snapshot(page);
   assert.equal(initial.openingHandDealt,true);
   assert.deepEqual(initial.players.map(p=>[p.deck.length,p.hand.length]),[[45,5],[45,5]]);
-  assert.equal(page.randomCalls(),99);
-  page.click("startBattle");
+  assert.equal(page.randomCalls(),187);
+  startBattle(page);
   assert.deepEqual(snapshot(page),initial);
   page.run('move(0,"hand",0,"front0"); move(0,"hand",0,"stock"); move(0,"hand",0,"cx")');
   page.click("draw");
@@ -173,7 +179,7 @@ test("start deals five once, then reload restores every zone, order, flags and p
 
 test("deck inspection is read-only and a new transfer cannot leave or replace an active match", () => {
   const page = launch("",deckStorage());
-  page.click("startBattle");
+  startBattle(page);
   page.click("draw");
   const before = snapshot(page);
   page.click("viewDecks");
@@ -202,7 +208,7 @@ test("deck inspection is read-only and a new transfer cannot leave or replace an
 
 test("cancel preserves the game, surrender restores the winner, and next match starts fresh", () => {
   const page = launch("",deckStorage());
-  page.click("startBattle");
+  startBattle(page);
   const initial = snapshot(page);
   page.get("battleSide").onchange({target:{value:"1"}});
   page.click("draw");
@@ -223,9 +229,9 @@ test("cancel preserves the game, surrender restores the winner, and next match s
   assert.equal(reopened.get("setupScreen").hidden,false);
   assert.deepEqual(reopened.counts(0),expected(frieren));
   assert.deepEqual(reopened.counts(1),expected(idol));
-  reopened.click("startBattle");
+  startBattle(reopened);
   const next = snapshot(reopened);
-  assert.equal(reopened.randomCalls(),99);
+  assert.equal(reopened.randomCalls(),187);
   assert.notEqual(next.firstPlayer,initial.firstPlayer);
   assert.notDeepEqual(next.players[0].deck,initial.players[0].deck);
   for(const player of next.players) {
@@ -242,7 +248,7 @@ test("cancel preserves the game, surrender restores the winner, and next match s
 
 test("corrupt snapshots recover to setup and saved deck registration remains available", () => {
   const page = launch("",deckStorage());
-  page.click("startBattle");
+  startBattle(page);
   const broken = snapshot(page);
   broken.players[0].deck[0] = broken.players[0].deck[1];
   for (const raw of ["{",JSON.stringify(broken)]) {
@@ -252,7 +258,7 @@ test("corrupt snapshots recover to setup and saved deck registration remains ava
     assert.equal(reopened.storage.has(matchKey),false);
     assert.match(reopened.get("storageWarning").textContent,/復元できなかった/);
     assert.deepEqual(reopened.counts(0),expected(frieren));
-    reopened.click("startBattle");
+    startBattle(reopened);
     assert.equal(snapshot(reopened).phase,"active");
   }
   const unregistered = launch();
