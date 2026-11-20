@@ -118,10 +118,12 @@ function showMatchScreen() {
   matchElement("side").value = String(side);
   matchElement("battleSide").value = String(side);
   if (isMatchActive()) {
+    ensureTurn();
     const first = match.firstPlayer;
     matchElement("firstPlayerResult").textContent = "先攻：プレイヤー" + (first + 1) +
       " ／ 後攻：プレイヤー" + (2 - first);
     render();
+    renderTurnControls();
   } else if (match?.phase === "ended") {
     const { reason, winner } = match.result;
     matchElement("battleResult").textContent = reason === "surrender"
@@ -203,7 +205,7 @@ function completeMulligan(){
   const next={...match,players:match.players.map((b,i)=>i===p?board:b),mulliganPlayer:p+1,phase:p===0?"mulligan":"active",screen:p===0?"mulligan":"battle"};
   if(!writeMatch(next))return;
   match=next;players=next.players;mulliganSelection=new Set();showMatchScreen();
-  if(p===1)message("両プレイヤーのマリガンが完了しました");
+  if(p===1){ensureTurn();message("両プレイヤーのマリガンが完了しました");}
 }
 function finishMatch(reason) {
   if (!isMatchActive()) return;
