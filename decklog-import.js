@@ -2,7 +2,7 @@
 // Deck Log public website internal API. This is not a guaranteed public API.
 // Do not persist a response until validated; CORS may block browser requests.
 (() => {
-  const proxyBase = "https://ws-decklog-proxy.YOUR-SUBDOMAIN.workers.dev";
+  const proxyBase = "https://ws-decklog-proxy.spicahosino.workers.dev";
   const $ = id => document.getElementById(id);
   let pending = null;
   function codeOf(value) {
