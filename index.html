@@ -8,10 +8,7 @@
 <script>
 "use strict";
 const cardCatalog = Object.freeze({
-  "SFN/S128-003": {name:"旅立ちのきっかけ ヒンメル",level:3,cost:2,power:9500,type:"キャラ",rarity:"RR"},
-  "SFN/S136-065": {name:"作戦会議 フリーレン",rarity:"C"},
-  "SFN/S136-076": {name:"“一級魔法使い”フェルン"},
-  "SFN/S136-078": {name:"魔法の世界 フリーレン"}
+  "SFN/S128-003": {name:"旅立ちのきっかけ ヒンメル",level:3,cost:2,power:9500,type:"キャラ",rarity:"RR"}
 });
 function cardInfo(card){return cardCatalog[card.id]||null}
 function cardLabel(card){const m=cardInfo(card);return m?m.name+" / Lv"+m.level:card.id+" / Lv不明"}
