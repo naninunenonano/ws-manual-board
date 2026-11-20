@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.34</title>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.35</title>
 <link rel="stylesheet" href="board-layout.css?v=0.30">
 <style>
 :root{font-family:system-ui,-apple-system,sans-serif;color:#edf1f8;background:#101827}*{box-sizing:border-box}body{margin:0}header{padding:12px 14px;background:#1a2840;display:flex;justify-content:space-between;align-items:center;gap:8px}h1{font-size:17px;margin:0}button,select{background:#263e61;color:white;border:1px solid #6581a5;border-radius:8px;padding:9px;font:inherit}button:disabled{opacity:.4}.shell{max-width:680px;margin:auto;padding:10px}.player{border:1px solid #49617e;border-radius:14px;margin:8px 0;padding:9px;background:#18243a}.player.active{border-color:#83b8ff}.player h2{font-size:14px;margin:0 0 8px;display:flex;justify-content:space-between}.modalcards .modal-card{display:flex;flex-direction:column;align-items:center;gap:4px;width:90px;min-height:128px;padding:5px;font-size:10px;overflow-wrap:anywhere}.modal-card img{height:100px;max-width:74px;object-fit:contain}.modal-card .card-back{height:100px;width:70px;background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px)}.zone.selected{outline:3px solid #f4cf73}.zone.empty{visibility:hidden}.stage{background:#30435e}.hand{display:flex;overflow-x:auto;gap:5px;padding:8px 0;min-height:80px}.card{flex:0 0 46px;height:66px;border:1px solid #9db3cc;border-radius:5px;background:#e4eaf1;color:#19273d;font-size:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:grab;user-select:none}.card.back{background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px);color:#fff}.card.selected{outline:3px solid #f4cf73}.card img{width:100%;height:100%;object-fit:contain;border-radius:4px;-webkit-touch-callout:none;-webkit-user-select:none}.card .cardlabel{font-size:9px;overflow-wrap:anywhere;padding:2px}.carddetail{display:grid;grid-template-columns:1fr;gap:7px;font-size:13px}.carddetail img{display:block;width:100%;max-width:100%;max-height:none;object-fit:contain;height:auto;-webkit-touch-callout:none;-webkit-user-select:none}.carddetail{max-width:100%}.carddetail .zoom-actions{display:flex;gap:8px;flex-wrap:wrap}.modalcards .modal-card img{object-fit:contain}#dialog{max-height:94dvh;overflow:auto}#dialog.zoom-mode{width:min(96vw,720px)}#dialog.zoom-mode .carddetail img{max-height:none}#dialog.zoom-mode{padding:8px}#dialog.zoom-mode #dialogTitle{font-size:14px;margin:2px 0 8px}.zone-zoom{border:0;background:#35557b;padding:2px 4px;font-size:10px;line-height:1.2;border-radius:4px;margin-top:2px}.card-zoom{position:absolute;right:0;bottom:0;background:#183453e8;border:0;border-radius:4px;padding:1px 3px;font-size:12px;line-height:1.4;color:white}.card{position:relative}.carddetail strong{color:#e7f0ff}.controls{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.controls button{font-size:12px}.notice{font-size:12px;color:#d3dfed;min-height:35px}.toolbar{display:flex;gap:5px;align-items:center;flex-wrap:wrap}.toolbar label{font-size:12px}dialog{background:#1a2840;color:white;border:1px solid #7191ba;border-radius:12px;max-width:95vw;width:420px}dialog::backdrop{background:#0009}.modalcards{display:flex;flex-wrap:wrap;gap:5px;max-height:50vh;overflow:auto}.muted{opacity:.7;font-size:11px}.count{font-size:11px;color:#bbd2f4}
@@ -164,8 +164,131 @@ board.dataset.player=String(p);
 for(const z of zones)if(z!=="hand")board.append(renderZone(p,z,pl[z]));
 section.append(board);const hand=document.createElement("div");hand.className="hand";const caption=document.createElement("div");caption.className="muted";caption.textContent="手札 "+pl.hand.length+"枚";section.append(caption);for(let i=0;i<pl.hand.length;i++){const c=pl.hand[i],el=document.createElement("div");el.className="card"+(p!==side?" back":"");if(p===side){const m=cardInfo(c);if(!addCardImage(el,c,m?.name||c.id)){el.textContent=cardLabel(c)}el.title=cardLabel(c)}else{el.textContent="WS"};el.draggable=p===side;el.ondragstart=()=>{selected={p,z:"hand",index:i}};el.onclick=()=>cardClick(p,"hand",i);if(p===side){const zb=document.createElement("button");zb.className="card-zoom";zb.textContent="🔍";zb.onclick=e=>{e.stopPropagation();showCardDetail(c)};el.append(zb)}hand.append(el)}hand.ondragover=e=>{if(p===side)e.preventDefault()};hand.ondrop=e=>{e.preventDefault();if(selected&&selected.p===p)move(p,selected.z,selected.index,"hand")};section.append(hand);if(p===1)section.insertBefore(hand,board);root.append(section);if(p===side){section.append(actions)}}}
 function cardClick(p,z,index){if(p!==side)return;selected={p,z,index};render();renderTurnControls();message(labels[z]+"のカードを選択しました。移動先をタップしてください")}
-function zoneClick(p,z){if(p!==side){message("相手のカードは操作できません");return}if(selected&&selected.p===p&&selected.z!==z){move(p,selected.z,selected.index,z);return}const a=players[p][z];if(!a.length){message(labels[z]+"は空です");return}if(z==="stock"||z==="deck"){openActions(p,z);return}openList(p,z)}
-function openActions(p,z){document.getElementById("dialog").classList.remove("zoom-mode");const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");document.getElementById("dialogTitle").textContent=labels[z]+" ("+players[p][z].length+"枚)";body.replaceChildren();const info=document.createElement("p");info.textContent=z==="stock"?"内容・順序は表示しません。上から指定枚数を控え室へ送ります。":"山札の内容は表示しません。";body.append(info);const num=document.createElement("select");num.setAttribute("aria-label",z==="stock"?"使用するストック枚数":"ドロー枚数");for(let n=1;n<=players[p][z].length;n++){const option=document.createElement("option");option.value=String(n);option.textContent=n+"枚";num.append(option)}body.append(num);const btn=document.createElement("button");btn.textContent=z==="stock"?"指定枚数を支払う":"指定枚数ドロー";btn.onclick=()=>{takeTop(p,z,z==="stock"?"waiting":"hand",Math.max(1,Math.floor(Number(num.value)||1)));d.close()};body.append(btn);d.showModal()}
+function zoneClick(p,z){if(p!==side){message("相手のカードは操作できません");return}if(selected&&selected.p===p&&selected.z!==z){move(p,selected.z,selected.index,z);return}const a=players[p][z];if(!a.length&&z!=="deck"){message(labels[z]+"は空です");return}if(z==="stock"||z==="deck"){openActions(p,z);return}openList(p,z)}
+
+// Deck commands: deck top is the final array element. Revealed/inspected cards stay
+// outside the waiting room until their destination is confirmed.
+function refreshDeck(p){
+ const b=players[p];if(b.deck.length||!b.waiting.length)return false;
+ b.deck.push(...b.waiting.splice(0));for(const c of b.deck)c.faceUp=false;
+ shuffle(b.deck);const point=b.deck.pop();if(point){point.faceUp=true;b.clock.push(point)}
+ updateBoard();message("リフレッシュし、リフレッシュポイントをクロックへ置きました");
+ return true;
+}
+function pullDeck(p,count,to,interrupt=true){
+ const b=players[p];let moved=0;
+ for(let i=0;i<count;i++){
+   if(!b.deck.length && (!interrupt||!refreshDeck(p)))break;
+   const c=b.deck.pop();if(!c)break;c.faceUp=!["deck","stock"].includes(to);b[to].push(c);moved++;
+   if(!b.deck.length&&interrupt)refreshDeck(p);
+ }
+ updateBoard();return moved;
+}
+function deckSelect(max,initial=1){
+ const sel=document.createElement("select");sel.setAttribute("aria-label","枚数");
+ for(let i=1;i<=max;i++){const o=document.createElement("option");o.value=i;o.textContent=i+"枚";sel.append(o)}
+ sel.value=String(Math.min(initial,max));return sel;
+}
+function deckButton(parent,label,action){
+ const b=document.createElement("button");b.textContent=label;b.style.margin="4px";b.onclick=action;parent.append(b);return b;
+}
+function moveTemporary(p,items,index,to){
+ const c=items.splice(index,1)[0];if(!c)return;
+ c.faceUp=!["deck","stock"].includes(to);players[p][to].push(c);
+}
+function openDeckTemporary(p,mode,count){
+ const b=players[p],privateView=mode==="inspect",items=[];
+ for(let i=0;i<count&&b.deck.length;i++)items.push(b.deck.pop());
+ // Do not refresh here: these cards are treated as part of the deck until resolution.
+ const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
+ const title=document.getElementById("dialogTitle");
+ const destinations=["hand","waiting","clock","stock","memory","deck"];
+ function finish(destination,order){
+   if(destination==="waiting"){for(const c of items){c.faceUp=true;b.waiting.push(c)}}
+   else if(destination==="deck"){
+     const arranged=order==="original"?items.slice():items;
+     for(const c of arranged.slice().reverse()){c.faceUp=false;b.deck.push(c)}
+     if(order==="shuffle")shuffle(b.deck);
+   }else{
+     for(const c of items){c.faceUp=!["stock"].includes(destination);b[destination].push(c)}
+   }
+   items.length=0;d.close();if(!b.deck.length)refreshDeck(p);updateBoard();
+ }
+ function renderTemp(){
+   title.textContent=(privateView?"山札を確認":"山札を捲る")+"（残り"+items.length+"枚）";
+   body.replaceChildren();
+   const hint=document.createElement("p");hint.textContent=privateView?"操作側だけが確認するカードです。選択したカードを移動できます。":"公開したカードを選択して移動できます。";body.append(hint);
+   const list=document.createElement("div");list.className="modalcards";
+   items.forEach((c,i)=>{
+     const wrap=document.createElement("div");wrap.style.cssText="display:flex;flex-direction:column;gap:3px;width:90px";
+     const img=document.createElement("img");img.src=officialImageUrl(c.id)||"";img.alt=c.id;img.style.cssText="width:85px;height:105px;object-fit:contain";wrap.append(img);
+     const name=document.createElement("small");name.textContent=c.id;wrap.append(name);
+     const dest=document.createElement("select");for(const z of ["hand","waiting","clock","stock","memory","deck"]){const o=document.createElement("option");o.value=z;o.textContent=labels[z];dest.append(o)}wrap.append(dest);
+     deckButton(wrap,"移動",()=>{moveTemporary(p,items,i,dest.value);updateBoard();renderTemp()});
+     deckButton(wrap,"↑",()=>{if(i>0){[items[i-1],items[i]]=[items[i],items[i-1]];renderTemp()}});
+     deckButton(wrap,"↓",()=>{if(i<items.length-1){[items[i+1],items[i]]=[items[i],items[i+1]];renderTemp()}});
+     list.append(wrap);
+   });body.append(list);
+   const choice=document.createElement("select");
+   for(const [v,t] of [["shuffle","山札に戻してシャッフル"],["original","元の順番で山札の上"],["custom","並べ替えた順番で山札の上"],["bottom","山札の下"],["waiting","すべて控え室"]]){const o=document.createElement("option");o.value=v;o.textContent=t;choice.append(o)}body.append(choice);
+   deckButton(body,"残りのカードを確定",()=>{
+     const v=choice.value;
+     if(v==="bottom"){for(const c of items.slice().reverse()){c.faceUp=false;b.deck.unshift(c)}items.length=0;d.close();if(!b.deck.length)refreshDeck(p);updateBoard()}
+     else if(v==="waiting")finish("waiting",v);
+     else finish("deck",v);
+   });
+ }
+ renderTemp();d.showModal();
+}
+function runDamage(p,count){
+ const b=players[p],pending=[];let cancelled=false,unknown=false;
+ for(let i=0;i<count;i++){
+   if(!b.deck.length&&!refreshDeck(p))break;
+   const c=b.deck.pop();if(!c)break;pending.push(c);
+   if(!b.deck.length)refreshDeck(p);
+   if(c.cx===true){cancelled=true;break}
+   if(typeof c.cx!=="boolean"){unknown=true;break}
+ }
+ if(unknown){
+   const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
+   document.getElementById("dialogTitle").textContent="CX判定不能";
+   body.replaceChildren();const msg=document.createElement("p");msg.textContent="CX判定が不明なカードがあります。公開済みカードを確認してください。";body.append(msg);
+   for(const c of pending){const img=document.createElement("img");img.src=officialImageUrl(c.id)||"";img.style.cssText="width:75px;height:110px;object-fit:contain";body.append(img)}
+   deckButton(body,"キャンセルとして控え室",()=>{for(const c of pending){c.faceUp=true;b.waiting.push(c)}d.close();updateBoard()});
+   deckButton(body,"キャンセルなしとしてクロック",()=>{for(const c of pending){c.faceUp=true;b.clock.push(c)}d.close();updateBoard()});
+   d.showModal();return;
+ }
+ for(const c of pending){c.faceUp=true;b[cancelled?"waiting":"clock"].push(c)}
+ if(!b.deck.length)refreshDeck(p);updateBoard();
+ message(cancelled?"CXでダメージキャンセルしました":"ダメージ "+pending.length+"枚をクロックに置きました");
+}
+function openActions(p,z){
+ const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");d.classList.remove("zoom-mode");body.replaceChildren();
+ document.getElementById("dialogTitle").textContent=labels[z]+" ("+players[p][z].length+"枚)";
+ if(z==="stock"){
+   const sel=deckSelect(players[p].stock.length);body.append(sel);
+   deckButton(body,"指定枚数を支払う",()=>{takeTop(p,"stock","waiting",Number(sel.value));d.close()});d.showModal();return;
+ }
+ const deck=players[p].deck;
+ const options=[["reveal","山札を公開"],["flip","山札を捲る"],["inspect","山札を確認"],["draw","山札を引く"],["move","山札から移動"],["brainstorm","集中"],["damage","ダメージ"]];
+ const kind=document.createElement("select");for(const [v,label] of options){const o=document.createElement("option");o.value=v;o.textContent=label;kind.append(o)}body.append(kind);
+ const count=deckSelect(50),dest=document.createElement("select");
+ for(const z of ["clock","stock","waiting","memory","hand"]){const o=document.createElement("option");o.value=z;o.textContent=labels[z];dest.append(o)}
+ body.append(count,dest);
+ function sync(){const mode=kind.value;const max=["flip","inspect","reveal"].includes(mode)?deck.length:mode==="brainstorm"?6:50;const min=mode==="brainstorm"?2:1;count.replaceChildren();for(let i=min;i<=max;i++){const o=document.createElement("option");o.value=i;o.textContent=i+"枚";count.append(o)}count.value=String(mode==="brainstorm"?4:1);count.disabled=mode==="reveal"||max<min;dest.hidden=mode!=="move"}
+ kind.onchange=sync;sync();
+ deckButton(body,"実行",()=>{
+   const mode=kind.value,n=Number(count.value)||1;if(["flip","inspect","reveal"].includes(mode)&&!deck.length)return;
+   if(mode==="flip"||mode==="inspect"||mode==="reveal"){d.close();openDeckTemporary(p,mode,mode==="reveal"?1:n);return}
+   d.close();
+   if(mode==="draw")pullDeck(p,n,"hand");
+   if(mode==="move")pullDeck(p,n,dest.value);
+   if(mode==="brainstorm"){const cards=[];for(let i=0;i<n;i++){if(!deck.length&&!refreshDeck(p))break;const c=deck.pop();if(!c)break;c.faceUp=true;players[p].waiting.push(c);cards.push(c);if(!deck.length)refreshDeck(p)}updateBoard();const modal=document.getElementById("dialog"),panel=document.getElementById("dialogBody");document.getElementById("dialogTitle").textContent="集中：控え室に置いたカード";panel.replaceChildren();for(const c of cards){const img=document.createElement("img");img.src=officialImageUrl(c.id)||"";img.style.cssText="width:85px;height:115px;object-fit:contain";panel.append(img)}modal.showModal()}
+   if(mode==="damage")runDamage(p,n);
+ });
+ d.showModal();
+}
+
 function openList(p,z){
   const dialog=document.getElementById("dialog"), body=document.getElementById("dialogBody");
   dialog.classList.remove("zoom-mode");
@@ -206,9 +329,9 @@ function openList(p,z){
 }
 document.getElementById("side").onchange=e=>{side=Number(e.target.value);selected=null};
 document.getElementById("shuffle").onclick=()=>{shuffle(players[side].deck);updateBoard();message("山札をシャッフルしました")};
-document.getElementById("draw").onclick=()=>{if(!takeTop(side,"deck","hand"))message("山札がありません")};
-document.getElementById("refresh").onclick=()=>{const p=players[side];p.deck.push(...p.waiting.splice(0));p.deck.forEach(c=>c.faceUp=false);shuffle(p.deck);updateBoard();message("控え室を山札に戻してシャッフルしました。リフレッシュダメージは別操作です")};
-document.getElementById("damage").onclick=()=>{if(!takeTop(side,"deck","clock"))message("山札がありません")};
+document.getElementById("draw").onclick=()=>{pullDeck(side,1,"hand")};
+document.getElementById("refresh").onclick=()=>{if(!refreshDeck(side))message("山札が残っているか控え室が空です")};
+document.getElementById("damage").onclick=()=>{runDamage(side,1)};
 document.getElementById("level").onclick=()=>{const p=players[side];if(p.clock.length<7){message("クロックが7枚未満です");return}const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");d.classList.remove("zoom-mode");document.getElementById("dialogTitle").textContent="レベルアップ：下から7枚のうち1枚を選択";body.replaceChildren();p.clock.slice(0,7).forEach((c,i)=>{const b=document.createElement("button");b.className="modal-card";b.style.cssText="width:95px;display:inline-flex;flex-direction:column;align-items:center;margin:3px";const img=document.createElement("img");const url=officialImageUrl(c.id);if(url){img.src=url;img.alt=cardLabel(c);img.style.cssText="width:85px;aspect-ratio:0.71;object-fit:contain";img.onerror=()=>{img.remove();b.prepend(document.createTextNode(cardLabel(c))) };b.append(img)}else b.textContent=cardLabel(c);b.onclick=()=>{const seven=p.clock.splice(0,7),chosen=seven.splice(i,1)[0];p.level.push(chosen);p.waiting.push(...seven);d.close();updateBoard();message("レベルアップしました")};body.append(b)});d.showModal()};
 document.getElementById("close").onclick=()=>document.getElementById("dialog").close();
 
@@ -230,7 +353,7 @@ function enterTurnPhase(){
    for(const z of ["front0","front1","front2","back0","back1"])
      for(const c of players[t.player][z])if(c.orientation===90)c.orientation=0;
  }else if(t.phase==="draw"){
-   if(!takeTop(t.player,"deck","hand"))message("山札がありません。リフレッシュを手動で行ってください");
+   if(!pullDeck(t.player,1,"hand"))message("山札と控え室が空です");
  }
  selected=null;
  updateBoard();
@@ -257,10 +380,10 @@ function clockAction(){
  if(t.phase!=="clock")return;
  if(side!==t.player){message("ターンプレイヤーを操作する側に切り替えてください");return}
  if(!selected || selected.p!==side || selected.z!=="hand"){message("クロックに置く手札を1枚選択してください");return}
- if(players[side].deck.length<2){message("山札が2枚未満です。必要なリフレッシュ処理を手動で行ってください");return}
+ 
  const card=players[side].hand.splice(selected.index,1)[0];
  card.faceUp=true;players[side].clock.push(card);
- takeTop(side,"deck","hand",2);
+ pullDeck(side,2,"hand");
  setTurnPhase("main");
  message("クロックに1枚置いて2枚ドローしました。メインフェイズです");
 }
@@ -281,6 +404,6 @@ document.getElementById("clockAction").onclick=()=>{clockAction();renderTurnCont
 document.getElementById("clockSkip").onclick=()=>{if(match?.turn?.phase==="clock"){setTurnPhase("main");renderTurnControls()}};
 
 </script>
-<script src="match-state.js?v=0.32"></script>
-<script src="decklog-import.js?v=0.17"></script>
+<script src="match-state.js?v=0.35"></script>
+<script src="decklog-import.js?v=0.35"></script>
 </body></html>
