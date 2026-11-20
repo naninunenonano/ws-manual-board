@@ -219,6 +219,8 @@ function ensureTurn(){
  if(!isMatchActive())return;
  if(!match.turn || ![0,1].includes(match.turn.player) || !TURN_PHASES.includes(match.turn.phase)){
    match.turn={player:match.firstPlayer,number:1,phase:"stand"};
+   side=match.firstPlayer;
+   document.getElementById("battleSide").value=String(side);
    enterTurnPhase();
  }
 }
