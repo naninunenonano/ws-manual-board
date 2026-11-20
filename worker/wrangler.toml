@@ -1,0 +1,6 @@
+name = "ws-decklog-proxy"
+main = "worker.js"
+compatibility_date = "2026-11-20"
+
+[vars]
+ALLOWED_ORIGIN = "https://naninunenonano.github.io"
