@@ -58,8 +58,8 @@ window.WSDeck = (() => {
       const c=b.deck.pop();held.push(c);
       // Refresh must interrupt after each card is moved into the temporary resolution area.
       if(!b.deck.length)refresh(p);
-      if(typeof c.isCX!=="boolean"){unknown=true;break}
-      if(c.isCX){cancelled=true;break}
+      if(typeof c.cx!=="boolean"){unknown=true;break}
+      if(c.cx){cancelled=true;break}
     }
     if(unknown){for(const c of held)moveCard(p,c,"waiting");updateBoard();message("CX判定不明のカードがあります。自動処理を停止しました");return}
     for(const c of held)moveCard(p,c,cancelled?"waiting":"clock");
