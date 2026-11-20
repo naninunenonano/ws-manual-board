@@ -147,7 +147,7 @@ function startMatch(readDeck) {
       for (let i = 0; i < num; i++) {
         board.deck.push({
           uid: p + "-" + id + "-" + i, id,
-          level: cardCatalog[id]?.level ?? "?", orientation: 0, faceUp: false
+          level: cardCatalog[id]?.level ?? "?", orientation: 0, faceUp: false, cx:deck.cards.find(x=>x.id===id)?.cx===true
         });
       }
     }
