@@ -61,6 +61,24 @@
       message("デッキ取得に失敗しました: "+e.message);
     } finally {$("importDeck").disabled=false}
   };
+
+  function parseText(value) {
+    const rows=[];
+    const lines=value.split(/\r?\n/);
+    for(let i=0;i<lines.length;i++){
+      const line=lines[i].trim();
+      if(!line || line.startsWith("#"))continue;
+      // Format: CARD-NUMBER x 4, CARD-NUMBER,4, or CARD-NUMBER 4
+      const m=line.match(/^([^\s,×xX*]+)\s*(?:[,\s]+|\s*[×xX*]\s*)([1-4])$/);
+      if(!m)throw Error((i+1)+"行目の形式が不正です。例: FRI/S100-001 × 4");
+      rows.push({card_number:m[1],num:Number(m[2])});
+    }
+    return parse({title:"手動入力デッキ",list:rows});
+  }
+  $("parseDeckText").onclick=()=>{
+    try{preview(parseText($("deckText").value))}
+    catch(e){pending=null;$("applyDeck").disabled=true;message("テキスト解析エラー: "+e.message)}
+  };
   $("parseDeck").onclick=()=>{
     try{preview(parse(JSON.parse($("deckJson").value)))}catch(e){pending=null;$("applyDeck").disabled=true;message("JSON解析エラー: "+e.message)}
   };
