@@ -2,7 +2,7 @@
 // Deck Log public website internal API. This is not a guaranteed public API.
 // Do not persist a response until validated; CORS may block browser requests.
 (() => {
-  const endpoint = "https://decklog.bushiroad.com/system/app/api/view/";
+  const proxyBase = "https://ws-decklog-proxy.YOUR-SUBDOMAIN.workers.dev";
   const $ = id => document.getElementById(id);
   let pending = null;
   function codeOf(value) {
@@ -50,14 +50,15 @@
     $("importDeck").disabled=true;
     message("Deck Logから取得しています…");
     try {
-      const response=await fetch(endpoint+encodeURIComponent(code),{
-        method:"POST",headers:{"Accept":"application/json","Content-Type":"application/json"},
-        body:"null",signal:AbortSignal.timeout(12000)
+      const configured = proxyBase.includes("YOUR-SUBDOMAIN") ? "" : proxyBase;
+      if (!configured) throw Error("中継URL未設定：Cloudflare Workers公開後にURLを設定してください");
+      const response=await fetch(configured+"/deck/"+encodeURIComponent(code),{
+        method:"GET",headers:{"Accept":"application/json"},signal:AbortSignal.timeout(15000)
       });
-      if(!response.ok)throw Error("HTTP "+response.status);
+      if(!response.ok){const err=await response.json().catch(()=>({}));throw Error(err.error||"HTTP "+response.status)}
       preview(parse(await response.json()));
     } catch(e) {
-      message("直接取得できませんでした（CORS/通信制限など）。JSON貼り付け方式かサーバー中継が必要です: "+e.message);
+      message("デッキ取得に失敗しました: "+e.message);
     } finally {$("importDeck").disabled=false}
   };
   $("parseDeck").onclick=()=>{
