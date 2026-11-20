@@ -13,7 +13,7 @@
     imageTypeCache.set(id,promise);return promise;
   }
   async function classify(deck){
-    const results=await Promise.all(deck.cards.map(async card=>({id:card.id,num:card.num,cx:await detectLandscape(card.id)})));
+    const results=await Promise.all(deck.cards.map(async card=>({id:card.id,num:card.num,cx:typeof card.cx==="boolean"?card.cx:await detectLandscape(card.id)})));
     return {...deck,cards:results};
   }
   function cxCount(deck){return deck.cards.reduce((n,c)=>n+(c.cx===true?c.num:0),0)}
@@ -55,11 +55,11 @@
     updateSavedStatus();
     message("プレイヤー"+(side+1)+"に"+deck.total+"枚を登録・保存しました");
   }
-  $("loadSavedDeck").onclick=()=>{
+  $("loadSavedDeck").onclick=async()=>{
     if (!isDeckSetup()) return;
     const deck=savedDeck(side);
-    if (deck) preview(deck);
-    else if (confirm("保存デッキがありません。以前取得したフリーレン（1TK8A8）を登録しますか？")) apply(defaultDeck,false);
+    if (deck) preview(await classify(deck));
+    else if (confirm("保存デッキがありません。以前取得したフリーレン（1TK8A8）を確認しますか？")) preview(await classify(defaultDeck));
   };
   $("clearSavedDeck").onclick=()=>{
     if (!isDeckSetup() || !savedDeck(side)) return;
