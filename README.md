@@ -19,3 +19,22 @@
 - レベル、カード名、カード画像、効果は未登録です。取り込み後はカード番号のみ表示します。
 - 現状のレベルアップ、リフレッシュなどは従来の手動試作のままです。割り込み全自動化は別途実装します。
 - 単一ブラウザ試作であり、オンライン同期・アクセス制御は未実装です。
+
+## Ver.0.3：Cloudflare Workers中継（導入準備）
+
+`worker/worker.js` と `worker/wrangler.toml` を追加。公開後は `decklog-import.js` の `proxyBase` を実際のWorkers URLに変更する必要があります。
+
+### 初回公開手順（Cloudflareアカウントが必要）
+
+1. Cloudflare Workers & Pages で Worker を作成し、`worker/worker.js` の内容を登録する（またはWranglerで `worker/` ディレクトリから `npx wrangler deploy`）。
+2. `ALLOWED_ORIGIN` を `https://naninunenonano.github.io` に設定する。
+3. 公開された `https://<worker-name>.<subdomain>.workers.dev` を控える。
+4. `decklog-import.js` の `proxyBase` を実際のURLに変更してPRで反映する。
+5. `/health` がJSONを返すことと `/deck/1TK8A8` の取得結果が50枚になることを検証する。
+
+### 安全上の制約
+- 中継先は日本語版Deck Logの固定APIのみ。任意URLの代理取得は禁止。
+- GET `/deck/<英数字コード>` のみ受け付け、元のJSONからデッキ名とカード番号・枚数のみ返す。
+- Originを限定しているが、Originヘッダーのないサーバーアクセスは可能。認証機能ではなく、公開APIの呼び出し制限・濫用対策としては不十分。
+- APIの利用条件・レート制限・応答形式は未検証。Cloudflare Workers側からの接続も未検証。
+- Cloudflareのアカウント設定・Worker公開はまだ実行していません。
