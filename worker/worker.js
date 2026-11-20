@@ -24,14 +24,8 @@ export default {
     if (!match) return reply({error:"Invalid deck code"},400);
     try {
       const upstream = await fetch(API + match[1].toUpperCase(), {
-        method:"POST",
-        headers:{
-          "Accept":"application/json, text/plain, */*",
-          "Content-Type":"application/json",
-          "Origin":"https://decklog.bushiroad.com",
-          "Referer":"https://decklog.bushiroad.com/view/" + match[1].toUpperCase()
-        },
-        body:"null",
+        method:"GET",
+        headers:{"Accept":"application/json"},
         signal:AbortSignal.timeout(12000)
       });
       if (!upstream.ok) return reply({error:"Deck Log upstream HTTP "+upstream.status},502);
