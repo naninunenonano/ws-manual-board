@@ -87,7 +87,7 @@
     if(!confirm("プレイヤー"+(side+1)+"の現在の盤面を破棄して、取得した50枚のデッキに置き換えますか？"))return;
     const p=side,z=Object.fromEntries(zones.map(x=>[x,[]]));
     for(const {id,num} of pending.cards)for(let i=0;i<num;i++)z.deck.push({
-      uid:p+"-"+id+"-"+i,id,level:"?",orientation:0,faceUp:false
+      uid:p+"-"+id+"-"+i,id,level:cardCatalog[id]?.level??"?",orientation:0,faceUp:false
     });
     shuffle(z.deck);players[p]=z;selected=null;render();
     message("プレイヤー"+(p+1)+"に"+pending.total+"枚を登録しました。レベル・カード名・能力は未照合です");
