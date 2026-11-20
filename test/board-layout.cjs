@@ -1,7 +1,6 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
-const { existsSync } = require("node:fs");
 const { chromium, devices } = require("playwright");
 
 const cardNumbers = [
@@ -30,7 +29,7 @@ async function main() {
   await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
   let browser;
   try {
-    browser = await chromium.launch(existsSync("/usr/bin/google-chrome") ? {channel:"chrome"} : {});
+    browser = await chromium.launch(fs.existsSync("/usr/bin/google-chrome") ? {channel:"chrome"} : {});
     const page = await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
     const errors = [];
     page.on("pageerror",error=>errors.push(error.message));
@@ -43,6 +42,10 @@ async function main() {
     await page.locator("#confirmMulligan").click();
     await page.locator("#boards .board").first().waitFor();
     fs.mkdirSync("layout-screenshots",{recursive:true});
+    const loadBoardImages = () => page.locator("#boards img").evaluateAll(images=>Promise.allSettled(
+      images.map(img=>{img.loading="eager";return Promise.race([img.decode(),new Promise(resolve=>setTimeout(resolve,8000))]);})
+    ));
+    await loadBoardImages();
     await page.screenshot({path:"layout-screenshots/empty.png",fullPage:true});
     assert.equal(await page.locator("#boards .stage.has-card").count(),0);
 
@@ -69,9 +72,7 @@ async function main() {
       change.value = "0";
       change.dispatchEvent(new Event("change"));
     });
-    await page.locator("#boards img").evaluateAll(images=>Promise.allSettled(
-      images.map(img=>{img.loading="eager";return Promise.race([img.decode(),new Promise(resolve=>setTimeout(resolve,8000))]);})
-    ));
+    await loadBoardImages();
     await page.screenshot({path:"layout-screenshots/populated.png",fullPage:true});
     const geometry = await page.locator("#boards").evaluate(root=>{
       const [upper,lower] = [1,0].map(p=>root.querySelector('.board[data-player="'+p+'"]'));
