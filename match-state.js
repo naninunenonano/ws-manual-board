@@ -2,6 +2,7 @@
 
 const matchStorageKey = "ws-manual-match-v1";
 let match = null;
+let mulliganSelection = new Set();
 
 function isDeckSetup() {
   return match === null;
@@ -78,6 +79,7 @@ function validMatch(snapshot) {
       !Array.isArray(snapshot.players) || snapshot.players.length !== 2 ||
       !Array.isArray(snapshot.decks) || snapshot.decks.length !== 2 ||
       !snapshot.decks.every((deck, p) => validDeckBoard(deck, snapshot.players[p], p))) return false;
+  if (snapshot.phase === "mulligan") return snapshot.screen === "mulligan" && snapshot.result === null && [0,1].includes(snapshot.mulliganPlayer) && snapshot.players.every(board=>board.hand.length===5 && board.deck.length===45);
   if (snapshot.phase === "active") return snapshot.screen === "battle" && snapshot.result === null;
   if (snapshot.phase !== "ended" || snapshot.screen !== "result") return false;
   return (snapshot.result?.reason === "left" && snapshot.result.winner === null) ||
@@ -110,6 +112,8 @@ function restoreMatch() {
 function showMatchScreen() {
   matchElement("setupScreen").hidden = !isDeckSetup();
   matchElement("battleScreen").hidden = !isMatchActive();
+  matchElement("mulliganScreen").hidden = match?.phase !== "mulligan";
+  if(match?.phase === "mulligan") renderMulligan();
   matchElement("resultScreen").hidden = match?.phase !== "ended";
   matchElement("side").value = String(side);
   matchElement("battleSide").value = String(side);
@@ -157,7 +161,7 @@ function startMatch(readDeck) {
     }
   }
   const snapshot = {
-    version: 1, phase: "active", screen: "battle", side, firstPlayer,
+    version: 1, phase: "mulligan", screen: "mulligan", side, firstPlayer, mulliganPlayer: 0,
     openingHandDealt: true, decks, players: boards, result: null
   };
   if (!writeMatch(snapshot)) return;
@@ -168,6 +172,39 @@ function startMatch(readDeck) {
   message("両プレイヤーに初手5枚を配りました");
 }
 
+function renderMulligan(){
+  const p=match.mulliganPlayer, root=matchElement("mulliganCards");
+  matchElement("mulliganProgress").textContent="プレイヤー"+(p+1)+"：交換 "+mulliganSelection.size+"枚";
+  root.replaceChildren();
+  match.players[p].hand.forEach((card,i)=>{
+    const button=document.createElement("button");
+    button.type="button";
+    button.style.cssText="width:90px;min-height:140px;border:"+(mulliganSelection.has(i)?"3px solid #f4cf73":"1px solid #6581a5");
+    button.setAttribute("aria-pressed",String(mulliganSelection.has(i)));
+    const img=document.createElement("img");
+    const url=officialImageUrl(card.id);
+    if(url){img.src=url;img.alt=cardLabel(card);img.style.cssText="width:75px;height:105px;object-fit:contain";button.append(img);}
+    else button.textContent=cardLabel(card);
+    const label=document.createElement("span");
+    label.textContent=mulliganSelection.has(i)?"交換":"残す";
+    button.append(label);
+    button.onclick=()=>{if(mulliganSelection.has(i))mulliganSelection.delete(i);else mulliganSelection.add(i);renderMulligan();};
+    root.append(button);
+  });
+}
+function completeMulligan(){
+  if(match?.phase!=="mulligan")return;
+  const p=match.mulliganPlayer,old=match.players[p];
+  const board=Object.fromEntries(zones.map(z=>[z,old[z].slice()]));
+  const indices=[...mulliganSelection].sort((a,b)=>b-a);
+  for(const i of indices)board.waiting.push(board.hand.splice(i,1)[0]);
+  for(let i=0;i<indices.length;i++){const c=board.deck.pop();c.faceUp=true;board.hand.push(c);}
+  shuffle(board.deck);
+  const next={...match,players:match.players.map((b,i)=>i===p?board:b),mulliganPlayer:p+1,phase:p===0?"mulligan":"active",screen:p===0?"mulligan":"battle"};
+  if(!writeMatch(next))return;
+  match=next;players=next.players;mulliganSelection=new Set();showMatchScreen();
+  if(p===1)message("両プレイヤーのマリガンが完了しました");
+}
 function finishMatch(reason) {
   if (!isMatchActive()) return;
   const surrender = reason === "surrender";
@@ -209,6 +246,7 @@ function showRegisteredDecks() {
 
 function initializeMatch(readDeck, refreshSetup) {
   matchElement("startBattle").onclick = () => startMatch(readDeck);
+  matchElement("confirmMulligan").onclick = completeMulligan;
   matchElement("surrender").onclick = () => finishMatch("surrender");
   matchElement("leaveBattle").onclick = () => finishMatch("left");
   matchElement("viewDecks").onclick = showRegisteredDecks;
@@ -221,6 +259,7 @@ function initializeMatch(readDeck, refreshSetup) {
   matchElement("nextBattle").onclick = () => {
     if (match?.phase !== "ended" || !writeMatch(null)) return;
     match = null;
+    mulliganSelection = new Set();
     players = [];
     selected = null;
     matchElement("boards").replaceChildren();
