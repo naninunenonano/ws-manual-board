@@ -100,4 +100,48 @@
     try{preview(parse(JSON.parse($("deckJson").value)))}catch(e){pending=null;$("applyDeck").disabled=true;message("JSON解析エラー: "+e.message)}
   };
   $("applyDeck").onclick=()=>{if(pending)apply(pending)};
+
+  // Executed as a Safari bookmarklet on the Deck Log origin.
+  const transferBookmarklet="javascript:("+function(){
+    (async()=>{
+      try{
+        const code=location.pathname.match(/^\/view\/([A-Za-z0-9]+)\/?$/)?.[1];
+        if(!code)throw Error("Deck Logのデッキ詳細ページで実行してください");
+        const response=await fetch("/system/app/api/view/"+encodeURIComponent(code),{credentials:"same-origin",headers:{Accept:"application/json"}});
+        if(!response.ok)throw Error("HTTP "+response.status);
+        const data=await response.json();
+        if(!Array.isArray(data.list))throw Error("デッキデータがありません");
+        const list=data.list.map(x=>({card_number:x.card_number,num:x.num}));
+        const total=list.reduce((n,x)=>n+Number(x.num||0),0);
+        if(total!==50)throw Error("50枚のデッキではありません（"+total+"枚）");
+        const payload=JSON.stringify({title:data.title||code,list,code});
+        location.href="https://naninunenonano.github.io/ws-manual-board/#decklog="+encodeURIComponent(payload);
+      }catch(e){alert("転送失敗: "+e.message)}
+    })()
+  }.toString()+")()";
+  $("transferCode").value=transferBookmarklet;
+  $("copyDeckTransfer").onclick=async()=>{
+    try{await navigator.clipboard.writeText(transferBookmarklet);message("転送用コードをコピーしました。SafariのブックマークURLに貼り付けてください")}
+    catch(e){$("transferCode").focus();$("transferCode").select();message("コピーできないためコードを選択しました。手動でコピーしてください")}
+  };
+  $("openDeckLog").onclick=()=>{
+    const code=codeOf($("deckCode").value);
+    if(!code){message("デッキコードが不正です");return}
+    location.href="https://decklog.bushiroad.com/view/"+encodeURIComponent(code);
+  };
+  function receiveTransferredDeck(){
+    if(!location.hash.startsWith("#decklog="))return;
+    const encoded=location.hash.slice("#decklog=".length);
+    history.replaceState(null,"",location.pathname+location.search);
+    try{
+      if(encoded.length>16000)throw Error("転送データが大きすぎます");
+      const raw=JSON.parse(decodeURIComponent(encoded));
+      const deck=parse(raw);
+      preview(deck);
+      $("importer").scrollIntoView({behavior:"smooth",block:"start"});
+      message("Deck Logから"+deck.total+"枚を受信しました。登録先のプレイヤーを確認して「操作側に50枚登録」を押してください");
+    }catch(e){message("Deck Log転送データを読み込めません: "+e.message)}
+  }
+  receiveTransferredDeck();
+
 })();
