@@ -5,6 +5,23 @@
   const proxyBase = "https://ws-decklog-proxy.spicahosino.workers.dev";
   const $ = id => document.getElementById(id);
   let pending = null;
+  const storageKey=p=>"ws-manual-deck-v1-p"+p;
+  const defaultDeck={title:"フリーレン（1TK8A8）",cards:[["SFN/S128-003",4],["SFN/S128-009",1],["SFN/S136-012",1],["SFN/S128-017",4],["SFN/S108-T04",4],["SFN/S136-001",3],["SFN/S136-005",3],["SFN/S136-002",2],["SFN/S136-006",4],["SFN/S136-065",1],["SFN/S136-076",3],["SFN/S108-T13",4],["SFN/S136-078",4],["SFN/S128-021",4],["SFN/S108-T09",4],["SFN/S128-022",4]].map(([id,num])=>({id,num})),total:50};
+  function savedDeck(p){try{const raw=localStorage.getItem(storageKey(p));return raw?parse(JSON.parse(raw)):null}catch(e){return null}}
+  function updateSavedStatus(){const d=savedDeck(side);$("savedDeckStatus").textContent="プレイヤー"+(side+1)+"の保存デッキ："+(d?d.title+"（50枚）":"なし。初回はデッキ登録が必要です")}
+  function apply(deck,ask=true){
+    if(ask&&!confirm("プレイヤー"+(side+1)+"の現在の盤面を破棄して、50枚のデッキに置き換えますか？"))return;
+    const p=side,z=Object.fromEntries(zones.map(x=>[x,[]]));
+    for(const {id,num} of deck.cards)for(let i=0;i<num;i++)z.deck.push({uid:p+"-"+id+"-"+i,id,level:cardCatalog[id]?.level??"?",orientation:0,faceUp:false});
+    shuffle(z.deck);players[p]=z;selected=null;render();
+    try{localStorage.setItem(storageKey(p),JSON.stringify({title:deck.title,list:deck.cards.map(c=>({card_number:c.id,num:c.num}))}))}catch(e){message("登録しましたが端末への保存に失敗しました: "+e.message);return}
+    updateSavedStatus();message("プレイヤー"+(p+1)+"に"+deck.total+"枚を登録・保存しました。次回から自動で読み込みます");
+  }
+  $("loadSavedDeck").onclick=()=>{const d=savedDeck(side);if(d)apply(d);else if(confirm("保存デッキがありません。以前取得したフリーレン（1TK8A8）を登録しますか？"))apply(defaultDeck)};
+  $("clearSavedDeck").onclick=()=>{if(!savedDeck(side))return;if(!confirm("プレイヤー"+(side+1)+"の保存デッキを削除しますか？（現在の盤面は維持）"))return;localStorage.removeItem(storageKey(side));updateSavedStatus();message("保存デッキを削除しました")};
+  $("side").addEventListener("change",updateSavedStatus);
+  updateSavedStatus();
+
   function codeOf(value) {
     const v = value.trim();
     const match = v.match(/^(?:https?:\/\/decklog\.bushiroad\.com\/view\/)?([A-Za-z0-9]{4,12})\/?$/i);
@@ -82,14 +99,5 @@
   $("parseDeck").onclick=()=>{
     try{preview(parse(JSON.parse($("deckJson").value)))}catch(e){pending=null;$("applyDeck").disabled=true;message("JSON解析エラー: "+e.message)}
   };
-  $("applyDeck").onclick=()=>{
-    if(!pending)return;
-    if(!confirm("プレイヤー"+(side+1)+"の現在の盤面を破棄して、取得した50枚のデッキに置き換えますか？"))return;
-    const p=side,z=Object.fromEntries(zones.map(x=>[x,[]]));
-    for(const {id,num} of pending.cards)for(let i=0;i<num;i++)z.deck.push({
-      uid:p+"-"+id+"-"+i,id,level:cardCatalog[id]?.level??"?",orientation:0,faceUp:false
-    });
-    shuffle(z.deck);players[p]=z;selected=null;render();
-    message("プレイヤー"+(p+1)+"に"+pending.total+"枚を登録しました。レベル・カード名・能力は未照合です");
-  };
+  $("applyDeck").onclick=()=>{if(pending)apply(pending)};
 })();
