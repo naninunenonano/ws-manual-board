@@ -6,6 +6,23 @@
   const $ = id => document.getElementById(id);
   let pending = null;
   let transferRevision = 0;
+  const imageTypeCache = new Map();
+  function detectLandscape(id){
+    if(imageTypeCache.has(id))return imageTypeCache.get(id);
+    const promise=new Promise(resolve=>{const url=officialImageUrl(id);if(!url){resolve(null);return}const img=new Image();img.onload=()=>resolve(img.naturalWidth>img.naturalHeight);img.onerror=()=>resolve(null);img.src=url});
+    imageTypeCache.set(id,promise);return promise;
+  }
+  async function classify(deck){
+    const results=await Promise.all(deck.cards.map(async card=>({id:card.id,num:card.num,cx:typeof card.cx==="boolean"?card.cx:await detectLandscape(card.id)})));
+    return {...deck,cards:results};
+  }
+  function cxCount(deck){return deck.cards.reduce((n,c)=>n+(c.cx===true?c.num:0),0)}
+  function cxReady(deck){return deck.cards.every(c=>typeof c.cx==="boolean")&&cxCount(deck)===8}
+  function confirmCx(deck){
+    const table=$("deckPreview");const info=document.createElement("p");info.textContent="CX画像判定："+cxCount(deck)+"枚 / 8枚。画像取得失敗・縦長CXなどは下のチェックを修正してください。";table.append(info);
+    for(const card of deck.cards){const label=document.createElement("label");label.style.cssText="display:flex;align-items:center;gap:6px;margin:5px 0";const check=document.createElement("input");check.type="checkbox";check.checked=card.cx===true;check.onchange=()=>{card.cx=check.checked;info.textContent="CX判定："+cxCount(deck)+"枚 / 8枚";$("applyDeck").disabled=!cxReady(deck)};const img=document.createElement("img");img.src=officialImageUrl(card.id)||"";img.style.cssText="width:45px;height:65px;object-fit:contain";label.append(check,img,document.createTextNode(card.id+" × "+card.num));table.append(label)}
+    $("applyDeck").disabled=!cxReady(deck);
+  }
   const storageKey=p=>"ws-manual-deck-v1-p"+p;
   const defaultDeck={title:"フリーレン（1TK8A8）",cards:[["SFN/S128-003",4],["SFN/S128-009",1],["SFN/S136-012",1],["SFN/S128-017",4],["SFN/S108-T04",4],["SFN/S136-001",3],["SFN/S136-005",3],["SFN/S136-002",2],["SFN/S136-006",4],["SFN/S136-065",1],["SFN/S136-076",3],["SFN/S108-T13",4],["SFN/S136-078",4],["SFN/S128-021",4],["SFN/S108-T09",4],["SFN/S128-022",4]].map(([id,num])=>({id,num})),total:50};
   function savedDeck(p) {
@@ -14,7 +31,7 @@
       if (!raw) return null;
       const data = JSON.parse(raw);
       if (!Array.isArray(data?.list) && Array.isArray(data?.cards)) {
-        data.list = data.cards.map(card => ({card_number:card?.id,num:card?.num}));
+        data.list = data.cards.map(card => ({card_number:card?.id,num:card?.num,cx:card?.cx}));
       }
       return parse(data);
     } catch (e) {
@@ -23,11 +40,12 @@
   }
   function updateSavedStatus(){const d=savedDeck(side);$("savedDeckStatus").textContent="プレイヤー"+(side+1)+"の保存デッキ："+(d?d.title+"（50枚）":"なし。初回はデッキ登録が必要です")}
   function apply(deck,ask=true){
+    if(!cxReady(deck)){message("CXが8枚に確定していません。デッキを確認してください");return}
     if (!isDeckSetup()) return;
     if (ask && !confirm("プレイヤー"+(side+1)+"のデッキとして50枚を登録しますか？")) return;
     try {
       localStorage.setItem(storageKey(side), JSON.stringify({
-        title:deck.title,list:deck.cards.map(card=>({card_number:card.id,num:card.num}))
+        title:deck.title,list:deck.cards.map(card=>({card_number:card.id,num:card.num,cx:card.cx}))
       }));
     } catch (e) {
       message("デッキを保存できませんでした。端末の保存設定を確認してください");
@@ -37,11 +55,11 @@
     updateSavedStatus();
     message("プレイヤー"+(side+1)+"に"+deck.total+"枚を登録・保存しました");
   }
-  $("loadSavedDeck").onclick=()=>{
+  $("loadSavedDeck").onclick=async()=>{
     if (!isDeckSetup()) return;
     const deck=savedDeck(side);
-    if (deck) preview(deck);
-    else if (confirm("保存デッキがありません。以前取得したフリーレン（1TK8A8）を登録しますか？")) apply(defaultDeck,false);
+    if (deck) preview(await classify(deck));
+    else if (confirm("保存デッキがありません。以前取得したフリーレン（1TK8A8）を確認しますか？")) preview(await classify(defaultDeck));
   };
   $("clearSavedDeck").onclick=()=>{
     if (!isDeckSetup() || !savedDeck(side)) return;
@@ -73,18 +91,18 @@
       const count = row?.num;
       const num = typeof count === "string" && /^\d+$/.test(count.trim()) ? Number(count) : count;
       if (!id || !Number.isInteger(num) || num < 1 || num > 50) throw Error("カード番号または採用枚数が不正です");
-      return {id, num};
+      return {id, num, cx:typeof row.cx==="boolean"?row.cx:null};
     });
     const merged = new Map();
-    for (const {id,num} of rows) merged.set(id,(merged.get(id)||0)+num);
-    const total = [...merged.values()].reduce((a,b)=>a+b,0);
+    for (const {id,num,cx} of rows){const old=merged.get(id);merged.set(id,{num:(old?.num||0)+num,cx:cx??old?.cx??null})}
+    const total = [...merged.values()].reduce((a,b)=>a+b.num,0);
     if (total !== 50) throw Error("メインデッキが "+total+"枚です（50枚必要）");
-    if ([...merged.values()].some(n=>n>4)) throw Error("同じカード番号が4枚を超えています");
-    return {title: typeof data.title==="string"?data.title:"Deck Log",cards:[...merged].map(([id,num])=>({id,num})),total};
+    if ([...merged.values()].some(n=>n.num>4)) throw Error("同じカード番号が4枚を超えています");
+    return {title: typeof data.title==="string"?data.title:"Deck Log",cards:[...merged].map(([id,value])=>({id,...value})),total};
   }
   function preview(deck) {
     pending=deck;
-    $("applyDeck").disabled=false;
+    $("applyDeck").disabled=!cxReady(deck);
     $("deckTransferStatus").textContent="";
     $("deckPreview").replaceChildren();
     const title=document.createElement("p");
@@ -98,7 +116,8 @@
       table.append(row);
     }
     $("deckPreview").append(table);
-    message("50枚のカード番号・枚数を確認しました。登録先のプレイヤーを確認してください");
+    if(!cxReady(deck))confirmCx(deck);
+    message(cxReady(deck)?"CX8枚を確認しました。登録できます":"CX判定を確認してください（合計8枚で登録可能）");
   }
   $("importDeck").onclick=async()=>{
     pending=null;$("applyDeck").disabled=true;
@@ -115,7 +134,7 @@
       });
       if(!response.ok){const err=await response.json().catch(()=>({}));throw Error(err.error||"HTTP "+response.status)}
       const data = await response.json();
-      if (revision === transferRevision) preview(parse(data));
+      if (revision === transferRevision) preview(await classify(parse(data)));
     } catch(e) {
       if (revision === transferRevision) message("デッキ取得に失敗しました: "+e.message);
     } finally {$("importDeck").disabled=false}
@@ -134,12 +153,12 @@
     }
     return parse({title:"手動入力デッキ",list:rows});
   }
-  $("parseDeckText").onclick=()=>{
-    try{preview(parseText($("deckText").value))}
+  $("parseDeckText").onclick=async()=>{
+    try{preview(await classify(parseText($("deckText").value)))}
     catch(e){pending=null;$("applyDeck").disabled=true;message("テキスト解析エラー: "+e.message)}
   };
-  $("parseDeck").onclick=()=>{
-    try{preview(parse(JSON.parse($("deckJson").value)))}catch(e){pending=null;$("applyDeck").disabled=true;message("JSON解析エラー: "+e.message)}
+  $("parseDeck").onclick=async()=>{
+    try{preview(await classify(parse(JSON.parse($("deckJson").value))))}catch(e){pending=null;$("applyDeck").disabled=true;message("JSON解析エラー: "+e.message)}
   };
   $("applyDeck").onclick=()=>{if(pending)apply(pending)};
 
@@ -180,7 +199,7 @@
     try { return JSON.parse(json); }
     catch (e) { throw Error("転送データのJSONが不正です。転送URLが途中で切れていないか確認してください"); }
   }
-  function receiveTransferredDeck() {
+  async function receiveTransferredDeck() {
     const prefix = "#decklog=";
     if (!location.hash.startsWith(prefix)) return;
     if (!isDeckSetup()) {
@@ -195,7 +214,7 @@
     const status = $("deckTransferStatus");
     try {
       const raw = decodeTransfer(encoded);
-      const deck = parse(raw);
+      const deck = await classify(parse(raw));
       preview(deck);
       const code = typeof raw.code === "string" ? codeOf(raw.code) : null;
       if (code) $("deckCode").value = code;
