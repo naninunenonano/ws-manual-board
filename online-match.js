@@ -42,6 +42,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
   function lockBoard() {
     const blocked=!!roomId && (sending || !online);
     el("boards").inert=blocked;
+    el("autoAttack").disabled=blocked;
     el("playerActions").inert=blocked;
     el("confirmMulligan").disabled=blocked || !!snapshot?.state.mulligan?.[snapshot.seat];
     for(const id of ["surrender","leaveBattle","onlineRevealDeckTop","onlineReveal","onlineEndReveal","onlineDeckRequest","onlineAnswerDeck","onlineAcceptDeck","onlineOpponentReveal"]) {
@@ -235,6 +236,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
       return false;
     }finally{
       sending=false;lockBoard();renderLobby();
+      if(match?.online && match.phase==="active")renderTurnControls();
       if(recheck){recheck=false;poll()}
       if(online && !temporary && match?.online)checkMandatoryLevel();
     }
@@ -249,7 +251,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
     const data={board,clearReveal};
     clearReveal=false;
     if(turnKey!==lastTurn)data.turn=turn;
-    send("board",data,{recover:true});
+    return send("board",data,{recover:true});
   }
 
   function reset() {
@@ -397,9 +399,9 @@ function initializeOnlineMatch({authenticate,getDecks}) {
     commit,reset,refreshDecks:()=>{if(controls.open)renderDeckChoices()},
     mulligan:()=>send("mulligan",{cards:[...mulliganSelection].map(i=>players[side].hand[i].uid)}),
     finish:reason=>send(reason==="surrender"?"surrender":"leave"),
-    async temporaryReveal(cards){
+    async temporaryReveal(cards,options){
       temporary=true;
-      const ok=await send("reveal",{cards:cards.map(card=>card.uid)});
+      const ok=await send("reveal",{cards:cards.map(card=>card.uid)},options);
       if(!ok)temporary=false;
       return ok;
     },
