@@ -231,9 +231,15 @@ const WSEffects = (() => {
     p=>knownKey(sides,p.side)&&word(p.name)&&(p.cardNumbers===undefined||(Array.isArray(p.cardNumbers)&&p.cardNumbers.length>0&&p.cardNumbers.every(word))),
     p=>"CX置場に「"+p.name+"」がある",
     (ctx,p)=>pile(ctx,{side:p.side,zone:"cx"}).some(c=>p.cardNumbers?p.cardNumbers.includes(c.cardNumber):c.name===p.name),["side","name","cardNumbers"]);
+  operation("continuousCxBuff","CX永続修正の参照",p=>knownKey(sides,p.side)&&integer(p.power)&&integer(p.soul),
+    p=>"CXがある間キャラ全体にパワー"+p.power+"、ソウル"+p.soul,
+    (ctx,p)=>{const source=ctx.choices.sourceUid;
+      if(!pile(ctx,{side:p.side,zone:"cx"}).some(c=>c.uid===source))fail("対象CXがCX置場にありません","condition-not-met");
+      return {cards:pile(ctx,{side:p.side,zone:"stage"}).filter(c=>c.type==="character").map(c=>c.uid),powerBonus:p.power,soulBonus:p.soul};
+    },["side","power","soul"]);
   operation("treasureTrigger","トレジャー処理",p=>knownKey(sides,p.side)&&word(p.triggerUid),
     p=>"トレジャーを手札に戻し、任意で山札の上をストックに置く",
-    (ctx,p)=>{const waiting=pile(ctx,{side:p.side,zone:"waiting"});const idx=waiting.findIndex(c=>c.uid===p.triggerUid);
+    (ctx,p)=>{const waiting=pile(ctx,{side:p.side,zone:"waiting"});const idx=waiting.findIndex(c=>c.uid===(p.triggerUid==="@source"?ctx.choices.sourceUid:p.triggerUid));
       if(idx<0)fail("トリガーしたCXが控え室にありません");
       if(typeof ctx.choices.treasureStock!=="boolean")fail("ストックに置くか選んでください","needs-choice");
       if(ctx.choices.treasureStock&&!pile(ctx,{side:p.side,zone:"deck"}).length)fail("山札がありません");
