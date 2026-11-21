@@ -357,6 +357,7 @@ const WSEffects = (() => {
         at=entry;
         const {handler,params}=entry.step;
         if(guided){
+          if(handler==="chooseDestination"){const dest=yield {kind:"destination",destinations:params.destinations};choices[params.choiceKey]=dest;}
           const request=selectionRequest(context,entry);
           if(request){
             if(request.candidates.length<request.min)
