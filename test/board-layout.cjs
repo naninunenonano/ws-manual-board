@@ -317,7 +317,10 @@ async function checkBot(browser,url){
 
   await page.waitForFunction(()=>typeof botCatalog!=="undefined");
   await start("firen");
-  await page.evaluate(()=>move(0,"hand",players[0].hand.findIndex(card=>card.id==="STS/W140-002"),"front0"));
+  const hand=page.locator("#boards .player.active .hand");
+  await hand.locator('.card[title^="鋼に宿る優しき心 フィレン"]').tap({position:{x:8,y:10}});
+  await hand.locator(".card.selected").waitFor();
+  await page.locator('#boards .zone[data-p="0"][data-z="front0"]').tap();
   await button("能力を使う").tap();
   await button("黎明の刻 レイス").tap();
   await button("選択を確定").tap();

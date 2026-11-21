@@ -128,7 +128,7 @@ function showMatchScreen() {
   matchElement("resultScreen").hidden = match?.phase !== "ended";
   matchElement("side").value = String(side);
   matchElement("battleSide").value = String(side);
-  matchElement("battleSide").disabled=!!match?.bot;
+  matchElement("battleSide").disabled=!!(match?.bot||match?.online);
   if (isMatchActive()) {
     ensureTurn();
     const first = match.firstPlayer;

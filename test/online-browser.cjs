@@ -108,6 +108,8 @@ async function main() {
     await $(b,"onlineMulliganReconnect").click();
     await $(b,"confirmMulligan").click();
     await Promise.all([$(a,"battleScreen").waitFor(),$(b,"battleScreen").waitFor()]);
+    assert.equal(await $(a,"battleSide").isDisabled(),true);
+    assert.equal(await $(b,"battleSide").isDisabled(),true);
     const characterInHand=async page=>page.locator("#boards .player.active .hand .card")
       .nth(await page.evaluate(()=>players[side].hand.findIndex(card=>card.cx===false)));
     const me=a.locator("#boards .player.active .hand .card").first();
