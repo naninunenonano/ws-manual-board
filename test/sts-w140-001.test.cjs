@@ -52,9 +52,9 @@ test("Reis console success, failure, turn limit and memory-marker condition",()=
  assert.equal(result.state.self.hand[0].uid,"hit");
  assert.equal(engine.run(e,b,{...choices,usedThisTurn:1}).status,"condition-not-met");
  const miss=structuredClone(b);miss.self.deck=[card("miss",{type:"event",level:0})];
- const failedReveal=engine.run(e,miss,choices);
+ const failedReveal=engine.run(e,miss,{...choices,usedThisTurn:0});
  assert.equal(failedReveal.status,"success",failedReveal.message);
  assert.equal(failedReveal.state.self.deck[0].uid,"miss");
  const memoryFull=structuredClone(b);memoryFull.self.memory.push(card("m1"),card("m2"));
- assert.equal(engine.run(e,memoryFull,choices).status,"condition-not-met");
+ assert.equal(engine.run(e,memoryFull,{...choices,usedThisTurn:0}).status,"condition-not-met");
 });
