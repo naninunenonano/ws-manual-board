@@ -15,7 +15,7 @@
 #battleScreen .screen-actions,#battleScreen .toolbar,#battleScreen .controls{margin:4px 0;gap:4px}
 #battleScreen .screen-actions button,#battleScreen .toolbar button,#battleScreen .controls button,#battleScreen .toolbar select{font-size:11px;padding:5px 6px}
 #battleScreen .notice{min-height:0;margin:3px 0;font-size:11px}
-</style></head><body><header><h1>WS 手動盤面 <small>Ver.0.52</small></h1></header>
+</style></head><body><header><h1>WS 手動盤面 <small>Ver.0.52</small></h1><a href="card-registration.html" style="color:#ade0ff">カード情報・効果登録</a></header>
 <main class="shell"><p id="storageWarning" role="status" hidden></p><section id="setupScreen"><h2>デッキ設定</h2><p class="muted">登録済みのデッキから、各プレイヤーが使うデッキを選択してください。同じデッキも使用できます。</p><div class="toolbar"><label>設定するプレイヤー <select id="side"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label></div><section class="player" id="importer"><h2>使用するデッキ</h2><div class="toolbar"><label>このプレイヤーが使うデッキ <select id="savedDeckSelect"></select></label><button id="loadSavedDeck">選択デッキを確認</button><button id="clearSavedDeck">選択デッキを削除</button></div><p class="muted" id="savedDeckStatus">保存デッキ：未確認</p>
 <p id="cloudDeckStatus" role="status">端末内保存を利用できます</p>
 <details id="cloudDeckControls"><summary>デッキのクラウド保存</summary>
@@ -41,18 +41,12 @@
 <div class="toolbar"><button id="onlineAcceptDeck" type="button" hidden>指定枚数を公開して操作</button><button id="onlineAnswerDeck" type="button" hidden>依頼を閉じる</button></div>
 </section><div id="boards"></div><div id="playerActions" style="margin:8px 0"><div id="turnControls" style="border:1px solid #6581a5;border-radius:9px;padding:9px;margin:8px 0"><strong id="turnStatus"></strong><div class="toolbar"><button id="clockAction" hidden>選択した手札をクロックに置いて2枚ドロー</button><button id="clockSkip" hidden>クロックせずメインへ</button><button id="drawReminderResume" hidden>ドロー前確認に戻る</button><button id="nextPhase">次のフェイズへ</button></div></div><div class="toolbar"><label>操作する側 <select id="battleSide"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label><button id="viewDecks">自分のデッキ確認</button><button id="shuffle">山札シャッフル</button></div></div><p class="muted">カード画像は縦横比を維持して表示します。手札の🔍、盤面や一覧の「拡大」で公式画像を大きく確認できます。カード能力は手動で処理します。レベルアップはクロック下から7枚を対象とします。</p></section><section id="resultScreen" hidden><h2>対戦終了</h2><p id="battleResult" role="status"></p><button id="nextBattle">次の対戦へ</button></section></main>
 <dialog id="dialog"><h3 id="dialogTitle"></h3><div id="dialogBody"></div><div class="controls"><button id="close">閉じる</button></div></dialog>
+<script src="card-images.js?v=1"></script>
 <script>
 "use strict";
 const cardCatalog = Object.freeze({
   "SFN/S128-003": {name:"旅立ちのきっかけ ヒンメル",level:3,cost:2,power:9500,type:"キャラ",rarity:"RR"}
 });
-function officialImageUrl(id){
-  const match=String(id).match(/^([A-Za-z]+)\/([A-Za-z]+\d+)-([A-Za-z0-9]+)$/);
-  if(!match)return null;
-  const group=match[1].toLowerCase(),set=match[2].toLowerCase(),number=match[3].toLowerCase();
-  const folder=group+"_"+set;
-  return "https://ws-tcg.com/wordpress/wp-content/images/cardlist/"+group[0]+"/"+folder+"/"+folder+"_"+number+".png";
-}
 function addCardImage(parent,card,alt){
   const url=officialImageUrl(card.id);
   if(!url)return false;

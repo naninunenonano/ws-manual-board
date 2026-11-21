@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>カード情報・効果登録 | WS手動対戦盤面</title>
+  <link rel="stylesheet" href="card-registration.css?v=1">
+  <script src="card-images.js?v=1" defer></script>
+  <script src="card-catalog.js?v=1" defer></script>
+  <script src="card-registration.js?v=1" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell header-content">
+      <h1>カード情報・効果登録</h1>
+      <a href="index.html">対戦盤面</a>
+    </div>
+  </header>
+  <main class="shell">
+    <section class="panel" aria-labelledby="editorHeading">
+      <h2 id="editorHeading">カードを開く</h2>
+      <form id="lookupForm" class="row">
+        <label class="grow">カード番号
+          <input id="lookupNumber" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="例 TEST/S001-001" required>
+        </label>
+        <button type="submit">開く</button>
+      </form>
+      <div id="imagePreview" class="preview" hidden>
+        <img id="cardImage" alt="" hidden>
+        <p id="imageStatus" class="muted" role="status"></p>
+      </div>
+      <p id="editorStatus" class="feedback" role="status"></p>
+      <form id="editor" hidden novalidate>
+        <div class="section-heading">
+          <h3 id="editingNumber"></h3>
+          <button id="deleteCard" class="danger" type="button" hidden>このカードを削除</button>
+        </div>
+        <div class="fields">
+          <label>タイトル <input id="cardTitle" placeholder="任意"></label>
+          <label>商品 <input id="cardProduct" placeholder="任意"></label>
+          <label>カード種別
+            <select id="cardType">
+              <option value="">選択してください</option>
+              <option value="character">キャラ</option>
+              <option value="event">イベント</option>
+              <option value="climax">CX</option>
+            </select>
+          </label>
+          <label>色 <input id="cardColor" list="colors" autocomplete="off"></label>
+          <datalist id="colors"><option value="黄"><option value="緑"><option value="赤"><option value="青"><option value="紫"></datalist>
+          <label data-stat="level">レベル <input id="level" inputmode="numeric"></label>
+          <label data-stat="cost">コスト <input id="cost" inputmode="numeric"></label>
+          <label data-stat="power">パワー <input id="power" inputmode="numeric"></label>
+          <label data-stat="soul">ソウル <input id="soul" inputmode="numeric"></label>
+        </div>
+        <div class="section-heading">
+          <h3>効果定義</h3>
+          <button id="addEffect" type="button">効果を追加</button>
+        </div>
+        <p class="muted">効果ごとにJSONを編集します。処理は <code>steps</code> の順番で記録され、未実装の処理も保存できます。</p>
+        <div id="effects"></div>
+        <div class="row">
+          <button class="primary" type="submit">カードを保存</button>
+          <button id="validateDraft" type="button">入力を検証</button>
+          <button id="reloadCard" type="button">登録内容を読み直す</button>
+        </div>
+      </form>
+    </section>
+    <section class="panel" aria-labelledby="listHeading">
+      <div class="section-heading">
+        <h2 id="listHeading">登録済みカード</h2>
+        <span id="cardCount" class="muted"></span>
+      </div>
+      <div class="fields list-filters">
+        <label>カード番号で検索 <input id="filterNumber" type="search" autocomplete="off"></label>
+        <label>タイトル <select id="filterTitle"></select></label>
+        <label>商品 <select id="filterProduct"></select></label>
+      </div>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="登録済みカード一覧">
+        <table>
+          <thead><tr><th>カード番号</th><th>種別</th><th>レベル</th><th>コスト</th><th>パワー</th><th>効果数</th><th>検証</th></tr></thead>
+          <tbody id="cardRows"></tbody>
+        </table>
+      </div>
+      <p id="emptyList" class="muted"></p>
+    </section>
+    <section class="panel" aria-labelledby="validationHeading" id="validation">
+      <div class="section-heading">
+        <h2 id="validationHeading">検証結果</h2>
+        <button id="validateAll" type="button">全登録データを検証</button>
+      </div>
+      <p id="validationSummary" class="muted" role="status"></p>
+      <ul id="issueList"></ul>
+    </section>
+    <section class="panel" aria-labelledby="jsonHeading">
+      <h2 id="jsonHeading">JSON入出力</h2>
+      <label>JSONファイル <input id="importFile" type="file" accept=".json,application/json"></label>
+      <label for="jsonText">JSON</label>
+      <textarea id="jsonText" spellcheck="false" rows="6" placeholder="JSONを貼り付けるか、ファイルを選択してください"></textarea>
+      <div class="row">
+        <label class="grow">同じカード番号がある場合
+          <select id="importMode"><option value="skip">既存のカードを残す</option><option value="overwrite">読み込んだカードで上書き</option></select>
+        </label>
+        <button id="importJson" type="button">登録データに読み込む</button>
+      </div>
+      <div class="row export-actions">
+        <button id="exportAll" type="button">全件を出力</button>
+        <button id="exportGroup" type="button">選択したタイトル・商品を出力</button>
+        <button id="copyJson" type="button">コピー</button>
+        <button id="downloadJson" type="button">ファイルとして保存</button>
+      </div>
+      <p class="muted">タイトル・商品別の出力には、登録済みカード一覧の絞り込みを使います。</p>
+      <p id="jsonStatus" class="feedback" role="status"></p>
+    </section>
+  </main>
+</body>
+</html>

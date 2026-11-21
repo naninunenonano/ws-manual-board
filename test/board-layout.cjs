@@ -17,6 +17,7 @@ const files = new Map([
   ["/match-state.js",["match-state.js","text/javascript"]],
   ["/decklog-import.js",["decklog-import.js","text/javascript"]],
   ["/cloud-decks.js",["cloud-decks.js","text/javascript"]],
+  ["/card-images.js",["card-images.js","application/javascript"]],
   ["/online-match.js",["online-match.js","text/javascript"]]
 ]);
 
