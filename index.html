@@ -450,7 +450,7 @@ function openActions(p,z){
  const kind=document.createElement("select");for(const [v,label] of options){const o=document.createElement("option");o.value=v;o.textContent=label;kind.append(o)}body.append(kind);
  const count=deckSelect(50),dest=document.createElement("select"),direction=document.createElement("select");
  for(const [value,label] of [["top","上から"],["bottom","下から"]]){const option=document.createElement("option");option.value=value;option.textContent=label;direction.append(option)}
- for(const z of ["clock","stock","waiting","memory","hand"]){const o=document.createElement("option");o.value=z;o.textContent=labels[z];dest.append(o)}
+ for(const z of ["clock","stock","waiting","memory","hand","front0","front1","front2","back0","back1"]){const o=document.createElement("option");o.value=z;o.textContent=labels[z];dest.append(o)}
  body.append(count,direction,dest);
  function sync(){const mode=kind.value;const max=["flip","inspect","reveal"].includes(mode)?deck.length:mode==="brainstorm"?6:50;const min=mode==="brainstorm"?2:1;count.replaceChildren();for(let i=min;i<=max;i++){const o=document.createElement("option");o.value=i;o.textContent=i+"枚";count.append(o)}count.value=String(mode==="brainstorm"?4:1);count.disabled=mode==="reveal"||max<min;direction.hidden=!["reveal","flip","inspect","move"].includes(mode);dest.hidden=mode!=="move"}
  kind.onchange=sync;sync();
