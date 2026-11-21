@@ -228,9 +228,9 @@ const WSEffects = (() => {
     (ctx,p)=>pile(ctx,{side:p.side,zone:"stage"}).filter(c=>c.uid!==ctx.choices.sourceUid&&c.type==="character"&&checkTags(c,"traits",p.traits)).length>=p.min,
     ["side","min","traits"]);
   register(conditions,"cxName","CX置場のカード名",
-    p=>knownKey(sides,p.side)&&word(p.name),
+    p=>knownKey(sides,p.side)&&word(p.name)&&(p.cardNumbers===undefined||(Array.isArray(p.cardNumbers)&&p.cardNumbers.length>0&&p.cardNumbers.every(word))),
     p=>"CX置場に「"+p.name+"」がある",
-    (ctx,p)=>pile(ctx,{side:p.side,zone:"cx"}).some(c=>c.name===p.name),["side","name"]);
+    (ctx,p)=>pile(ctx,{side:p.side,zone:"cx"}).some(c=>p.cardNumbers?p.cardNumbers.includes(c.cardNumber):c.name===p.name),["side","name","cardNumbers"]);
   register(conditions,"memoryMarkerCount","思い出・マーカー合計",
     p=>knownKey(sides,p.side)&&count(p.max),
     p=>"思い出とマーカーの合計が"+p.max+"枚以下",
