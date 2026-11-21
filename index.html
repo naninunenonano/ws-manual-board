@@ -105,7 +105,7 @@ function showPendingMarkerChoices(){
    if(i>=0)manualDestination(item.p,"waiting",i);
   });
  }
- deckButton(body,"残りは控え室で確定",()=>{pendingMarkerChoices=[];d.close()});
+ deckButton(body,"残りは控え室で確定",()=>{pendingMarkerChoices=[];d.close();updateBoard()});
  d.showModal();
 }
 function openStageMarkers(p,z){
@@ -565,7 +565,7 @@ document.getElementById("shuffle").onclick=()=>{shuffle(players[side].deck);upda
 
 function checkMandatoryLevel(){
  const d=document.getElementById("dialog");
- if(ruleBusy || d.open || !isMatchActive())return;
+ if(ruleBusy || d.open || pendingMarkerChoices.length || !isMatchActive())return;
  const order=[side,1-side];
  if(!order.some(p=>players[p].clock.length>=7 || (!players[p].deck.length && players[p].waiting.length)))return;
  runRuleOperation(done=>resolveBoardRules(order[0],()=>resolveBoardRules(order[1],done)));
