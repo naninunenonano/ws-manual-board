@@ -341,7 +341,11 @@
               "handler": "cxName",
               "params": {
                 "side": "self",
-                "name": "黎明告げる凱旋歌"
+                "name": "黎明告げる凱旋歌",
+                "cardNumbers": [
+                  "STS/W140-031",
+                  "STS/W140-031R"
+                ]
               }
             }
           ],
