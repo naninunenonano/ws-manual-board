@@ -1093,3 +1093,43 @@ test("集中：山札切れのリフレッシュにめくり中のカードを�
   assert.equal(board.clock.length,1);
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
+
+test("仮Lv1：赤はレベル置場、青はクロックの色でプレイでき、カムバック連動は最大4枚から特徴を回収する",()=>{
+  const page=launchRules("practice-level-one");
+  const red=snapshot(page).players[0].hand.find(c=>c.id==="BOT/W000-106");
+  const blue=snapshot(page).players[0].hand.find(c=>c.id==="BOT/W000-107");
+  assert.equal(page.run(`autoRulePlace(0,${JSON.stringify(red.uid)},"front0")`),true);
+  assert.equal(page.run(`autoRulePlace(0,${JSON.stringify(blue.uid)},"front1")`),true);
+  assert.equal(page.run("botStats(0,players[0].front1[0]).power"),5000);
+  page.run('setTurnPhase("climax")');
+  assert.equal(page.run('autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-104").uid,"cx")'),true);
+  page.run('setTurnPhase("attack");autoRuleAttack(0,"front0",players[0].front0[0].uid,"direct")');
+  assert.match(page.get("dialogTitle").textContent,/山札を何枚見るか/);
+  const before=page.run("players[0].deck.length");
+  ruleButton(page,"山札を見る");
+  assert.match(page.get("dialogTitle").textContent,/巡遊者/);
+  assert.equal(page.get("dialogBody").children.some(el=>el.textContent.startsWith("2．")&&el.textContent.endsWith("を手札へ")),false);
+  const option=page.get("dialogBody").children.find(el=>el.textContent?.startsWith("1．")&&el.textContent.endsWith("を手札へ"));
+  assert.ok(option);
+  option.onclick();
+  const saved=snapshot(page);
+  assert.equal(saved.players[0].deck.length,before-5);
+  assert.equal(saved.players[0].waiting.length,3);
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});
+
+test("仮Lv1：青は他の特徴持ち2体でパワー＋1000、支払いでトリガーを2回処理する",()=>{
+  const page=launchRules("practice-level-one");
+  page.run('autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-107").uid,"front1")');
+  assert.equal(page.run("botStats(0,players[0].front1[0]).power"),5000);
+  page.run('botMove(players[0],"back0",0,"waiting");updateBoard()');
+  assert.equal(page.run("botStats(0,players[0].front1[0]).power"),4000);
+  const start=page.run("players[0].deck.length");
+  page.run('setTurnPhase("attack");autoRuleAttack(0,"front1",players[0].front1[0].uid,"side")');
+  ruleButton(page,"1ストック払う");
+  const saved=snapshot(page);
+  assert.equal(saved.players[0].deck.length,start-2);
+  assert.equal(saved.players[0].stock.length,4);
+  assert.equal(saved.bot.log.filter(line=>line.startsWith("トリガー ")).length,2);
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});
