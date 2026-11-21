@@ -186,15 +186,19 @@ function initializeOnlineMatch({authenticate,getDecks}) {
 
   async function poll(force=false) {
     if(!roomId)return;
-    if(sending || reading || ruleBusy || temporary){recheck=true;return}
+    const recovering=!online;
+    if(sending || reading || (!recovering && (ruleBusy || temporary))){recheck=true;return}
     reading=true;
     try{
       const data=await request("read",{p_room:roomId});
-      if(roomId===data.room && !sending && !ruleBusy && !temporary){observeRoom(data);updateView(data,force)}
+      if(roomId===data.room && !sending && (recovering || (!ruleBusy && !temporary))){
+        observeRoom(data);
+        updateView(data,force || recovering);
+      }
       else recheck=true;
     }catch(error){
       if(error.roomError==="ROOM_UNAVAILABLE" && !match?.online)reset();
-      online=false;status(problem(error));lockBoard();
+      online=false;status(problem(error));lockBoard();renderLobby();
     }finally{
       reading=false;
       if(recheck && !sending && !ruleBusy && !temporary){recheck=false;queueMicrotask(()=>poll())}
@@ -220,7 +224,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
         try{
           const latest=await request("read",{p_room:roomId});
           updateView(latest,true);
-          status(problem(error));
+          status(error.roomError?problem(error):"最新の盤面を取得しました。直前の操作結果を盤面で確認してください");
         }catch{
           online=false;
           status("操作結果を確認できません。再接続して最新盤面を取得してください");
@@ -347,7 +351,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
   window.addEventListener("online",()=>poll());
   window.addEventListener("offline",()=>{
     if(!roomId)return;
-    online=false;status("通信が切断されました。再接続後に最新の盤面を取得します");lockBoard();
+    online=false;status("通信が切断されました。再接続後に最新の盤面を取得します");lockBoard();renderLobby();
   });
 
   const controller={

@@ -123,7 +123,22 @@ async function main() {
     await assert.rejects(rpc(turn.player===0?bob:alice,"board",room,inactive.revision,{board:inactive.own.board,turn:next}),/INVALID_TURN/);
     const updated=await rpc(turn.player===0?alice:bob,"board",room,active.revision,{board:active.own.board,turn:next});
     assert.deepEqual(updated.state.turn,next);
-    const ended=await rpc(bob,"surrender",room,updated.revision);
+    const actor=turn.player===0?alice:bob;
+    const opponent=turn.player===0?bob:alice;
+    let current=updated;
+    for(const [phase,drawPending] of [["draw",false],["clock",false],["main",false],["climax",false],["attack",false],["end",false]]){
+      current=await rpc(actor,"board",room,current.revision,{board:current.own.board,turn:{...turn,phase,drawPending}});
+      assert.equal(current.state.turn.phase,phase);
+    }
+    let other=await rpc(opponent,"read",room);
+    const otherBoard=other.own.board;
+    if(!otherBoard.front1.length)otherBoard.front1.push(otherBoard.hand.pop());
+    otherBoard.front1[0].orientation=90;
+    other=await rpc(opponent,"board",room,other.revision,{board:otherBoard});
+    current=await rpc(actor,"board",room,other.revision,{board:current.own.board,
+      turn:{number:2,phase:"stand",player:1-turn.player,drawPending:false}});
+    assert.equal(current.state.boards[1-turn.player].front1[0].orientation,0);
+    const ended=await rpc(bob,"surrender",room,current.revision);
     assert.deepEqual(ended.state.result,{reason:"surrender",winner:0});
     for(let i=0;i<5;i++)assert.equal((await rpc(guest,"join",null,null,{code:"bad"})).error,"INVALID_CODE");
     assert.equal((await rpc(guest,"join",null,null,{code:"bad"})).error,"JOIN_RATE_LIMIT");

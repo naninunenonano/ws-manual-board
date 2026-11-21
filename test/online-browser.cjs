@@ -121,6 +121,18 @@ async function main() {
     await $(a,"onlineOpponentReveal").waitFor();
     await $(b,"onlineEndReveal").click();
     await $(a,"onlineOpponentReveal").waitFor({state:"hidden"});
+    a.once("dialog",dialog=>dialog.accept("2"));
+    await $(a,"onlineDeckRequest").click();
+    await $(b,"onlineAcceptDeck").click();
+    await b.getByText(/山札を確認（上から・残り2枚）/).waitFor();
+    await $(a,"onlineOpponentReveal").waitFor();
+    await b.locator("#dialogBody > select").selectOption("bottom");
+    await b.getByRole("button",{name:"残りのカードを確定",exact:true}).click();
+    await $(a,"onlineOpponentReveal").waitFor({state:"hidden"});
+    await a.evaluate(()=>window.dispatchEvent(new Event("offline")));
+    await a.getByText(/通信が切断されました/).last().waitFor();
+    await a.evaluate(()=>window.dispatchEvent(new Event("online")));
+    await a.locator("#onlineBattleStatus").filter({hasText:"接続済み"}).waitFor();
     await a.reload();
     await $(a,"battleScreen").waitFor();
     assert.equal(await a.evaluate(()=>players[0].front0.length),1);
