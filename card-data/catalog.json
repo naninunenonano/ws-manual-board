@@ -146,7 +146,7 @@
                 },
                 "as": "recollectionCost",
                 "count": 1,
-                "excludeUid": "source",
+                "excludeUid": "@source",
                 "cardType": "character",
                 "keywords": {
                   "names": [
