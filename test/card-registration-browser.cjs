@@ -210,6 +210,57 @@ async function checkSoloBoard(browser,url) {
   console.log("Solo board: hand-to-stage trigger and tap-to-activate passed on the same Wraith copy");
 }
 
+async function checkFirenPractice(browser,url){
+  const page=await browser.newPage(devices["iPhone 13"]);
+  const $=id=>page.locator("#"+id);
+  await page.goto(url+"/card-effect-test.html?mode=solo&card=STS%2FW140-002");
+  const area=zone=>page.locator('[data-key="self.'+zone+'"]');
+  const tap=label=>page.getByRole("button",{name:label,exact:true}).tap();
+  await area("hand").getByRole("button",{name:/鋼に宿る優しき心 フィレン/}).tap();
+  await tap("舞台に出す");
+  await tap("能力を使用する");
+  await $("effectChoices").getByRole("button",{name:/手札コスト用カード/}).tap();
+  await tap("選択を確定");
+  await tap("コストを支払う");
+  await $("effectChoices").getByRole("button",{name:/鋼に宿る優しき心 フィレン/}).tap();
+  await tap("選択を確定");
+  const firens=area("stage").getByRole("button",{name:/鋼に宿る優しき心 フィレン/});
+  assert.equal(await firens.count(),2);
+  assert.match(await firens.first().innerText(),/Lv 2.*パワー 7000/);
+  await tap("相手ターンのパワーを見る");
+  assert.match(await firens.first().innerText(),/パワー 3000/);
+  await tap("自分ターンのパワーに戻す");
+  await firens.first().tap();
+  await tap("アタック · CXコンボ確認");
+  assert.match(await $("effectResult").innerText(),/満たしていません/);
+  await area("hand").getByRole("button",{name:/黎明告げる凱旋歌/}).tap();
+  await tap("CX置場に出す");
+  assert.match(await firens.first().innerText(),/パワー 8000.*ソウル 2/);
+  assert.match(await area("stage").getByRole("button",{name:/巡遊者のキャラ/}).innerText(),/パワー 4000.*ソウル 2/);
+  await firens.first().tap();
+  await tap("アタック · CXコンボ確認");
+  await $("effectChoices").getByRole("button",{name:/控え室の巡遊者/}).tap();
+  await tap("選択を確定");
+  await tap("手札へ");
+  await $("effectResult").getByText("解決",{exact:true}).waitFor();
+  await $("repeatTest").tap();
+  await $("effectChoices").getByRole("button",{name:/控え室の巡遊者/}).tap();
+  await tap("選択を確定");
+  await tap("ストックへ");
+  await $("effectResult").getByText("解決",{exact:true}).waitFor();
+  await tap("トリガーチェック");
+  await $("effectChoices").getByText(/凱旋歌をトリガー/).waitFor();
+  await tap("山札の上を1枚ストックへ");
+  const after=JSON.parse(await $("afterBoard").textContent()).self;
+  assert.ok(after.hand.some(card=>card.cardNumber==="STS/W140-031"));
+  assert.equal(after.deck.length,1);
+  assert.equal(after.stock.length,2);
+  await tap("次のターンへ");
+  assert.match(await firens.first().innerText(),/Lv 1.*パワー 7000.*ソウル 1/);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.close();
+}
+
 async function main() {
   const server = http.createServer((request,response)=>{
     const path = new URL(request.url,"http://localhost").pathname.slice(1);
@@ -225,6 +276,7 @@ async function main() {
     await checkEffects(browser,url);
     await checkProducts(browser,url);
     await checkSoloBoard(browser,url);
+    await checkFirenPractice(browser,url);
     const page = await browser.newPage({...devices["iPhone 13"],acceptDownloads:true});
     const consoleErrors = [];
     page.on("pageerror",error=>consoleErrors.push(error.message));

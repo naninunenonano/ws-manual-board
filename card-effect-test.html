@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>カード効果テスト | WS手動対戦盤面</title>
   <link rel="stylesheet" href="card-registration.css?v=3">
-  <link rel="stylesheet" href="card-effect-test.css?v=2">
+  <link rel="stylesheet" href="card-effect-test.css?v=3">
   <script src="card-catalog.js?v=3" defer></script>
-  <script src="effects/engine.js?v=3" defer></script>
+  <script src="effects/engine.js?v=4" defer></script>
   <script src="card-data/load.js?v=2" defer></script>
   <script src="card-effect-test.js?v=6" defer></script>
 </head>
@@ -79,6 +79,10 @@
           <button type="submit">領域の上に追加</button>
         </form>
       </details>
+      <div id="firenActions" class="row" hidden>
+        <button id="checkTrigger" type="button">トリガーチェック</button>
+        <button id="togglePracticeTurn" type="button">相手ターンのパワーを見る</button>
+      </div>
       <p id="boardStatus" class="feedback" role="status"></p>
       <div id="boardEditor" class="lab-boards"></div>
       <form id="editCard" class="lab-form" hidden>

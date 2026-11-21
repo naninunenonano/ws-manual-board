@@ -23,3 +23,7 @@
 .check-pass, .check-fail { flex: 0 0 auto; }
 .check-pass { color: #a3efc3; }
 .check-fail { color: #ffc2c2; }
+.lab-boards.firen-practice { grid-template-columns: 1fr; }
+.firen-practice .lab-cards { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.firen-practice .lab-card { padding: .45rem; }
+.firen-practice .lab-card small { font-size: .78rem; }
