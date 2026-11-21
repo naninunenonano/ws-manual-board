@@ -96,7 +96,9 @@ function showPendingMarkerChoices(){
  d.classList.remove("zoom-mode");body.replaceChildren();document.getElementById("dialogTitle").textContent="マーカーの移動先確認";
  const note=document.createElement("p");note.textContent="通常は控え室です。別の移動先を選ぶ場合は各マーカーを選択してください。";body.append(note);
  for(const item of pending)deckButton(body,item.card.id+" の移動先",()=>{
-  const i=players[item.p].waiting.lastIndexOf(item.card);d.close();if(i>=0)manualDestination(item.p,"waiting",i);
+  const i=players[item.p].waiting.lastIndexOf(item.card);d.close();
+  if(i>=0)manualDestination(item.p,"waiting",i);
+  for(const other of pending)if(other!==item)pendingMarkerChoices.push(other);
  });
  deckButton(body,"控え室で確定",()=>d.close());d.showModal();
 }
@@ -621,24 +623,28 @@ let drawConfirmationPending=false;
 function beforeDrawConfirmation(){
  drawConfirmationPending=true;
  const p=match.turn.player,d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
- d.classList.remove("zoom-mode");body.replaceChildren();
- document.getElementById("dialogTitle").textContent="通常ドロー前の能力確認";
- const info=document.createElement("p");
- info.textContent="プレイヤー"+(p+1)+"の思い出と、両プレイヤーの舞台の能力を確認してください。必要な効果は手動で処理してください。";
- body.append(info);
- const memory=document.createElement("div");memory.className="modalcards";
- for(const c of players[p].memory){
-  const b=document.createElement("button");b.className="modal-card";
-  if(!addCardImage(b,c,c.id))b.textContent=c.id;
-  b.onclick=()=>{d.close();showCardDetail(c)};
-  memory.append(b);
+ function showReminder(){
+  d.classList.remove("zoom-mode");body.replaceChildren();
+  document.getElementById("dialogTitle").textContent="通常ドロー前の能力確認";
+  const info=document.createElement("p");
+  info.textContent="プレイヤー"+(p+1)+"の思い出と両プレイヤーの舞台を確認し、能力を手動で処理してください。";
+  body.append(info);
+  const memory=document.createElement("div");memory.className="modalcards";
+  for(const c of players[p].memory){
+   const b=document.createElement("button");b.className="modal-card";
+   if(!addCardImage(b,c,c.id))b.textContent=c.id;
+   b.onclick=()=>{d.close();showCardDetail(c);deckButton(body,"確認画面に戻る",()=>{d.close();showReminder()})};
+   memory.append(b);
+  }
+  body.append(memory);
+  deckButton(body,"盤面で効果を手動処理",()=>{d.close();message("効果の処理後、ドロー確認ボタンを押してください")});
+  deckButton(body,"確認完了・通常ドロー",()=>{
+   d.close();drawConfirmationPending=false;
+   pullDeck(p,1,"hand",true,false,moved=>{if(!moved)message("山札と控え室が空です")});
+  });
+  d.showModal();
  }
- body.append(memory);
- deckButton(body,"確認完了・通常ドロー",()=>{
-  d.close();drawConfirmationPending=false;
-  pullDeck(p,1,"hand",true,false,moved=>{if(!moved)message("山札と控え室が空です")});
- });
- d.showModal();
+ showReminder();
 }
 function endHandConfirmation(){
  const p=match.turn.player,d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
@@ -725,6 +731,7 @@ function renderTurnControls(){
  document.getElementById("clockAction").hidden=!clock;
  document.getElementById("clockSkip").hidden=!clock;
  document.getElementById("clockAction").disabled=side!==t.player || selected?.z!=="hand" || selected?.p!==side;
+ document.getElementById("nextPhase").disabled=drawConfirmationPending;
  document.getElementById("nextPhase").textContent=t.phase==="end"?"ターン終了・相手へ":clock?"手動でメインへ":"次のフェイズへ";
 }
 document.getElementById("nextPhase").onclick=()=>{advanceTurn();renderTurnControls()};
