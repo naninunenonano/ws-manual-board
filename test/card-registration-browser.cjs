@@ -101,6 +101,21 @@ async function checkProducts(browser,url) {
   await page.getByRole("button",{name:"領域の上に追加"}).click();
   await $("boardEditor").getByText("キーワード能力 回想",{exact:true}).waitFor();
   await $("loadPractice").click();
+  const waiting=page.locator('#boardEditor details[data-key="self.waiting"]');
+  const hand=page.locator('#boardEditor details[data-key="self.hand"]');
+  await hand.locator("summary").click();
+  await hand.getByRole("button",{name:/STS\/W140-001/}).click();
+  await $("editZone").selectOption("waiting");
+  await page.getByRole("button",{name:"選択したカードを移動",exact:true}).click();
+  await waiting.locator("summary").click();
+  await waiting.getByRole("button",{name:/STS\/W140-001/}).click();
+  await $("editZone").selectOption("stage");
+  await page.getByRole("button",{name:"選択したカードを移動",exact:true}).click();
+  assert.match(await $("effectResult").innerText(),/手札以外.*誘発しません/);
+  await $("undoBoard").click();
+  await waiting.getByRole("button",{name:/STS\/W140-001/}).waitFor();
+  await $("loadPractice").click();
+
   await $("runEffectTest").click();
   await page.getByRole("button",{name:"能力を使用する",exact:true}).click();
   await page.getByRole("button",{name:"コストを支払う",exact:true}).click();

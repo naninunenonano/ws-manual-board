@@ -55,7 +55,8 @@
     el.setAttribute("aria-pressed",String(pressed));
     el.append(node("strong",name(entry)));
     const details=[entry.name&&entry.cardNumber,typeNames[entry.type],entry.level!=null?"Lv "+entry.level:"",
-      entry.power!=null?"パワー "+entry.power:"",entry.soul!=null?"ソウル "+entry.soul:""].filter(Boolean);
+      entry.cost!=null?"コスト "+entry.cost:"",entry.power!=null?"パワー "+entry.power:"",entry.soul!=null?"ソウル "+entry.soul:"",
+      entry.triggers?.length?"トリガー "+entry.triggers.join("、"):""].filter(Boolean);
     if(details.length) el.append(node("small",details.join(" ／ ")));
     for(const [key,title] of [["traits","特徴"],["keywords","キーワード能力"]]){
       const values=WSEffects.effectiveTags(entry,key);
@@ -363,6 +364,7 @@
       showResult(resolved.before,next.value);render();return;
     }
     const step=next.value;
+    focusOperation();
     if(step.kind==="select"){chooseCards(step,advance);return}
     if(step.kind==="optional"){
       panel.append(node("p","この能力を使いますか？"),button("能力を使用する",()=>advance(true)),button("能力を使用しない",()=>advance(false)));
@@ -387,7 +389,7 @@
     const ability=effect();
     if(!ability||session)return;
     if(WSFormalCards.review(ability).status!=="ready"){begin(null);return}
-    if(sample||ability.timing==="manual"){begin(null);return}
+    if(sample||ability.timing==="manual"||!isOnPlay(ability)&&ability.type!=="activated"){begin(null);return}
     const entering=isOnPlay(ability),zone=entering?"hand":"stage";
     const candidates=board.self[zone].filter(matches);
     if(!candidates.length){
