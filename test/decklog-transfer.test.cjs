@@ -1133,3 +1133,34 @@ test("仮Lv1：青は他の特徴持ち2体でパワー＋1000、支払いでト
   assert.equal(saved.bot.log.filter(line=>line.startsWith("トリガー ")).length,2);
   assert.deepEqual(ruleCounts(saved),[50,50]);
 });
+
+test("仮Lv2：赤の1コストを支払い、後列から対象の現在レベル×500を加える",()=>{
+  const page=launchRules("practice-level-two");
+  const play='autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-108").uid,"back0")';
+  const power=zone=>page.run(`botStats(0,players[0].${zone}[0]).power`);
+  assert.equal(page.run(play),true);
+  assert.equal(snapshot(page).players[0].stock.length,2);
+  assert.equal(power("front0"),2500);
+  assert.equal(power("front1"),5500);
+  page.run('players[0].front1[0].botLevel=2;updateBoard()');
+  assert.equal(power("front1"),6000);
+  page.run('botMove(players[0],"back0",0,"waiting");updateBoard()');
+  assert.equal(power("front1"),5000);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("仮Lv2：ソウルトリガー1と、前回の仮Lv1のトリガーなし",()=>{
+  const page=launchRules("practice-level-two");
+  assert.equal(page.run('JSON.stringify([practiceCards["106"].triggers,practiceCards["107"].triggers])'),"[[],[]]");
+  page.run(`(()=>{
+    const board=players[0];
+    botMove(board,"hand",board.hand.findIndex(c=>c.id==="BOT/W000-108"),"deck");
+    setTurnPhase("attack");
+    autoRuleAttack(0,"front0",board.front0[0].uid,"direct");
+  })()`);
+  const saved=snapshot(page);
+  assert.equal(saved.players[0].stock.at(-1).id,"BOT/W000-108");
+  assert.equal(page.run('botStats(0,players[0].front0[0]).soul'),3);
+  assert.ok(saved.bot.log.some(line=>line.includes("ソウル＋1")));
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});

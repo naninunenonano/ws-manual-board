@@ -66,7 +66,7 @@ function startBotMatch(deck,scenario){
   if(!isDeckSetup())return;
   if(onlineMatch?.active()){message("オンラインルームを退出してから開始してください");return}
   const rules=isAutoRules(scenario);
-  if(rules)deck=(scenario===practiceScenario||scenario===levelOneScenario)?practiceDeck(botDeck,scenario):{...botDeck,title:"共通ルール確認用デッキ"};
+  if(rules)deck=Object.hasOwn(practiceTitles,scenario)?practiceDeck(botDeck,scenario):{...botDeck,title:"共通ルール確認用デッキ"};
   if(!deck){message("プレイヤー1の使用デッキを選択してください");return}
   if(!rules&&!Object.hasOwn(botScenarioNames,scenario))return;
   const opponentDeck=botDeck;
@@ -102,7 +102,7 @@ function startBotMatch(deck,scenario){
   const opening=scenario==="opening";
   const snapshot={version:1,phase:opening?"mulligan":"active",screen:opening?"mulligan":"battle",
     side:0,firstPlayer:0,mulliganPlayer:0,openingHandDealt:true,decks:[deck,opponentDeck],players:boards,result:null,
-    turn:{player:0,number:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
+    turn:{player:0,number:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[scenario===levelTwoScenario?"手札のLv2を後列①に置き、前のLv0とLv1のパワーを確認できます":scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
   if(!writeMatch(snapshot))return;
   match=snapshot;players=boards;side=0;selected=null;mulliganSelection=new Set();
   showMatchScreen();
@@ -436,7 +436,7 @@ function botCanStep(){
 }
 function renderBotControls(){
   document.getElementById("botControls").hidden=false;
-  document.getElementById("botModeName").textContent="Bot戦 · "+(match.bot.scenario===levelOneScenario?levelOneTitle:match.bot.scenario===practiceScenario?practiceTitle:isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]);
+  document.getElementById("botModeName").textContent="Bot戦 · "+(practiceTitles[match.bot.scenario]??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
   const button=document.getElementById("botStep");
   button.disabled=!botCanStep();
   const phase=match.turn.phase;
