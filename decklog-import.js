@@ -26,24 +26,51 @@
   const storageKey=p=>"ws-manual-deck-v1-p"+p;
   const libraryKey="ws-manual-deck-library-v1";
   const selectedKey=p=>"ws-manual-deck-selected-v1-p"+p;
-  function library(){try{const v=JSON.parse(localStorage.getItem(libraryKey)||"[]");return Array.isArray(v)?v:[]}catch(e){return []}}
+  function library(){
+    const raw=localStorage.getItem(libraryKey);
+    const list=raw===null?[]:JSON.parse(raw);
+    if(!Array.isArray(list))throw Error("登録データの形式が不正です");
+    const ids=new Set();
+    for(const item of list){
+      if(typeof item?.id!=="string" || !item.id || ids.has(item.id))throw Error("登録データのIDが不正です");
+      normalize(item.deck);
+      ids.add(item.id);
+    }
+    return list;
+  }
   function normalize(v){return parse({title:v.title,list:Array.isArray(v.list)?v.list:v.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))})}
   function migrate(){
-    const list=library();let changed=false;
-    for(const p of [0,1])try{
-      const raw=localStorage.getItem(storageKey(p));if(!raw)continue;
-      const deck=normalize(JSON.parse(raw)),id="legacy-"+p;
-      if(!list.some(x=>x.id===id)){list.push({id,deck:{title:deck.title,list:deck.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))}});changed=true}
-      if(!localStorage.getItem(selectedKey(p)))localStorage.setItem(selectedKey(p),id);
+    const list=library(), migrated=[];
+    for(const p of [0,1]){
+      const raw=localStorage.getItem(storageKey(p));
+      if(!raw)continue;
+      let deck;
+      try{deck=normalize(JSON.parse(raw))}
+      catch(e){message("プレイヤー"+(p+1)+"の旧デッキを読み込めません。元データは保持されています");continue}
+      const id="legacy-"+p;
+      if(!list.some(item=>item.id===id))list.push({id,deck:{title:deck.title,list:deck.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))}});
+      migrated.push({p,id});
+    }
+    if(!migrated.length)return;
+    localStorage.setItem(libraryKey,JSON.stringify(list));
+    for(const {p,id} of migrated){
+      const selected=localStorage.getItem(selectedKey(p));
+      if(!list.some(item=>item.id===selected))localStorage.setItem(selectedKey(p),id);
       localStorage.removeItem(storageKey(p));
-    }catch(e){}
-    if(changed)localStorage.setItem(libraryKey,JSON.stringify(list));
+    }
   }
   function savedDeck(p){
     try{const id=localStorage.getItem(selectedKey(p)),item=library().find(x=>x.id===id);return item?normalize(item.deck):null}catch(e){return null}
   }
   function updateSavedStatus(){
-    const list=library(),select=$("savedDeckSelect"),id=localStorage.getItem(selectedKey(side));
+    const select=$("savedDeckSelect");
+    let list,id;
+    try{list=library();id=localStorage.getItem(selectedKey(side))}
+    catch(e){
+      select.replaceChildren();
+      $("savedDeckStatus").textContent="登録済みデッキを読み込めません。保存データを確認してください";
+      return;
+    }
     select.replaceChildren();const empty=document.createElement("option");empty.value="";empty.textContent="未選択";select.append(empty);
     for(const item of list){const o=document.createElement("option");o.value=item.id;o.textContent=item.deck.title;select.append(o)}
     select.value=list.some(x=>x.id===id)?id:"";
@@ -59,19 +86,25 @@
     if(!isDeckSetup())return;
     const input=prompt("デッキ名",deck.title||"新しいデッキ");if(input===null)return;
     const title=input.trim();if(!title){message("デッキ名が空です");return}
-    const list=library(),id="deck-"+Date.now()+"-"+Math.random().toString(36).slice(2,8);
-    list.push({id,deck:{title,list:deck.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))}});
-    try{localStorage.setItem(libraryKey,JSON.stringify(list));localStorage.setItem(selectedKey(side),id)}
-    catch(e){message("デッキを保存できません");return}
+    try{
+      const list=library(),id="deck-"+Date.now()+"-"+Math.random().toString(36).slice(2,8);
+      list.push({id,deck:{title,list:deck.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))}});
+      localStorage.setItem(libraryKey,JSON.stringify(list));
+    }catch(e){message("デッキを保存できません。保存容量または登録データを確認してください");return}
     updateSavedStatus();message("「"+title+"」を登録しました");
   }
-  $("loadSavedDeck").onclick=async()=>{if(!isDeckSetup())return;const deck=savedDeck(side);if(deck)preview(await classify(deck));else message("デッキを選択してください")};
+  $("loadSavedDeck").onclick=()=>{
+    if(!isDeckSetup())return;
+    const deck=savedDeck(side);
+    if(deck)showDeckContents(deck,side);
+    else message("デッキを選択してください");
+  };
   $("clearSavedDeck").onclick=()=>{
     if(!isDeckSetup())return;
-    const id=$("savedDeckSelect").value,item=library().find(x=>x.id===id);if(!item)return;
-    if(!confirm("「"+item.deck.title+"」を削除しますか？"))return;
     try{
-      localStorage.setItem(libraryKey,JSON.stringify(library().filter(x=>x.id!==id)));
+      const list=library(),id=$("savedDeckSelect").value,item=list.find(x=>x.id===id);
+      if(!item || !confirm("「"+item.deck.title+"」を削除しますか？"))return;
+      localStorage.setItem(libraryKey,JSON.stringify(list.filter(x=>x.id!==id)));
       for(const p of [0,1])if(localStorage.getItem(selectedKey(p))===id)localStorage.removeItem(selectedKey(p));
     }catch(e){message("削除に失敗しました");return}
     pending=null;$("applyDeck").disabled=true;$("deckPreview").replaceChildren();updateSavedStatus();
@@ -126,7 +159,7 @@
       const line=lines[i].trim();
       if(!line || line.startsWith("#"))continue;
       // Format: CARD-NUMBER x 4, CARD-NUMBER,4, or CARD-NUMBER 4
-      const m=line.match(/^([^\s,×xX*]+)\s*(?:[,\s]+|\s*[×xX*]\s*)([1-4])$/);
+      const m=line.match(/^([^\s,×*]+?)\s*(?:[,\s]+|\s*[×xX*]\s*)([1-4])$/);
       if(!m)throw Error((i+1)+"行目の形式が不正です。例: FRI/S100-001 × 4");
       rows.push({card_number:m[1],num:Number(m[2])});
     }
@@ -170,7 +203,7 @@
   };
   $("openDeckLog").onclick=()=>{
     const code=codeOf($("deckCode").value);
-    if(!code){message("デッキコードを入力してください");return}
+    if(!code){message($("deckCode").value.trim()?"デッキコードの形式が正しくありません":"デッキコードを入力してください");return}
     window.open("https://decklog.bushiroad.com/view/"+encodeURIComponent(code),"_blank","noopener,noreferrer");
   };
   function decodeTransfer(encoded) {
@@ -190,7 +223,7 @@
       return;
     }
     const encoded = location.hash.slice(prefix.length);
-    transferRevision++;
+    const revision=++transferRevision;
     pending = null;
     $("applyDeck").disabled = true;
     $("deckPreview").replaceChildren();
@@ -198,11 +231,15 @@
     try {
       const raw = decodeTransfer(encoded);
       const deck = await classify(parse(raw));
+      if(revision!==transferRevision || !isDeckSetup())return;
       preview(deck);
       // The transferred deck is stored in the shared library; no code field is needed.
       $("registrationPanel").hidden=false;$("toggleDeckRegistration").textContent="登録画面を閉じる";
       status.textContent = "Deck Logから50枚を受信しました。内容を確認して「新しいデッキとして保存」を押してください";
     } catch (e) {
+      if(revision!==transferRevision || !isDeckSetup())return;
+      $("registrationPanel").hidden=false;
+      $("toggleDeckRegistration").textContent="登録画面を閉じる";
       status.textContent = "Deck Log転送データを読み込めません: " + e.message;
     }
     // Clearing the fragment is optional. A browser history error must not stop the transfer.
@@ -211,7 +248,7 @@
     $("importer").scrollIntoView({block:"start"});
   }
   window.addEventListener("hashchange", receiveTransferredDeck);
-  migrate();
+  try{migrate()}catch(e){message("旧デッキの移行を完了できません。保存容量または登録データを確認してください");}
   initializeMatch(savedDeck, () => {
     updateSavedStatus();
     receiveTransferredDeck();

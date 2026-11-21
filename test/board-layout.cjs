@@ -30,6 +30,26 @@ async function main() {
   let browser;
   try {
     browser = await chromium.launch(fs.existsSync("/usr/bin/google-chrome") ? {channel:"chrome"} : {});
+    const desktop = await browser.newPage({viewport:{width:1280,height:800}});
+    const url="http://127.0.0.1:"+server.address().port;
+    await desktop.addInitScript(()=>{window.open=url=>{window.deckLogURL=url}});
+    await desktop.goto(url);
+    assert.equal(await desktop.locator("#deckCode").inputValue(),"");
+    assert.equal(await desktop.getByRole("button",{name:"デッキ取得",exact:true}).count(),0);
+    await desktop.locator("#deckCode").fill("U14QG");
+    await desktop.locator("#openDeckLog").click();
+    assert.equal(await desktop.evaluate(()=>window.deckLogURL),"https://decklog.bushiroad.com/view/U14QG");
+    await desktop.locator("#toggleDeckRegistration").click();
+    await desktop.locator("details").filter({has:desktop.locator("#deckJson")}).locator("summary").click();
+    const payload={...fixture,list:fixture.list.map((card,i)=>({...card,cx:i>=fixture.list.length-2}))};
+    await desktop.locator("#deckJson").fill(JSON.stringify(payload));
+    await desktop.locator("#parseDeck").click();
+    desktop.once("dialog",dialog=>dialog.accept("PC検証デッキ"));
+    await desktop.locator("#applyDeck").click();
+    assert.equal(await desktop.locator("#savedDeckSelect").inputValue(),"");
+    await desktop.reload();
+    assert.equal(await desktop.locator("#savedDeckSelect option").last().textContent(),"PC検証デッキ");
+    await desktop.close();
     const page = await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
     const errors = [];
     page.on("pageerror",error=>errors.push(error.message));
@@ -132,8 +152,18 @@ async function main() {
       assert.ok(Math.abs(cos-Math.cos(angle*Math.PI/180))<0.01);
       assert.ok(Math.abs(sin-Math.sin(angle*Math.PI/180))<0.01);
     };
+    const hand = page.locator("#boards .player.active .hand .card").first();
+    await hand.tap();
+    await hand.tap();
+    await page.getByRole("heading",{name:"移動先を選択",exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>selected),null);
+    await page.locator("#close").click();
+    await hand.tap();
+    await page.locator("#boards .player.active .hand .card.selected").waitFor();
+    await hand.tap();
+    await page.locator("#boards .player.active .hand .card.selected").waitFor({state:"detached"});
     for(const [zone,label,angle] of [[front,"右90°",90],[back,"180°",180]]) {
-      await zone.click();
+      await zone.dblclick();
       await page.getByRole("button",{name:label,exact:true}).click();
       assert.equal(await zone.getAttribute("data-orientation"),String(angle));
       await assertAngle(zone.locator(".zone-preview"),angle);
@@ -148,7 +178,7 @@ async function main() {
     await climax.waitFor();
     await assertAngle(climax,180);
     await page.screenshot({path:"layout-screenshots/rotated.png",fullPage:true});
-    await front.click();
+    await front.dblclick();
     await page.getByRole("button",{name:"縦向き",exact:true}).click();
     assert.equal(await front.getAttribute("data-orientation"),"0");
     await page.evaluate(()=>{

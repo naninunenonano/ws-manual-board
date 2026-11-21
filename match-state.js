@@ -55,19 +55,27 @@ function validDeckBoard(deck, board, player) {
     expected.set(card.id, card.num);
   }
   const seen = new Set();
+  const cards = [];
   for (const zone of zones) {
-    const cards = board[zone];
-    if (!Array.isArray(cards) || cards.length > 50) return false;
-    for (const card of cards) {
-      if (!expected.has(card?.id) || typeof card.uid !== "string" ||
-          typeof card.faceUp !== "boolean" || !Number.isFinite(card.orientation) ||
-          !(typeof card.level === "string" || Number.isFinite(card.level))) return false;
-      const count = expected.get(card.id);
-      const prefix = player + "-" + card.id + "-";
-      const index = Number(card.uid.slice(prefix.length));
-      if (!Number.isInteger(index) || index < 0 || index >= count ||
-          card.uid !== prefix + index || seen.has(card.uid)) return false;
-      seen.add(card.uid);
+    if (!Array.isArray(board[zone]) || board[zone].length > 50) return false;
+    cards.push(...board[zone]);
+  }
+  for (const card of cards) {
+    if (!expected.has(card?.id) || typeof card.uid !== "string" ||
+        typeof card.faceUp !== "boolean" || !Number.isFinite(card.orientation) ||
+        !(typeof card.level === "string" || Number.isFinite(card.level))) return false;
+    const count = expected.get(card.id);
+    const prefix = player + "-" + card.id + "-";
+    const index = Number(card.uid.slice(prefix.length));
+    if (!Number.isInteger(index) || index < 0 || index >= count ||
+        card.uid !== prefix + index || seen.has(card.uid)) return false;
+    seen.add(card.uid);
+    if (card.markers !== undefined) {
+      if (!Array.isArray(card.markers) || cards.length + card.markers.length > 50) return false;
+      for (const marker of card.markers) {
+        if (typeof marker?.faceUp !== "boolean" || !marker.card) return false;
+        cards.push(marker.card);
+      }
     }
   }
   return seen.size === 50 && [...expected.values()].reduce((sum, count) => sum + count, 0) === 50;
@@ -123,6 +131,7 @@ function showMatchScreen() {
     matchElement("firstPlayerResult").textContent = "先攻：プレイヤー" + (first + 1) +
       " ／ 後攻：プレイヤー" + (2 - first);
     render();
+    if (match.turn.phase==="draw" && match.turn.drawPending) beforeDrawConfirmation();
     renderTurnControls();
     checkMandatoryLevel();
   } else if (match?.phase === "ended") {
@@ -139,7 +148,7 @@ function startMatch(readDeck) {
   const decks = [readDeck(0), readDeck(1)];
   const missing = decks.findIndex(deck => !deck);
   if (missing !== -1) {
-    message("プレイヤー" + (missing + 1) + "のデッキを登録してください");
+    message("プレイヤー" + (missing + 1) + "の使用デッキを選択してください");
     return;
   }
   const boards = decks.map((deck, p) => {
@@ -219,20 +228,24 @@ function finishMatch(reason) {
     result: { reason, winner: surrender ? 1 - side : null }
   };
   if (!writeMatch(snapshot)) return;
+  drawConfirmationPending=false;
+  reopenDrawReminder=null;
+  pendingMarkerChoices=[];
   match = snapshot;
   selected = null;
   showMatchScreen();
 }
 
 function showRegisteredDecks() {
-  if (!isMatchActive()) return;
+  if (isMatchActive()) showDeckContents(match.decks[side],side);
+}
+
+function showDeckContents(deck,p) {
   const dialog = matchElement("dialog");
   dialog.classList.remove("zoom-mode");
   matchElement("dialogTitle").textContent = "デッキ内容確認";
   const body = matchElement("dialogBody");
   body.replaceChildren();
-  const p = side;
-  const deck = match.decks[p];
   {
     const title = document.createElement("h4");
     const total = deck.cards.reduce((sum, card) => sum + card.num, 0);

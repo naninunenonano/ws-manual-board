@@ -38,13 +38,14 @@ const [frieren, idol] = decks;
 const fragment = deck => "#decklog=" + encodeURIComponent(JSON.stringify(deck));
 const key = p => "ws-manual-deck-v1-p" + p;
 
-function launch(hash = "", storage = new Map(), replaceState = null, randomValue = 100) {
+function launch(hash = "", storage = new Map(), replaceState = null, randomValue = 100, failingKey = null) {
   const handlers = new Map();
   const settle = () => new Promise(resolve=>setImmediate(resolve));
   let randomCalls = 0;
   let allowConfirmation = true;
+  let blockedWrite=failingKey;
   const element = () => ({
-    textContent:"", children:[], style:{setProperty(){}}, dataset:{}, classList:{add(){},remove(){}},
+    value:"", isConnected:true, textContent:"", children:[], style:{setProperty(){}}, dataset:{}, classList:{add(){},remove(){}},
     append(...children){ this.children.push(...children); },
     replaceChildren(...children){ this.children = children; },
     setAttribute(){}, insertBefore(){}, addEventListener(){}, scrollIntoView(){}, querySelector(){ return null; },
@@ -55,13 +56,13 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
   const location = {hash,pathname:"/ws-manual-board/",search:""};
   const context = vm.createContext({
     document:{getElementById:id=>elements.get(id),createElement:element},
-    location,
+    location, setTimeout, clearTimeout, prompt:(_,title)=>title,
     window:{
       history:{replaceState:replaceState ?? (()=>{location.hash = "";})},
       addEventListener:(type,callback)=>handlers.set(type,callback),
       scrollTo(){}
     },
-    localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
+    localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>{if(k===blockedWrite)throw Error("quota");storage.set(k,v)},removeItem:k=>storage.delete(k)},
     crypto:{getRandomValues(buffer){ randomCalls++; buffer[0] = randomValue; return buffer; }},
     confirm:()=>allowConfirmation, console:{warn(){}}
   });
@@ -73,7 +74,17 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
     navigate(nextHash){ location.hash = nextHash; handlers.get("hashchange")?.(); },
     apply(p){ elements.get("side").onchange({target:{value:p}}); elements.get("applyDeck").onclick(); },
     click:id=>elements.get(id).onclick(),
-    counts:p=>expected(JSON.parse(storage.get(key(p)))),
+    counts:p=>{
+      const id=storage.get("ws-manual-deck-selected-v1-p"+p);
+      const item=JSON.parse(storage.get(libraryKey)).find(entry=>entry.id===id);
+      return expected(item.deck);
+    },
+    select(p,id){
+      elements.get("side").onchange({target:{value:p}});
+      elements.get("savedDeckSelect").value=id;
+      elements.get("savedDeckSelect").onchange();
+    },
+    blockWrite:key=>{blockedWrite=key;},
     run:code=>vm.runInContext(code,context),
     confirm:value=>{allowConfirmation=value;},
     randomCalls:()=>randomCalls
@@ -91,8 +102,10 @@ function checkPreview(page,deck) {
   assert.equal(title?.textContent, deck.title+" / "+deck.list.length+"種類 / 50枚");
   assert.deepEqual(rows.children.map(row=>row.textContent), deck.list.map(row=>row.card_number+" × "+row.num));
   assert.equal(page.get("applyDeck").disabled,false);
-  assert.equal(page.get("deckCode").value,deck.code);
+  assert.equal(page.get("deckCode").value,"");
+  assert.equal(page.get("registrationPanel").hidden,false);
 }
+const libraryKey = "ws-manual-deck-library-v1";
 const expected = deck => Object.fromEntries(deck.list.map(row=>[row.card_number,row.num]));
 
 test("initial transfer, same-tab transfer with a saved deck, and restored decks", async () => {
@@ -101,6 +114,8 @@ test("initial transfer, same-tab transfer with a saved deck, and restored decks"
   checkPreview(page,frieren);
   assert.equal(page.location.hash,"");
   page.apply(0);
+  assert.equal(page.storage.has("ws-manual-deck-selected-v1-p0"),false);
+  page.select(0,JSON.parse(page.storage.get(libraryKey))[0].id);
   assert.deepEqual(page.counts(0),expected(frieren));
   page.navigate(fragment(idol));
   await page.settle();
@@ -108,6 +123,7 @@ test("initial transfer, same-tab transfer with a saved deck, and restored decks"
   assert.match(page.get("savedDeckStatus").textContent,/勇者一行/);
   assert.deepEqual(page.counts(0),expected(frieren));
   page.apply(1);
+  page.select(1,JSON.parse(page.storage.get(libraryKey)).at(-1).id);
   assert.deepEqual(page.counts(1),expected(idol));
   const reopened = launch("",page.storage);
   assert.deepEqual(reopened.counts(0),expected(frieren));
@@ -120,6 +136,7 @@ test("legacy saved data and numeric-string quantities are accepted", async () =>
   await page.settle();
   checkPreview(page,idol);
   page.apply(1);
+  page.select(1,JSON.parse(page.storage.get(libraryKey)).at(-1).id);
   page.click("startBattle");
   assert.deepEqual(snapshot(page).decks[0].cards, frieren.list.map(row=>({id:row.card_number,num:row.num,cx:null})));
 });
@@ -160,14 +177,14 @@ test("start deals five once, then reload restores every zone, order, flags and p
   startBattle(page);
   assert.deepEqual(snapshot(page),initial);
   page.run('move(0,"hand",0,"front0"); move(0,"hand",0,"stock"); move(0,"hand",0,"cx")');
-  page.click("draw");
+  page.run('pullDeck(side,1,"hand")');
   page.click("shuffle");
   page.run("players[side].deck.slice(-7).forEach(card=>card.cx=false)");
-  for(let i=0;i<7;i++) page.click("damage");
-  page.click("level");
+  for(let i=0;i<7;i++) page.run("runDamage(side,1)");
+  page.run("checkMandatoryLevel()");
   page.get("dialogBody").children[2].onclick();
   page.get("battleSide").onchange({target:{value:"1"}});
-  page.click("draw");
+  page.run('pullDeck(side,1,"hand")');
   page.run('players[0].front0[0].orientation=90; updateBoard()');
   const before = snapshot(page);
   assert.equal(before.players[0].level.length,1);
@@ -186,7 +203,7 @@ test("start deals five once, then reload restores every zone, order, flags and p
 test("deck inspection is read-only and a new transfer cannot leave or replace an active match", async () => {
   const page = launch("",deckStorage());
   startBattle(page);
-  page.click("draw");
+  page.run('pullDeck(side,1,"hand")');
   const before = snapshot(page);
   page.click("viewDecks");
   assert.equal(page.get("dialog").open,true);
@@ -217,7 +234,7 @@ test("cancel preserves the game, surrender restores the winner, and next match s
   startBattle(page);
   const initial = snapshot(page);
   page.get("battleSide").onchange({target:{value:"1"}});
-  page.click("draw");
+  page.run('pullDeck(side,1,"hand")');
   const before = snapshot(page);
   page.confirm(false);
   page.click("surrender");
@@ -269,7 +286,7 @@ test("corrupt snapshots recover to setup and saved deck registration remains ava
   }
   const unregistered = launch();
   unregistered.click("startBattle");
-  assert.match(unregistered.get("setupNotice").textContent,/プレイヤー1のデッキを登録/);
+  assert.match(unregistered.get("setupNotice").textContent,/プレイヤー1の使用デッキを選択/);
   assert.equal(unregistered.randomCalls(),0);
 });
 
@@ -298,14 +315,14 @@ const chooseLevel=page=>{
 
 test("refresh only moves one point to clock",()=>{
   const page=ruleGame(0,0,4);
-  page.click("refresh");
+  page.run("checkMandatoryLevel()");
   assert.deepEqual([state(page).deck.length,state(page).clock.length,state(page).waiting.length],[3,1,0]);
 });
 
 test("level-up only, with eight clock cards",()=>{
   const page=ruleGame(3,8,1);
   const latest=state(page).clock.at(-1).uid;
-  page.click("level");
+  page.run("checkMandatoryLevel()");
   chooseLevel(page);
   assert.deepEqual(state(page).clock.map(c=>c.uid),[latest]);
   assert.equal(state(page).waiting.length,7);
@@ -320,7 +337,7 @@ for(const refreshFirst of [true,false]){
     assert.match(page.get("dialogTitle").textContent,/順番を選択/);
     assert.equal(state(page).deck.length,0);
     page.click("close");
-    page.click("level");
+    page.run("checkMandatoryLevel()");
     assert.equal(page.get("dialog").open,true);
     panel(page)[refreshFirst?0:1].onclick();
     assert.equal(state(page).deck.length,refreshFirst?3:0);
@@ -351,12 +368,12 @@ for(const cancelled of [false,true]){
 
 test("the point is applied before its own level-up; a one-card refresh settles",()=>{
   const single=ruleGame(0,0,1);
-  single.click("refresh");
+  single.run("checkMandatoryLevel()");
   assert.equal(state(single).deck.length,0);
   assert.equal(state(single).clock.length,1);
   assert.equal(single.run("ruleBusy"),false);
   const chained=ruleGame(0,6,1);
-  chained.click("refresh");
+  chained.run("checkMandatoryLevel()");
   assert.equal(state(chained).clock.length,7);
   chooseLevel(chained);
   assert.equal(state(chained).deck.length,5);
@@ -366,7 +383,7 @@ test("the point is applied before its own level-up; a one-card refresh settles",
 
 test("multiple level-ups precede the point without duplicate choice dialogs",()=>{
   const page=ruleGame(0,15,4);
-  page.click("level");
+  page.run("checkMandatoryLevel()");
   panel(page)[0].onclick();
   chooseLevel(page);
   assert.equal(state(page).clock.length,8);
@@ -402,4 +419,69 @@ test("draw and brainstorm-style multi-card move resume after refresh",()=>{
   assert.equal(state(mill).deck.length,2);
   assert.equal(state(mill).clock.length,1);
   assert.equal(state(mill).waiting.length,1);
+});
+
+test("failed migration keeps legacy decks; successful retry does not duplicate them",()=>{
+  const storage=deckStorage();
+  const page=launch("",storage,null,100,libraryKey);
+  assert.match(page.get("setupNotice").textContent,/移行を完了できません/);
+  assert.ok(storage.has(key(0)) && storage.has(key(1)));
+  launch("",storage);
+  assert.equal(JSON.parse(storage.get(libraryKey)).length,2);
+  launch("",storage);
+  assert.equal(JSON.parse(storage.get(libraryKey)).length,2);
+});
+
+test("deletion clears both references to the same deck and keeps other decks",()=>{
+  const page=launch("",deckStorage());
+  page.select(0,"legacy-1");
+  page.select(1,"legacy-1");
+  page.click("clearSavedDeck");
+  assert.deepEqual(JSON.parse(page.storage.get(libraryKey)).map(item=>item.id),["legacy-0"]);
+  for(const p of [0,1])assert.equal(page.storage.has("ws-manual-deck-selected-v1-p"+p),false);
+  page.click("startBattle");
+  assert.match(page.get("setupNotice").textContent,/使用デッキを選択/);
+  page.select(0,"legacy-0");
+  page.select(1,"legacy-0");
+  startBattle(page);
+  assert.deepEqual(snapshot(page).decks.map(deck=>deck.title),[frieren.title,frieren.title]);
+});
+
+test("corrupt library is reported and not overwritten by a new registration",async()=>{
+  const page=launch(fragment(frieren),new Map([[libraryKey,"{"]]));
+  await page.settle();
+  assert.match(page.get("savedDeckStatus").textContent,/読み込めません/);
+  page.click("applyDeck");
+  assert.equal(page.storage.get(libraryKey),"{");
+  assert.match(page.get("setupNotice").textContent,/保存できません/);
+});
+
+test("occupied stage rejects a move; stage movement and reload retain markers",()=>{
+  const page=launch("",deckStorage());
+  startBattle(page);
+  page.run('manualTransfer(0,"hand",0,"front0"); manualTransfer(0,"hand",0,"front1")');
+  const before=state(page);
+  assert.equal(page.run('manualTransfer(0,"hand",0,"front0")'),false);
+  assert.deepEqual(state(page),before);
+  page.run('const materials=[players[0].hand.shift()]; moveTemporary(0,materials,0,"marker","top","front0","up"); manualTransfer(0,"front0",0,"back0")');
+  const marked=state(page);
+  const reopened=launch("",page.storage);
+  assert.deepEqual(state(reopened),marked);
+  reopened.run('manualTransfer(0,"back0",0,"memory")');
+  assert.equal(state(reopened).waiting.at(-1).uid,marked.back0[0].markers[0].card.uid);
+  assert.equal(state(reopened).waiting.at(-1).faceUp,true);
+});
+
+test("draw confirmation survives reload and draws exactly once",()=>{
+  const page=launch("",deckStorage());
+  startBattle(page);
+  page.click("nextPhase");
+  const reopened=launch("",page.storage);
+  assert.match(reopened.get("dialogTitle").textContent,/ドロー前/);
+  assert.equal(reopened.get("nextPhase").disabled,true);
+  panel(reopened).find(button=>button.textContent==="確認完了・通常ドロー").onclick();
+  assert.equal(state(reopened).hand.length,6);
+  const again=launch("",page.storage);
+  assert.equal(state(again).hand.length,6);
+  assert.equal(again.get("nextPhase").disabled,false);
 });
