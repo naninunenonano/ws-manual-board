@@ -918,9 +918,9 @@ test("Bot draws, deploys and attacks only on its turn",()=>{
   assert.deepEqual(players.map(board=>Object.values(board).flat().length),[50,50]);
 });
 
-function launchRules(){
+function launchRules(scenario="rules"){
   const page=launch("",new Map(),null,100,null,true);
-  page.get("botScenario").value="rules";
+  page.get("botScenario").value=scenario;
   page.click("startBotBattle");
   return page;
 }
@@ -1014,4 +1014,77 @@ test("自動ルール：サイドはレベル分を引きバトルなし、ダ�
   assert.equal(snap.players[0].hand.length,hand+1);
   assert.equal(snap.players[0].clock.length,1);
   assert.deepEqual(ruleCounts(snap),[50,50]);
+});
+
+test("仮カード5種：特徴・キーワードの全一致と応援の位置変更",()=>{
+  const page=launchRules("practice-cards");
+  const example=page.run(`(()=>{
+    const chars=players[0];
+    const all=[...chars.front0,...chars.back0,...chars.back1,...chars.deck.slice(-9,-7)];
+    return JSON.stringify(all.map(c=>{
+      const entry=botEffectCard(c);
+      return [entry.cardNumber,WSEffects.matchTags(entry,"traits",{names:["任意の特徴"],mode:"all"}),
+        WSEffects.matchTags(entry,"keywords",{names:["任意の能力"],mode:"all"})];
+    }));
+  })()`);
+  assert.deepEqual(JSON.parse(example),["101","102","103","105","104"].map(id=>["BOT/W000-"+id,true,true]));
+  assert.deepEqual(JSON.parse(page.run("JSON.stringify([botStats(0,players[0].front0[0]).power,botStats(0,players[0].front1[0]).power])")),[3500,3000]);
+  page.run('botMove(players[0],"back0",0,"front2");updateBoard()');
+  assert.equal(page.run("botStats(0,players[0].front0[0]).power"),3000);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("仮カード5種：集中の任意ドローと回収先、CXの1001、トリガー後のストック",()=>{
+  const page=launchRules("practice-cards");
+  const activate='activateBrainstorm(0,players[0].back1[0],{stock:1,reveal:5})';
+  page.run('zoneClick(0,"back1")');
+  ruleButton(page,"集中（1ストック・自身レスト）");
+  assert.match(page.get("dialogTitle").textContent,/最大2枚/);
+  ruleButton(page,"2枚引く");
+  let board=snapshot(page).players[0];
+  assert.equal(board.back1[0].orientation,90);
+  assert.equal(board.stock.length,2);
+  assert.equal(board.hand.length,4);
+  assert.equal(board.waiting.length,8);
+  page.run(activate);
+  assert.match(page.get("botStatus").textContent,/スタンドしていません/);
+  assert.equal(snapshot(page).players[0].stock.length,2);
+  page.run('setTurnPhase("attack");startAutoAttack(0,"front0",0)');
+  ruleButton(page,"ダイレクトアタック");
+  assert.match(page.get("dialogTitle").textContent,/カムバック/);
+  assert.equal(page.get("dialogBody").children.some(el=>el.textContent==="仮CX"),false);
+  const current=page.get("dialogBody").children.find(el=>el.textContent==="仮キャラ");
+  assert.ok(current);
+  current.onclick();
+  ruleButton(page,"選択を確定");
+  assert.equal(snapshot(page).players[0].stock.at(-1).id,"BOT/W000-104");
+  page.run('startAutoAttack(0,"front1",0)');
+  ruleButton(page,"サイドアタック");
+  assert.match(page.get("dialogTitle").textContent,/ゲート/);
+  assert.equal(page.get("dialogBody").children.some(el=>el.textContent==="仮キャラ"||el.textContent==="仮CX ゲート"),false);
+  ruleButton(page,"仮CX");
+  ruleButton(page,"選択を確定");
+  assert.equal(snapshot(page).players[0].stock.at(-1).id,"BOT/W000-105");
+  page.run('botMove(players[0],"stock",players[0].stock.length-1,"hand");setTurnPhase("climax");autoRulePlace(0,players[0].hand.at(-1).uid,"cx")');
+  assert.deepEqual(JSON.parse(page.run("JSON.stringify(botStats(0,players[0].front0[0]))")),{power:4500,soul:3});
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("集中：山札切れのリフレッシュにめくり中のカードを含めず、0枚でも終了できる",()=>{
+  const page=launchRules("practice-cards");
+  page.run(`(()=>{
+    const board=players[0],cx=board.deck.splice(board.deck.findIndex(card=>card.cx===true),1)[0];
+    board.waiting.push(...board.deck.splice(0));
+    board.deck.push(cx);
+    window.firstRevealed=cx.uid;
+    activateBrainstorm(0,board.back1[0],{stock:1,reveal:5});
+  })()`);
+  ruleButton(page,"引かない");
+  const board=snapshot(page).players[0];
+  const first=page.run("window.firstRevealed");
+  assert.ok(board.waiting.some(card=>card.uid===first));
+  assert.ok(!board.clock.some(card=>card.uid===first));
+  assert.equal(board.hand.length,2);
+  assert.equal(board.clock.length,1);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });

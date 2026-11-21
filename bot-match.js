@@ -65,14 +65,14 @@ function prepareBotScenario(board){
 function startBotMatch(deck,scenario){
   if(!isDeckSetup())return;
   if(onlineMatch?.active()){message("オンラインルームを退出してから開始してください");return}
-  const rules=scenario===autoRuleScenario;
-  if(rules)deck={...botDeck,title:"共通ルール確認用デッキ"};
+  const rules=isAutoRules(scenario);
+  if(rules)deck=scenario===practiceScenario?practiceDeck(botDeck):{...botDeck,title:"共通ルール確認用デッキ"};
   if(!deck){message("プレイヤー1の使用デッキを選択してください");return}
   if(!rules&&!Object.hasOwn(botScenarioNames,scenario))return;
-  const opponentDeck=rules?deck:botDeck;
+  const opponentDeck=botDeck;
   const boards=[buildMatchBoard(deck,0),buildMatchBoard(opponentDeck,1)];
   const [own,opponent]=boards;
-  if(rules){prepareAutoRuleBoards(boards);}
+  if(rules){prepareAutoRuleBoards(boards,scenario);}
   else if(scenario==="firen"){
     if(!botCatalog){message("カードデータの読み込みをお待ちください");return}
     if(!prepareBotScenario(own)){
@@ -102,7 +102,7 @@ function startBotMatch(deck,scenario){
   const opening=scenario==="opening";
   const snapshot={version:1,phase:opening?"mulligan":"active",screen:opening?"mulligan":"battle",
     side:0,firstPlayer:0,mulliganPlayer:0,openingHandDealt:true,decks:[deck,opponentDeck],players:boards,result:null,
-    turn:{player:0,number:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:["手札の仮キャラをタップしてプレイ"]}:{})}};
+    turn:{player:0,number:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
   if(!writeMatch(snapshot))return;
   match=snapshot;players=boards;side=0;selected=null;mulliganSelection=new Set();
   showMatchScreen();
@@ -115,7 +115,7 @@ function botEffectCard(card){
   return {uid:card.uid,cardNumber:card.id,name:def?.name??null,type:def?.type??(card.cx?"climax":null),
     level:card.botLevel??def?.stats?.level??null,power:card.botPower??def?.stats?.power??null,
     soul:card.botSoul??def?.stats?.soul??null,turnLevelBonus:card.turnLevelBonus??0,
-    traits:def?.traits??null,keywords:def?.keywords??null,markers:card.markers??[]};
+    traits:def?.traits??null,keywords:def?.keywords??null,allTags:def?.allTags??false,markers:card.markers??[]};
 }
 function botEffectBoard(p){
   const result=WSEffects.emptyBoard();
@@ -172,7 +172,7 @@ function botStats(p,card){
   const original=botEffectCard(card);
   let {power,soul}=original;
   const own=players[p];
-  if(isAutoRules()&&own.cx.length){
+  if(isAutoRules()){
     const bonus=autoRuleBuff(p,card);
     if(power!=null)power+=bonus.power;
     if(soul!=null)soul+=bonus.soul;
@@ -397,9 +397,11 @@ function botTriggerEffect(p,trigger,done){
   const board=players[p];
   const effect=botDefinition(trigger)?.effects?.find(item=>item.type==="trigger"&&item.timing==="on_trigger");
   if(effect){
-    trigger.faceUp=true;board.waiting.push(trigger);
+    const includesTrigger=effect.steps.some(step=>step.handler==="treasureTrigger");
+    if(includesTrigger){trigger.faceUp=true;board.waiting.push(trigger)}
     botGuide(trigger,effect,success=>{
-      if(!success){
+      if(!includesTrigger){trigger.faceUp=false;board.stock.push(trigger)}
+      else if(!success){
         const index=board.waiting.findIndex(card=>card.uid===trigger.uid);
         if(index>=0)botMove(board,"waiting",index,"stock");
       }
@@ -434,7 +436,7 @@ function botCanStep(){
 }
 function renderBotControls(){
   document.getElementById("botControls").hidden=false;
-  document.getElementById("botModeName").textContent="Bot戦 · "+(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]);
+  document.getElementById("botModeName").textContent="Bot戦 · "+(match.bot.scenario===practiceScenario?practiceTitle:isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]);
   const button=document.getElementById("botStep");
   button.disabled=!botCanStep();
   const phase=match.turn.phase;
@@ -502,6 +504,7 @@ function openBotAbility(){
   setRuleModal(false);
   for(const ability of abilities)deckButton(body,ability.category??ability.id,()=>{
     closeResolution();
+    if(ability.brainstorm){activateBrainstorm(0,card,ability.brainstorm);return}
     runRuleOperation(done=>botGuide(card,ability,done));
   });
 }

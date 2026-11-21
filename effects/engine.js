@@ -37,6 +37,7 @@ const WSEffects = (() => {
     const [field,off]=tagFields[kind];
     const effective=effectiveTags(card,kind);
     const results=filter.names.map(tag=>{
+      if(card.allTags===true)return !tagList(card[field]?.[off]).includes(tag);
       if(effective!==null)return effective.includes(tag);
       if(tagList(card[field]?.[off]).includes(tag))return false;
       if(tagList(card[field]?.added).includes(tag))return true;
@@ -70,6 +71,7 @@ const WSEffects = (() => {
         if (!Array.isArray(cards)) fail(zoneLabel({side,zone})+"のカード一覧がありません","invalid");
         for (const card of cards) {
           if (!object(card) || !word(card.uid) || seen.has(card.uid) || !word(card.cardNumber)
+              || (card.allTags!==undefined&&typeof card.allTags!=="boolean")
               || ["power","soul","level"].some(stat=>card[stat]!=null&&!integer(card[stat])) || (card.type!=null&&!["character","event","climax"].includes(card.type)) || (card.markers!=null&&(!Array.isArray(card.markers)||card.markers.some(marker=>!object(marker))))) {
             fail(zoneLabel({side,zone})+"のカード番号・個体ID・数値を確認してください","invalid");
           }
