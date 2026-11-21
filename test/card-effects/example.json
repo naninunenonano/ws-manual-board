@@ -1,0 +1,569 @@
+{
+  "card": {
+    "cardNumber": "TEST/S001-001",
+    "name": "架空のカードA",
+    "effects": [
+      {
+        "id": "example",
+        "type": "activated",
+        "timing": "manual",
+        "optional": true,
+        "description": "ストックがあるときに1枚支払い、舞台の1枚のパワーを上げてソウルを下げる。クロックの上から1枚を控え室に置き、1枚引く。",
+        "conditions": [
+          {
+            "handler": "zoneCount",
+            "params": {
+              "from": {
+                "zone": "stock",
+                "side": "self"
+              },
+              "min": 1
+            }
+          }
+        ],
+        "costs": [
+          {
+            "handler": "payStock",
+            "params": {
+              "side": "self",
+              "count": 1
+            }
+          }
+        ],
+        "target": {
+          "handler": "selectCards",
+          "params": {
+            "from": {
+              "zone": "stage",
+              "side": "self"
+            },
+            "as": "unit",
+            "count": 1
+          }
+        },
+        "steps": [
+          {
+            "handler": "modifyPower",
+            "params": {
+              "selection": "unit",
+              "amount": 500
+            }
+          },
+          {
+            "handler": "modifySoul",
+            "params": {
+              "selection": "unit",
+              "amount": -1
+            }
+          },
+          {
+            "handler": "move",
+            "params": {
+              "from": {
+                "zone": "clock",
+                "side": "self"
+              },
+              "to": {
+                "zone": "waiting",
+                "side": "self"
+              },
+              "count": 1
+            }
+          },
+          {
+            "handler": "draw",
+            "params": {
+              "side": "self",
+              "count": 1
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "label": "支払い・対象指定・回復・ドロー",
+      "cardNumber": "TEST/S001-001",
+      "effectId": "example",
+      "before": {
+        "self": {
+          "deck": [
+            {
+              "uid": "d1",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            },
+            {
+              "uid": "d2",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "hand": [],
+          "stage": [
+            {
+              "uid": "a1",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            },
+            {
+              "uid": "a2",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "clock": [
+            {
+              "uid": "c1",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            },
+            {
+              "uid": "c2",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "level": [],
+          "stock": [
+            {
+              "uid": "s1",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "waiting": [],
+          "memory": [],
+          "cx": []
+        },
+        "opponent": {
+          "deck": [],
+          "hand": [],
+          "stage": [
+            {
+              "uid": "b1",
+              "cardNumber": "TEST/S001-002",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "clock": [],
+          "level": [],
+          "stock": [],
+          "waiting": [],
+          "memory": [],
+          "cx": []
+        }
+      },
+      "choices": {
+        "activate": true,
+        "unit": [
+          "a2"
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "state": {
+          "self": {
+            "deck": [
+              {
+                "uid": "d1",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "hand": [
+              {
+                "uid": "d2",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "stage": [
+              {
+                "uid": "a1",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              },
+              {
+                "uid": "a2",
+                "cardNumber": "TEST/S001-001",
+                "power": 1500,
+                "soul": 0
+              }
+            ],
+            "clock": [
+              {
+                "uid": "c1",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "level": [],
+            "stock": [],
+            "waiting": [
+              {
+                "uid": "s1",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              },
+              {
+                "uid": "c2",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "memory": [],
+            "cx": []
+          },
+          "opponent": {
+            "deck": [],
+            "hand": [],
+            "stage": [
+              {
+                "uid": "b1",
+                "cardNumber": "TEST/S001-002",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "clock": [],
+            "level": [],
+            "stock": [],
+            "waiting": [],
+            "memory": [],
+            "cx": []
+          }
+        }
+      }
+    },
+    {
+      "label": "任意効果を辞退",
+      "cardNumber": "TEST/S001-001",
+      "effectId": "example",
+      "before": {
+        "self": {
+          "deck": [
+            {
+              "uid": "d1",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            },
+            {
+              "uid": "d2",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "hand": [],
+          "stage": [
+            {
+              "uid": "a1",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            },
+            {
+              "uid": "a2",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "clock": [
+            {
+              "uid": "c1",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            },
+            {
+              "uid": "c2",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "level": [],
+          "stock": [
+            {
+              "uid": "s1",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "waiting": [],
+          "memory": [],
+          "cx": []
+        },
+        "opponent": {
+          "deck": [],
+          "hand": [],
+          "stage": [
+            {
+              "uid": "b1",
+              "cardNumber": "TEST/S001-002",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "clock": [],
+          "level": [],
+          "stock": [],
+          "waiting": [],
+          "memory": [],
+          "cx": []
+        }
+      },
+      "choices": {
+        "activate": false
+      },
+      "expected": {
+        "status": "skipped",
+        "state": {
+          "self": {
+            "deck": [
+              {
+                "uid": "d1",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              },
+              {
+                "uid": "d2",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "hand": [],
+            "stage": [
+              {
+                "uid": "a1",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              },
+              {
+                "uid": "a2",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "clock": [
+              {
+                "uid": "c1",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              },
+              {
+                "uid": "c2",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "level": [],
+            "stock": [
+              {
+                "uid": "s1",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "waiting": [],
+            "memory": [],
+            "cx": []
+          },
+          "opponent": {
+            "deck": [],
+            "hand": [],
+            "stage": [
+              {
+                "uid": "b1",
+                "cardNumber": "TEST/S001-002",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "clock": [],
+            "level": [],
+            "stock": [],
+            "waiting": [],
+            "memory": [],
+            "cx": []
+          }
+        }
+      }
+    },
+    {
+      "label": "ストックが足りず条件未達",
+      "cardNumber": "TEST/S001-001",
+      "effectId": "example",
+      "before": {
+        "self": {
+          "deck": [
+            {
+              "uid": "d1",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            },
+            {
+              "uid": "d2",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "hand": [],
+          "stage": [
+            {
+              "uid": "a1",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            },
+            {
+              "uid": "a2",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "clock": [
+            {
+              "uid": "c1",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            },
+            {
+              "uid": "c2",
+              "cardNumber": "TEST/S001-001",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "level": [],
+          "stock": [],
+          "waiting": [],
+          "memory": [],
+          "cx": []
+        },
+        "opponent": {
+          "deck": [],
+          "hand": [],
+          "stage": [
+            {
+              "uid": "b1",
+              "cardNumber": "TEST/S001-002",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "clock": [],
+          "level": [],
+          "stock": [],
+          "waiting": [],
+          "memory": [],
+          "cx": []
+        }
+      },
+      "choices": {},
+      "expected": {
+        "status": "condition-not-met",
+        "state": {
+          "self": {
+            "deck": [
+              {
+                "uid": "d1",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              },
+              {
+                "uid": "d2",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "hand": [],
+            "stage": [
+              {
+                "uid": "a1",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              },
+              {
+                "uid": "a2",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "clock": [
+              {
+                "uid": "c1",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              },
+              {
+                "uid": "c2",
+                "cardNumber": "TEST/S001-001",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "level": [],
+            "stock": [],
+            "waiting": [],
+            "memory": [],
+            "cx": []
+          },
+          "opponent": {
+            "deck": [],
+            "hand": [],
+            "stage": [
+              {
+                "uid": "b1",
+                "cardNumber": "TEST/S001-002",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "clock": [],
+            "level": [],
+            "stock": [],
+            "waiting": [],
+            "memory": [],
+            "cx": []
+          }
+        }
+      }
+    }
+  ]
+}

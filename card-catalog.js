@@ -84,9 +84,9 @@ const CardCatalog = (() => {
     }
   }
 
-  const requiredStats = type => Object.hasOwn(stats,type) ? stats[type] : [];
+  const requiredStats = type => typeof type==="string" && Object.hasOwn(stats,type) ? stats[type] : [];
 
-  function validateCard(card, path = "カード") {
+  function validateCard(card, path = "カード", {formal=false,supportedHandlers=null} = {}) {
     const issues = [];
     const add = (key, message, code = "invalid", severity = "error") =>
       issues.push({path:path+key,message,code,severity});
@@ -95,19 +95,25 @@ const CardCatalog = (() => {
       return issues;
     }
     if (!validNumber(normalizeNumber(card.cardNumber))) add(".cardNumber","カード番号の形式を確認してください");
-    if (!Object.hasOwn(types,card.type)) add(".type","カード種別を選んでください");
-    if (!nonempty(card.color)) add(".color","色を入力してください");
-    for (const key of ["title","product"]) {
+    if (!(formal && card.type==null) && !(typeof card.type==="string" && Object.hasOwn(types,card.type))) add(".type","カード種別を選んでください");
+    if (!(formal && card.color==null) && !nonempty(card.color)) add(".color","色を入力してください");
+    for (const key of formal ? ["title","product","name","sourceText"] : ["title","product"]) {
       if (card[key] != null && typeof card[key] !== "string") add("."+key,"文字列を指定してください");
     }
-    const required = requiredStats(card.type);
-    if (!object(card.stats)) add(".stats","基本ステータスを指定してください");
-    else for (const [key,label] of Object.entries(statNames)) {
-      const value = card.stats[key];
-      if (value == null && required.includes(key)) add(".stats."+key,label+"を入力してください");
-      else if (value != null && (!Number.isSafeInteger(value) || value < 0)) add(".stats."+key,label+"は0以上の整数で指定してください");
-      else if (value != null && !required.includes(key)) add(".stats."+key,"このカード種別では空欄にしてください");
+    for (const key of ["triggers","traits"]) {
+      if (formal && card[key]!=null && !(Array.isArray(card[key]) && card[key].every(nonempty))) {
+        add("."+key,"文字列の配列またはnullを指定してください");
+      }
     }
+    const required = requiredStats(card.type);
+    if (!object(card.stats) && !(formal && card.stats==null)) add(".stats","基本ステータスを指定してください");
+    if (object(card.stats)) for (const [key,label] of Object.entries(statNames)) {
+      const value = card.stats[key];
+      if (!formal && value == null && required.includes(key)) add(".stats."+key,label+"を入力してください");
+      else if (value != null && (!Number.isSafeInteger(value) || value < 0)) add(".stats."+key,label+"は0以上の整数で指定してください");
+      else if (value != null && card.type!=null && !required.includes(key)) add(".stats."+key,"このカード種別では空欄にしてください");
+    }
+    if (formal && card.effects==null) return issues;
     if (!Array.isArray(card.effects)) {
       add(".effects","効果は配列で指定してください");
       return issues;
@@ -116,15 +122,15 @@ const CardCatalog = (() => {
     card.effects.forEach((effect,index) => {
       const key = ".effects["+index+"]";
       if (!object(effect)) {add(key,"オブジェクトを指定してください"); return;}
-      for (const field of ["id","type","timing"]) if (!nonempty(effect[field])) add(key+"."+field,"文字列を入力してください");
+      for (const field of ["id","type","timing"]) if (!(formal && field!=="id" && effect[field]==null) && !nonempty(effect[field])) add(key+"."+field,"文字列を入力してください");
       if (nonempty(effect.id)) {
         const id = effect.id.trim();
         if (ids.has(id)) add(key+".id","効果IDが重複しています","duplicate-effect");
         ids.add(id);
       }
-      if (typeof effect.optional !== "boolean") add(key+".optional","任意ならtrue、強制ならfalseを指定してください");
+      if (!(formal && effect.optional==null) && typeof effect.optional !== "boolean") add(key+".optional","任意ならtrue、強制ならfalseを指定してください");
       for (const field of ["conditions","costs","choices"]) {
-        if (field in effect && !Array.isArray(effect[field])) add(key+"."+field,"配列を指定してください");
+        if (field in effect && !(formal && effect[field]===null) && !Array.isArray(effect[field])) add(key+"."+field,"配列を指定してください");
       }
       for (const field of ["target","duration","limit"]) {
         if (effect[field] != null && !object(effect[field])) add(key+"."+field,"オブジェクトまたはnullを指定してください");
@@ -132,12 +138,16 @@ const CardCatalog = (() => {
       if ("stateRefs" in effect && !(Array.isArray(effect.stateRefs) && effect.stateRefs.every(nonempty))) {
         add(key+".stateRefs","参照する状態は文字列の配列で指定してください");
       }
+      for (const field of formal ? ["description","sourceText"] : []) {
+        if (effect[field]!=null && typeof effect[field]!=="string") add(key+"."+field,"文字列を指定してください");
+      }
+      if (formal && effect.steps==null)return;
       if (!Array.isArray(effect.steps) || !effect.steps.length) {add(key+".steps","1件以上の処理を実行順の配列で指定してください"); return;}
       effect.steps.forEach((step,order) => {
         const at = key+".steps["+order+"]";
         if (!object(step) || typeof step.handler !== "string" || !/^[A-Za-z][A-Za-z0-9_.:-]*$/.test(step.handler)) {
           add(at+".handler","処理識別子は英字で始め、英数字・ピリオド・下線・コロン・ハイフンで指定してください");
-        } else {
+        } else if(!formal && !supportedHandlers?.has(step.handler)) {
           add(at+".handler",step.handler+" は未実装です","unsupported-handler","warning");
         }
         if (!object(step?.params)) add(at+".params","パラメータはオブジェクトで指定してください");
@@ -146,7 +156,7 @@ const CardCatalog = (() => {
     return issues;
   }
 
-  function validateCatalog(catalog) {
+  function validateCatalog(catalog, options) {
     if (!object(catalog) || catalog.schemaVersion !== schemaVersion) {
       return [{path:"schemaVersion",message:"データ形式のバージョンが一致しません（対応は "+schemaVersion+"）",code:"version",severity:"error"}];
     }
@@ -155,7 +165,7 @@ const CardCatalog = (() => {
     const issues = [];
     catalog.cards.forEach((card,index) => {
       const path = "cards["+index+"]";
-      issues.push(...validateCard(card,path));
+      issues.push(...validateCard(card,path,options));
       const number = normalizeNumber(card?.cardNumber);
       if (number && numbers.has(number)) issues.push({path:path+".cardNumber",message:number+" が重複しています",code:"duplicate-card",severity:"error"});
       numbers.add(number);
@@ -163,8 +173,8 @@ const CardCatalog = (() => {
     return issues;
   }
 
-  function checked(catalog) {
-    const issues = validateCatalog(catalog);
+  function checked(catalog, options) {
+    const issues = validateCatalog(catalog,options);
     if (issues.some(issue => issue.severity === "error")) {
       throw Object.assign(new Error("登録データを確認してください"),{issues});
     }
@@ -184,8 +194,9 @@ const CardCatalog = (() => {
     return {catalog:{...imported,...current,cards:[...cards.values()]},added,updated,skipped};
   }
 
-  function selectCards(cards,{number="",title=null,product=null} = {}) {
+  function selectCards(cards,{number="",name="",title=null,product=null} = {}) {
     return cards.filter(card => card.cardNumber.includes(normalizeNumber(number))
+      && (card.name??"").toLocaleLowerCase().includes(name.trim().toLocaleLowerCase())
       && (title === null || title === (card.title ?? ""))
       && (product === null || product === (card.product ?? "")));
   }
