@@ -46,6 +46,8 @@
   }
 
   function clearResults(){
+    $("resultVerification").hidden=true;
+    $("resultVerification").replaceChildren();
     for(const id of ["effectResult","beforeBoard","afterBoard","resultChanges","compareResults","effectLog"])$(id).replaceChildren();
   }
 
@@ -237,6 +239,13 @@
     turn++;used.clear();undo=null;clearResults();render();
   };
 
+  function reisCheckKind(ability=effect()){
+    if(card?.cardNumber!=="STS/W140-001")return null;
+    if(ability?.id==="on-play-waiting-okaken")return "search";
+    if(ability?.id==="memory-recollection-top-reveal")return "console";
+    return null;
+  }
+
   function readEffect(){
     if(session)return;
     lastStart=null;
@@ -245,6 +254,11 @@
     $("effectText").hidden=!ability;
     $("effectText").textContent=ability?.sourceText??ability?.description??"";
     $("operationDescription").textContent=!ability?"":isOnPlay(ability)?"テスト対象のカードを手札から舞台に登場させると、能力の確認に進みます。":"テスト開始から、使用するカードと必要な対象を選択できます。";
+    const check=reisCheckKind();
+    $("expectedOutcome").hidden=!check;
+    $("expectedOutcome").textContent=check==="search"?
+      "確認すること：ストックを1枚支払い、選んだ控え室のカードがクロックの一番下へ。選んだ山札のカードは公開して手札へ。":
+      "確認すること：選んだ『回想』持ちのキャラが思い出へ。山札の一番上は公開し、レベル0以下のキャラなら手札へ、それ以外なら山札の上へ。";
     $("effectChoices").replaceChildren();
     clearResults();render();
   }
@@ -341,7 +355,7 @@
     clearResults();
     lastStart={state:start,uid,entered};
     session={iterator:WSEffects.guide(ability,board,{sourceUid:uid,usedThisTurn:used.get(usageKey(uid))??0}),
-      before:copy(board),uid,ability};
+      before:copy(board),uid,ability,chosen:{}};
     render();
     focusOperation();
     advance();
@@ -361,11 +375,21 @@
         }
         undo=null;
       }
-      showResult(resolved.before,next.value);render();return;
+      showResult(resolved.before,next.value);
+      renderVerification(resolved,next.value);
+      render();
+      $("resultHeading").focus();
+      return;
     }
     const step=next.value;
     focusOperation();
-    if(step.kind==="select"){chooseCards(step,advance);return}
+    if(step.kind==="select"){
+      chooseCards(step,ids=>{
+        session.chosen[step.from.zone]=ids;
+        advance(ids);
+      });
+      return;
+    }
     if(step.kind==="optional"){
       panel.append(node("p","この能力を使いますか？"),button("能力を使用する",()=>advance(true)),button("能力を使用しない",()=>advance(false)));
       return;
@@ -408,6 +432,7 @@
     clearResults();
     $("effectResult").textContent="テストを中止しました。途中のコストや効果は盤面に反映していません。";
     render();
+    $("resultHeading").focus();
   };
   $("restoreStart").onclick=()=>{
     if(!lastStart||session)return;
@@ -421,6 +446,57 @@
     if(previous.entered)enterFromHand(previous.uid);
     else begin(previous.uid);
   };
+
+  function renderVerification(resolved,actual){
+    const kind=reisCheckKind(resolved.ability);
+    if(!kind||!["success","skipped"].includes(actual.status))return;
+    const panel=$("resultVerification"),before=resolved.before.self,after=actual.state.self;
+    const ids=pile=>pile.map(entry=>entry.uid);
+    const same=(a,b)=>a.length===b.length&&a.every((id,i)=>id===b[i]);
+    const without=(pile,uid)=>ids(pile).filter(id=>id!==uid);
+    const revealed=actual.log.flatMap(step=>step.revealed??[]);
+    const rows=[];
+    if(actual.status==="skipped"){
+      const unchanged=Object.keys(sides).every(side=>Object.keys(zones).every(zone=>
+        same(ids(resolved.before[side][zone]),ids(actual.state[side][zone]))));
+      rows.push(["能力を使わず、コストとカードの移動がなかった",unchanged&&!revealed.length]);
+    }else if(kind==="search"){
+      const paid=before.stock.at(-1),[clock]=resolved.chosen.waiting??[],[found]=resolved.chosen.deck??[];
+      const clockCard=before.waiting.find(entry=>entry.uid===clock);
+      const foundCard=before.deck.find(entry=>entry.uid===found);
+      const remaining=without(before.deck,found);
+      rows.push(["ストックの一番上を1枚、控え室へ",!!paid&&same(ids(after.stock),ids(before.stock).slice(0,-1))&&
+        same(ids(after.waiting),[...without(before.waiting,clock),paid.uid])]);
+      rows.push([(clockCard?name(clockCard):"選んだカード")+"をクロックの一番下へ",!!clock&&same(ids(after.clock),[clock,...ids(before.clock)])]);
+      rows.push([foundCard?name(foundCard)+"を公開して手札へ":"山札からカードを選ばずに進行",
+        same(revealed,found?[found]:[])&&same(ids(after.hand),found?[...ids(before.hand),found]:ids(before.hand))]);
+      rows.push(["山札をシャッフルし、残りのカードを保持",actual.log.some(step=>step.handler==="shuffleDeck"&&step.ok)&&
+        same(ids(after.deck).sort(),remaining.sort())]);
+    }else{
+      const [cost]=resolved.chosen.stage??[];
+      const payer=before.stage.find(entry=>entry.uid===cost),top=before.deck.at(-1);
+      const hit=top?.type==="character"&&Number.isInteger(top.level)&&top.level<=0;
+      rows.push([(payer?name(payer):"選んだキャラ")+"を思い出へ",!!cost&&cost!==resolved.uid&&
+        same(ids(after.stage),without(before.stage,cost))&&same(ids(after.memory),[...ids(before.memory),cost])]);
+      rows.push(["山札の一番上の"+(top?name(top):"カード")+"を公開",!!top&&same(revealed,[top.uid])]);
+      rows.push([hit?"公開カードを手札へ":"公開カードを山札の一番上へ戻す",!!top&&
+        same(ids(after.deck),hit?ids(before.deck).slice(0,-1):ids(before.deck))&&
+        same(ids(after.hand),hit?[...ids(before.hand),top.uid]:ids(before.hand))]);
+    }
+    const matches=rows.filter(([,pass])=>pass).length;
+    const title=matches===rows.length?"確認項目はすべて期待どおり":"期待と異なる項目があります";
+    panel.append(node("h3",title+"（"+matches+" / "+rows.length+"件）"));
+    const list=node("ul");
+    for(const [description,pass] of rows){
+      const item=node("li");
+      const status=node("strong",pass?"一致":"不一致");
+      status.className=pass?"check-pass":"check-fail";
+      item.append(status,document.createTextNode(description));
+      list.append(item);
+    }
+    panel.append(list);
+    panel.hidden=false;
+  }
 
   function showResult(before,actual){
     const after=actual.status==="success"?actual.state:board;
