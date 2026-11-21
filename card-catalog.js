@@ -100,9 +100,16 @@ const CardCatalog = (() => {
     for (const key of formal ? ["title","product","name","sourceText"] : ["title","product"]) {
       if (card[key] != null && typeof card[key] !== "string") add("."+key,"文字列を指定してください");
     }
-    for (const key of ["triggers","traits"]) {
+    for (const key of ["triggers","traits","keywords"]) {
       if (formal && card[key]!=null && !(Array.isArray(card[key]) && card[key].every(nonempty))) {
         add("."+key,"文字列の配列またはnullを指定してください");
+      }
+    }
+    if (formal && card.variants!=null) {
+      if (!Array.isArray(card.variants) || !card.variants.every(number=>validNumber(normalizeNumber(number)))) {
+        add(".variants","別バージョン番号の配列を確認してください");
+      } else if (new Set(card.variants.map(normalizeNumber)).size!==card.variants.length) {
+        add(".variants","別バージョン番号が重複しています","duplicate-card");
       }
     }
     const required = requiredStats(card.type);
@@ -138,7 +145,7 @@ const CardCatalog = (() => {
       if ("stateRefs" in effect && !(Array.isArray(effect.stateRefs) && effect.stateRefs.every(nonempty))) {
         add(key+".stateRefs","参照する状態は文字列の配列で指定してください");
       }
-      for (const field of formal ? ["description","sourceText"] : []) {
+      for (const field of formal ? ["description","sourceText","category"] : []) {
         if (effect[field]!=null && typeof effect[field]!=="string") add(key+"."+field,"文字列を指定してください");
       }
       if (formal && effect.steps==null)return;
@@ -166,9 +173,13 @@ const CardCatalog = (() => {
     catalog.cards.forEach((card,index) => {
       const path = "cards["+index+"]";
       issues.push(...validateCard(card,path,options));
-      const number = normalizeNumber(card?.cardNumber);
-      if (number && numbers.has(number)) issues.push({path:path+".cardNumber",message:number+" が重複しています",code:"duplicate-card",severity:"error"});
-      numbers.add(number);
+      const canonical=normalizeNumber(card?.cardNumber);
+      for (const number of options?.formal?cardNumbers(card):[canonical]) {
+        if (!number)continue;
+        if (numbers.has(number)) issues.push({path:path+(number===canonical?".cardNumber":".variants"),
+          message:number+" が重複しています",code:"duplicate-card",severity:"error"});
+        numbers.add(number);
+      }
     });
     return issues;
   }
@@ -178,7 +189,8 @@ const CardCatalog = (() => {
     if (issues.some(issue => issue.severity === "error")) {
       throw Object.assign(new Error("登録データを確認してください"),{issues});
     }
-    return {...catalog,cards:catalog.cards.map(card => ({...card,cardNumber:normalizeNumber(card.cardNumber)}))};
+    return {...catalog,cards:catalog.cards.map(card => ({...card,cardNumber:normalizeNumber(card.cardNumber),
+      ...(options?.formal && Array.isArray(card.variants)?{variants:card.variants.map(normalizeNumber)}:{})}))};
   }
 
   function mergeCatalog(current, incoming, overwrite) {
@@ -194,9 +206,23 @@ const CardCatalog = (() => {
     return {catalog:{...imported,...current,cards:[...cards.values()]},added,updated,skipped};
   }
 
+  function cardNumbers(card) {
+    return [...new Set([card?.cardNumber,...(Array.isArray(card?.variants)?card.variants:[])].map(normalizeNumber))];
+  }
+
+  function findCard(cards,number) {
+    const id=normalizeNumber(number);
+    return id ? cards.find(card=>cardNumbers(card).includes(id)) : undefined;
+  }
+
+  function products(cards) {
+    return [...new Set(cards.map(card=>card.product).filter(nonempty))].sort((a,b)=>a.localeCompare(b,"ja"));
+  }
+
   function selectCards(cards,{number="",name="",title=null,product=null} = {}) {
-    return cards.filter(card => card.cardNumber.includes(normalizeNumber(number))
-      && (card.name??"").toLocaleLowerCase().includes(name.trim().toLocaleLowerCase())
+    const id=normalizeNumber(number), byName=name.trim().toLocaleLowerCase();
+    return cards.filter(card => (!id || cardNumbers(card).some(number=>number.includes(id)))
+      && (typeof card.name==="string"?card.name:"").toLocaleLowerCase().includes(byName)
       && (title === null || title === (card.title ?? ""))
       && (product === null || product === (card.product ?? "")));
   }
@@ -207,7 +233,7 @@ const CardCatalog = (() => {
   }
 
   return {empty,types,requiredStats,statNames,normalizeNumber,validNumber,parseJson,
-    validateCard,validateCatalog,checked,mergeCatalog,selectCards,template};
+    validateCard,validateCatalog,checked,mergeCatalog,cardNumbers,findCard,products,selectCards,template};
 })();
 
 if (typeof module === "object") module.exports = CardCatalog;

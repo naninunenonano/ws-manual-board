@@ -69,6 +69,50 @@ async function checkEffects(browser,url) {
   console.log("Effect tester: formal number/name search, Japanese definitions, test board, expectations, sample, preflight failure and isolation passed");
 }
 
+async function checkProducts(browser,url) {
+  const page=await browser.newPage(devices["iPhone 13"]);
+  const $=id=>page.locator("#"+id);
+  const original=require("../card-data/catalog.json");
+  const wraith=original.cards.find(card=>card.cardNumber==="STS/W140-001");
+  let addProduct=false;
+  await page.route("**/card-data/catalog.json",route=>route.fulfill({json:{...original,cards:[
+    ...original.cards,
+    {cardNumber:"TEST/S001-001",product:wraith.product,traits:null,keywords:[],effects:[]},
+    ...(addProduct?[{cardNumber:"TEST/S002-001",product:"自動追加の商品",effects:[]}]:[])
+  ]}}));
+  await page.goto(url+"/card-registration.html");
+  await $("formalProduct").locator("option").filter({hasText:wraith.product}).waitFor({state:"attached"});
+  assert.equal(await $("formalProduct").locator("option").filter({hasText:wraith.product}).count(),1);
+  assert.equal(await $("formalProduct").locator('option[value="自動追加の商品"]').count(),0);
+  addProduct=true;
+  await page.reload();
+  await $("formalProduct").selectOption("自動追加の商品");
+  assert.equal(await $("formalResults").locator("summary").count(),1);
+  await $("formalResults").getByText(/TEST\/S002-001/).waitFor();
+  await $("formalProduct").selectOption(wraith.product);
+  await $("formalNumber").fill("sts/w140-001sp");
+  assert.equal(await $("formalResults").locator("summary").count(),1);
+  await $("formalResults").locator("summary").click();
+  await $("formalResults").getByText("STS/W140-001S、STS/W140-001SP",{exact:true}).waitFor();
+  await $("formalResults").getByText("巡遊者、恩恵意志",{exact:true}).waitFor();
+  assert.deepEqual(await $("formalResults").locator(".effect-original").allTextContents(),wraith.effects.map(effect=>effect.sourceText));
+  assert.equal(await $("formalResults").getByText(/テスト実行可能/).count(),0);
+  assert.equal(await $("formalResults").getByText(/未実装あり/).count(),3);
+  await page.goto(url+"/card-effect-test.html?card=STS%2FW140-001SP");
+  await $("testCardStatus").getByText(/STS\/W140-001 ／/).waitFor();
+  await $("placeNumber").fill("STS/W140-001SP");
+  await $("placeCard").locator("details summary").click();
+  await $("keywordsAdded").fill("回想");
+  await page.getByRole("button",{name:"領域の上に追加"}).click();
+  await $("boardEditor").getByText("山札 （1枚）",{exact:true}).click();
+  await $("boardEditor").getByText("キーワード能力 回想",{exact:true}).waitFor();
+  await $("runEffectTest").click();
+  assert.match(await $("effectResult").innerText(),/未実装.*実行前に停止/);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.close();
+  console.log("Catalog: product generation and filter, explicit variants, original source, keyword test state and pending effect passed");
+}
+
 async function main() {
   const server = http.createServer((request,response)=>{
     const path = new URL(request.url,"http://localhost").pathname.slice(1);
@@ -82,6 +126,7 @@ async function main() {
     browser = await chromium.launch(fs.existsSync("/usr/bin/google-chrome")?{channel:"chrome"}:{});
     const url="http://127.0.0.1:"+server.address().port;
     await checkEffects(browser,url);
+    await checkProducts(browser,url);
     const page = await browser.newPage({...devices["iPhone 13"],acceptDownloads:true});
     const consoleErrors = [];
     page.on("pageerror",error=>consoleErrors.push(error.message));
