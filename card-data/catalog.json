@@ -104,7 +104,7 @@
                   "side": "self",
                   "zone": "hand"
                 },
-                "selection": "found"
+                "selection": "searched"
               }
             },
             {
@@ -152,7 +152,8 @@
                     "回想"
                   ],
                   "mode": "any"
-                }
+                },
+                "excludeUid": "@source"
               }
             },
             {
