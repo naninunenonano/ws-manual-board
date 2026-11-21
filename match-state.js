@@ -124,6 +124,7 @@ function showMatchScreen() {
       " ／ 後攻：プレイヤー" + (2 - first);
     render();
     renderTurnControls();
+    checkMandatoryLevel();
   } else if (match?.phase === "ended") {
     const { reason, winner } = match.result;
     matchElement("battleResult").textContent = reason === "surrender"

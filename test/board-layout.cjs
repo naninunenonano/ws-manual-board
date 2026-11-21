@@ -151,6 +151,20 @@ async function main() {
     await front.click();
     await page.getByRole("button",{name:"縦向き",exact:true}).click();
     assert.equal(await front.getAttribute("data-orientation"),"0");
+    await page.evaluate(()=>{
+      const board=players[side];
+      board.clock.push(...board.deck.splice(0,7-board.clock.length));
+      board.waiting.push(...board.deck.splice(0));
+      updateBoard();
+    });
+    await page.getByRole("button",{name:"レベルアップ → リフレッシュ → リフレッシュポイント",exact:true}).click();
+    await page.locator("#dialogBody .modal-card").first().click();
+    await page.locator("#dialog").waitFor({state:"hidden"});
+    const forced=await page.evaluate(()=>({
+      clock:players[side].clock.length,level:players[side].level.length,
+      waiting:players[side].waiting.length,busy:ruleBusy
+    }));
+    assert.deepEqual(forced,{clock:1,level:4,waiting:0,busy:false});
     assert.deepEqual(errors,[]);
     console.log(JSON.stringify(geometry));
   } finally {

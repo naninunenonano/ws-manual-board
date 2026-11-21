@@ -1,6 +1,6 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.38</title>
-<link rel="stylesheet" href="board-layout.css?v=0.38">
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.39</title>
+<link rel="stylesheet" href="board-layout.css?v=0.39">
 <style>
 :root{font-family:system-ui,-apple-system,sans-serif;color:#edf1f8;background:#101827}*{box-sizing:border-box}body{margin:0}header{padding:12px 14px;background:#1a2840;display:flex;justify-content:space-between;align-items:center;gap:8px}h1{font-size:17px;margin:0}button,select{background:#263e61;color:white;border:1px solid #6581a5;border-radius:8px;padding:9px;font:inherit}button:disabled{opacity:.4}.shell{max-width:680px;margin:auto;padding:10px}.player{border:1px solid #49617e;border-radius:14px;margin:8px 0;padding:9px;background:#18243a}.player.active{border-color:#83b8ff}.player h2{font-size:14px;margin:0 0 8px;display:flex;justify-content:space-between}.modalcards .modal-card{display:flex;flex-direction:column;align-items:center;gap:4px;width:90px;min-height:128px;padding:5px;font-size:10px;overflow-wrap:anywhere}.modal-card img{height:100px;max-width:74px;object-fit:contain}.modal-card .card-back{height:100px;width:70px;background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px)}.zone.selected{outline:3px solid #f4cf73}.zone.empty{visibility:hidden}.stage{background:#30435e}.hand{display:flex;overflow-x:auto;gap:5px;padding:8px 0;min-height:80px}.card{flex:0 0 46px;height:66px;border:1px solid #9db3cc;border-radius:5px;background:#e4eaf1;color:#19273d;font-size:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:grab;user-select:none}.card.back{background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px);color:#fff}.card.selected{outline:3px solid #f4cf73}.card img{width:100%;height:100%;object-fit:contain;border-radius:4px;-webkit-touch-callout:none;-webkit-user-select:none}.card .cardlabel{font-size:9px;overflow-wrap:anywhere;padding:2px}.carddetail{display:grid;grid-template-columns:1fr;gap:7px;font-size:13px}.carddetail img{display:block;width:100%;max-width:100%;max-height:none;object-fit:contain;height:auto;-webkit-touch-callout:none;-webkit-user-select:none}.carddetail{max-width:100%}.carddetail .zoom-actions{display:flex;gap:8px;flex-wrap:wrap}.modalcards .modal-card img{object-fit:contain}#dialog{max-height:94dvh;overflow:auto}#dialog.zoom-mode{width:min(96vw,720px)}#dialog.zoom-mode .carddetail img{max-height:none}#dialog.zoom-mode{padding:8px}#dialog.zoom-mode #dialogTitle{font-size:14px;margin:2px 0 8px}.zone-zoom{border:0;background:#35557b;padding:2px 4px;font-size:10px;line-height:1.2;border-radius:4px;margin-top:2px}.card-zoom{position:absolute;right:0;bottom:0;background:#183453e8;border:0;border-radius:4px;padding:1px 3px;font-size:12px;line-height:1.4;color:white}.card{position:relative}.carddetail strong{color:#e7f0ff}.controls{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.controls button{font-size:12px}.notice{font-size:12px;color:#d3dfed;min-height:35px}.toolbar{display:flex;gap:5px;align-items:center;flex-wrap:wrap}.toolbar label{font-size:12px}dialog{background:#1a2840;color:white;border:1px solid #7191ba;border-radius:12px;max-width:95vw;width:420px}dialog::backdrop{background:#0009}.modalcards{display:flex;flex-wrap:wrap;gap:5px;max-height:50vh;overflow:auto}.muted{opacity:.7;font-size:11px}.count{font-size:11px;color:#bbd2f4}
 .card img.landscape-card{transform:rotate(90deg) scale(1.4)}
@@ -15,7 +15,7 @@
 #battleScreen .screen-actions,#battleScreen .toolbar,#battleScreen .controls{margin:4px 0;gap:4px}
 #battleScreen .screen-actions button,#battleScreen .toolbar button,#battleScreen .controls button,#battleScreen .toolbar select{font-size:11px;padding:5px 6px}
 #battleScreen .notice{min-height:0;margin:3px 0;font-size:11px}
-</style></head><body><header><h1>WS 手動盤面 <small>Ver.0.38</small></h1></header>
+</style></head><body><header><h1>WS 手動盤面 <small>Ver.0.39</small></h1></header>
 <main class="shell"><p id="storageWarning" role="status" hidden></p><section id="setupScreen"><h2>デッキ設定</h2><p class="muted">デッキを登録してから対戦を開始してください。プレイヤーごとに登録できます。</p><div class="toolbar"><label>操作する側 <select id="side"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label></div><section class="player" id="importer"><h2>Deck Log デッキ登録（試験機能）</h2><div class="toolbar"><input id="deckCode" value="1TK8A8" aria-label="Deck Logコード" maxlength="12" style="width:125px;padding:9px"><button id="importDeck">デッキ取得</button><button id="openDeckLog">Deck Logを開く</button><button id="applyDeck" disabled>操作側に50枚登録</button></div><div id="deckTransferStatus" role="status"></div><p class="muted">SafariでDeck Logのデッキページを開き、共有メニューの「WSデッキ転送」を実行してください。受信後、登録先を確認して50枚を登録できます。</p><details><summary>初回設定：Deck Log転送用ブックマークレット</summary><p class="muted">「転送コードをコピー」→Safariで任意のページをブックマーク→ブックマークを編集しURL欄を貼り付けたコードに置換。以後はDeck Logのデッキページでそのブックマークを押します。</p><button id="copyDeckTransfer">転送コードをコピー</button><textarea id="transferCode" readonly rows="3" style="width:100%;background:#101827;color:white" aria-label="転送用ブックマークレット"></textarea></details><details open><summary>カード番号と枚数を貼り付け（手動登録）</summary><p class="muted">1行に1種類。例：FRI/S100-001 × 4 または FRI/S100-001,4。合計50枚になるよう入力してください。</p><textarea id="deckText" rows="6" style="width:100%;background:#101827;color:white" placeholder="FRI/S100-001 × 4"></textarea><button id="parseDeckText">テキストから50枚を確認</button></details><details><summary>JSON貼り付け（従来方式）</summary><textarea id="deckJson" rows="4" style="width:100%;background:#101827;color:white" placeholder='{"list":[{"card_number":"...","num":4}]}'></textarea><button id="parseDeck">JSONを解析</button></details><div class="toolbar"><button id="loadSavedDeck">保存デッキを読み込む</button><button id="clearSavedDeck">保存デッキを削除</button></div><p class="muted" id="savedDeckStatus">保存デッキ：未確認</p><div id="deckPreview" class="muted" aria-live="polite"></div></section><div class="screen-actions"><button id="startBattle">対戦開始</button></div><p id="setupNotice" role="status"></p></section><section id="mulliganScreen" hidden><h2>マリガン</h2><p id="mulliganProgress" role="status"></p><p class="muted">交換するカードを0〜5枚選択。選択カードを控え室へ置き、同じ枚数を引いた後、山札をシャッフルします。</p><div id="mulliganCards" class="modalcards"></div><div class="screen-actions"><button id="confirmMulligan">マリガン確定</button></div></section><section id="battleScreen" hidden><div class="screen-actions"><button id="surrender">降参</button><button id="leaveBattle">対戦を離れる</button><span id="firstPlayerResult" class="turn-result" role="status"></span></div><p class="notice" id="notice" role="status">カードをタップして移動先を選択。ドラッグでも移動できます。</p><div id="boards"></div><div id="playerActions" style="margin:8px 0"><div id="turnControls" style="border:1px solid #6581a5;border-radius:9px;padding:9px;margin:8px 0"><strong id="turnStatus"></strong><div class="toolbar"><button id="clockAction" hidden>選択した手札をクロックに置いて2枚ドロー</button><button id="clockSkip" hidden>クロックせずメインへ</button><button id="nextPhase">次のフェイズへ</button></div></div><div class="toolbar"><label>操作する側 <select id="battleSide"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label><button id="viewDecks">自分のデッキ確認</button><button id="shuffle">山札シャッフル</button><button id="draw">1枚ドロー</button></div><div class="controls"><button id="refresh">控え室→山札（シャッフル）</button><button id="damage">山札→クロック 1枚</button><button id="level">レベルアップ</button></div></div><p class="muted">ローカル操作試作版。カード画像は縦横比を維持して表示します。手札の🔍、盤面や一覧の「拡大」で公式画像を大きく確認できます。オンライン同期・カード能力の自動処理は未実装です。レベルアップはクロック下から7枚を対象とします。</p></section><section id="resultScreen" hidden><h2>対戦終了</h2><p id="battleResult" role="status"></p><button id="nextBattle">次の対戦へ</button></section></main>
 <dialog id="dialog"><h3 id="dialogTitle"></h3><div id="dialogBody"></div><div class="controls"><button id="close">閉じる</button></div></dialog>
 <script>
@@ -69,7 +69,7 @@ function message(text){
   document.getElementById(id).textContent=text;
 }
 function updateBoard(){
-  saveMatchProgress();
+  if (!ruleBusy) saveMatchProgress();
   render();
   if(typeof renderTurnControls==="function" && isMatchActive())renderTurnControls();
   checkMandatoryLevel();
@@ -169,22 +169,82 @@ function zoneClick(p,z){if(p!==side){message("相手のカードは操作でき�
 
 // Deck commands: deck top is the final array element. Revealed/inspected cards stay
 // outside the waiting room until their destination is confirmed.
-function refreshDeck(p){
- const b=players[p];if(b.deck.length||!b.waiting.length)return false;
- b.deck.push(...b.waiting.splice(0));for(const c of b.deck)c.faceUp=false;
- shuffle(b.deck);const point=b.deck.pop();if(point){point.faceUp=true;b.clock.push(point)}
- updateBoard();message("リフレッシュし、リフレッシュポイントをクロックへ置きました");
- return true;
+let ruleBusy=false;
+let ruleModal=false;
+function setRuleModal(locked){
+ ruleModal=locked;
+ document.getElementById("close").hidden=locked;
 }
-function pullDeck(p,count,to,interrupt=true,fromBottom=false){
- const b=players[p];let moved=0;
- for(let i=0;i<count;i++){
-   if(!b.deck.length && (!interrupt||!refreshDeck(p)))break;
-   const c=fromBottom?b.deck.shift():b.deck.pop();if(!c)break;c.faceUp=!["deck","stock"].includes(to);b[to].push(c);moved++;
-   if(!b.deck.length&&interrupt)refreshDeck(p);
+
+function runRuleOperation(work){
+ if(ruleBusy)return;
+ ruleBusy=true;
+ work(()=>{
+   ruleBusy=false;
+   updateBoard();
+ });
+}
+
+function refillDeck(board){
+ board.deck.push(...board.waiting.splice(0));
+ for(const card of board.deck)card.faceUp=false;
+ shuffle(board.deck);
+}
+
+function resolveBoardRules(p,done){
+ const board=players[p];
+ const canRefresh=()=>board.deck.length===0 && board.waiting.length>0;
+ const needsLevel=()=>board.clock.length>=7;
+ function resolveLevels(next){
+   if(needsLevel())openMandatoryLevel(p,()=>resolveLevels(next));
+   else next();
  }
- updateBoard();return moved;
+ function refresh(){
+   refillDeck(board);
+   render();
+   resolveLevels(()=>{
+     const point=board.deck.pop();
+     point.faceUp=true;
+     board.clock.push(point);
+     message("リフレッシュポイントをクロックへ置きました");
+     resolveBoardRules(p,done);
+   });
+ }
+ if(canRefresh() && needsLevel()){
+   openRuleOrderChoice(
+     refresh,
+     ()=>openMandatoryLevel(p,refresh)
+   );
+ }else if(canRefresh()){
+   refresh();
+ }else if(needsLevel()){
+   openMandatoryLevel(p,()=>resolveBoardRules(p,done));
+ }else done();
 }
+
+function pullDeck(p,count,to,interrupt=true,fromBottom=false,after,revealed){
+ const board=players[p];
+ runRuleOperation(done=>{
+   let moved=0;
+   function finish(){
+     if(after)after(moved);
+     done();
+   }
+   function next(){
+     if(moved>=count || !board.deck.length){finish();return}
+     const card=fromBottom?board.deck.shift():board.deck.pop();
+     card.faceUp=!["deck","stock"].includes(to);
+     board[to].push(card);
+     if(revealed)revealed.push(card);
+     moved++;
+     if(interrupt)resolveBoardRules(p,next);
+     else next();
+   }
+   if(interrupt && !board.deck.length)resolveBoardRules(p,next);
+   else next();
+ });
+}
+
 function deckSelect(max,initial=1){
  const sel=document.createElement("select");sel.setAttribute("aria-label","枚数");
  for(let i=1;i<=max;i++){const o=document.createElement("option");o.value=i;o.textContent=i+"枚";sel.append(o)}
@@ -198,6 +258,8 @@ function moveTemporary(p,items,index,to){
  c.faceUp=!["deck","stock"].includes(to);players[p][to].push(c);
 }
 function openDeckTemporary(p,mode,count,fromBottom=false){
+ if(ruleBusy)return;
+ ruleBusy=true;setRuleModal(true);
  const b=players[p],privateView=mode==="inspect",items=[];
  for(let i=0;i<count&&b.deck.length;i++)items.push(fromBottom?b.deck.shift():b.deck.pop());
  // Do not refresh here: these cards are treated as part of the deck until resolution.
@@ -211,9 +273,10 @@ function openDeckTemporary(p,mode,count,fromBottom=false){
      for(const c of (fromBottom?arranged:arranged.slice().reverse())){c.faceUp=false;if(fromBottom)b.deck.unshift(c);else b.deck.push(c)}
      if(order==="shuffle")shuffle(b.deck);
    }else{
-     for(const c of items){c.faceUp=!["stock"].includes(destination);b[destination].push(c)}
+     for(const c of items){c.faceUp=destination!=="stock";b[destination].push(c)}
    }
-   items.length=0;d.close();if(!b.deck.length)refreshDeck(p);updateBoard();
+   items.length=0;setRuleModal(false);d.close();
+   resolveBoardRules(p,()=>{ruleBusy=false;updateBoard()});
  }
  function renderTemp(){
    title.textContent=(privateView?"山札を確認":"山札を捲る")+"（"+(fromBottom?"下":"上")+"から・残り"+items.length+"枚）";
@@ -234,7 +297,7 @@ function openDeckTemporary(p,mode,count,fromBottom=false){
    for(const [v,t] of [["shuffle","山札に戻してシャッフル"],["original","元の順番で山札の"+(fromBottom?"下":"上")],["custom","並べ替えた順番で山札の"+(fromBottom?"下":"上")],["bottom","山札の下"],["waiting","すべて控え室"]]){const o=document.createElement("option");o.value=v;o.textContent=t;choice.append(o)}body.append(choice);
    deckButton(body,"残りのカードを確定",()=>{
      const v=choice.value;
-     if(v==="bottom"){for(const c of items.slice().reverse()){c.faceUp=false;b.deck.unshift(c)}items.length=0;d.close();if(!b.deck.length)refreshDeck(p);updateBoard()}
+     if(v==="bottom"){for(const c of items.slice().reverse()){c.faceUp=false;b.deck.unshift(c)}items.length=0;setRuleModal(false);d.close();resolveBoardRules(p,()=>{ruleBusy=false;updateBoard()})}
      else if(v==="waiting")finish("waiting",v);
      else finish("deck",v);
    });
@@ -242,26 +305,53 @@ function openDeckTemporary(p,mode,count,fromBottom=false){
  renderTemp();d.showModal();
 }
 function runDamage(p,count){
- const b=players[p],pending=[];let cancelled=false,unknown=false;
- for(let i=0;i<count;i++){
-   if(!b.deck.length&&!refreshDeck(p))break;
-   const c=b.deck.pop();if(!c)break;pending.push(c);
-   if(!b.deck.length)refreshDeck(p);
-   if(c.cx===true){cancelled=true;break}
-   if(typeof c.cx!=="boolean"){unknown=true;break}
- }
- if(unknown){
-   const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
-   document.getElementById("dialogTitle").textContent="CX判定不能";
-   body.replaceChildren();const msg=document.createElement("p");msg.textContent="CX判定が不明なカードがあります。公開済みカードを確認してください。";body.append(msg);
-   for(const c of pending){const img=document.createElement("img");img.src=officialImageUrl(c.id)||"";img.style.cssText="width:75px;height:110px;object-fit:contain";body.append(img)}
-   deckButton(body,"キャンセルとして控え室",()=>{for(const c of pending){c.faceUp=true;b.waiting.push(c)}d.close();updateBoard()});
-   deckButton(body,"キャンセルなしとしてクロック",()=>{for(const c of pending){c.faceUp=true;b.clock.push(c)}d.close();updateBoard()});
-   d.showModal();return;
- }
- for(const c of pending){c.faceUp=true;b[cancelled?"waiting":"clock"].push(c)}
- if(!b.deck.length)refreshDeck(p);updateBoard();
- message(cancelled?"CXでダメージキャンセルしました":"ダメージ "+pending.length+"枚をクロックに置きました");
+ const board=players[p],pending=[];
+ runRuleOperation(done=>{
+   function finish(cancelled){
+     for(const card of pending){
+       card.faceUp=true;
+       board[cancelled?"waiting":"clock"].push(card);
+     }
+     resolveBoardRules(p,()=>{
+       message(cancelled?"CXでダメージキャンセルしました":"ダメージ "+pending.length+"枚をクロックに置きました");
+       done();
+     });
+   }
+   function checkCard(card){
+     if(card.cx===true){finish(true);return}
+     if(typeof card.cx==="boolean"){next();return}
+     const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
+     document.getElementById("dialogTitle").textContent="CX判定不能";
+     body.replaceChildren();
+     const hint=document.createElement("p");
+     hint.textContent="CX判定が不明なカードがあります。公開済みカードを確認してください。";
+     body.append(hint);
+     for(const revealed of pending){
+       const img=document.createElement("img");
+       img.src=officialImageUrl(revealed.id)||"";
+       img.style.cssText="width:75px;height:110px;object-fit:contain";
+       body.append(img);
+     }
+     for(const [label,cancelled] of [["キャンセルとして控え室",true],["キャンセルなしとしてクロック",false]]){
+       deckButton(body,label,()=>{
+         setRuleModal(false);
+         d.close();
+         finish(cancelled);
+       });
+     }
+     setRuleModal(true);
+     d.showModal();
+   }
+   function next(){
+     if(pending.length>=count || !board.deck.length){finish(false);return}
+     const card=board.deck.pop();
+     pending.push(card);
+     // Revealed damage cards stay here through refresh and its point.
+     if(!board.deck.length)resolveBoardRules(p,()=>checkCard(card));
+     else checkCard(card);
+   }
+   resolveBoardRules(p,next);
+ });
 }
 function openActions(p,z){
  const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");d.classList.remove("zoom-mode");body.replaceChildren();
@@ -285,7 +375,20 @@ function openActions(p,z){
    d.close();
    if(mode==="draw")pullDeck(p,n,"hand");
    if(mode==="move")pullDeck(p,n,dest.value,true,direction.value==="bottom");
-   if(mode==="brainstorm"){const cards=[];for(let i=0;i<n;i++){if(!deck.length&&!refreshDeck(p))break;const c=deck.pop();if(!c)break;c.faceUp=true;players[p].waiting.push(c);cards.push(c);if(!deck.length)refreshDeck(p)}updateBoard();const modal=document.getElementById("dialog"),panel=document.getElementById("dialogBody");document.getElementById("dialogTitle").textContent="集中：控え室に置いたカード";panel.replaceChildren();for(const c of cards){const img=document.createElement("img");img.src=officialImageUrl(c.id)||"";img.style.cssText="width:85px;height:115px;object-fit:contain";panel.append(img)}modal.showModal()}
+   if(mode==="brainstorm"){
+     const revealed=[];
+     pullDeck(p,n,"waiting",true,false,()=>{
+       document.getElementById("dialogTitle").textContent="集中：控え室に置いたカード";
+       body.replaceChildren();
+       for(const card of revealed){
+         const img=document.createElement("img");
+         img.src=officialImageUrl(card.id)||"";
+         img.style.cssText="width:85px;height:115px;object-fit:contain";
+         body.append(img);
+       }
+       d.showModal();
+     },revealed);
+   }
    if(mode==="damage")runDamage(p,n);
  });
  d.showModal();
@@ -332,22 +435,40 @@ function openList(p,z){
 document.getElementById("side").onchange=e=>{side=Number(e.target.value);selected=null};
 document.getElementById("shuffle").onclick=()=>{shuffle(players[side].deck);updateBoard();message("山札をシャッフルしました")};
 document.getElementById("draw").onclick=()=>{pullDeck(side,1,"hand")};
-document.getElementById("refresh").onclick=()=>{if(!refreshDeck(side))message("山札が残っているか控え室が空です")};
+document.getElementById("refresh").onclick=()=>{if(players[side].deck.length||!players[side].waiting.length)message("山札が残っているか控え室が空です");else checkMandatoryLevel()};
 document.getElementById("damage").onclick=()=>{runDamage(side,1)};
-let mandatoryLevelPlayer=null;
 function checkMandatoryLevel(){
- if(!players || !isMatchActive())return;
- const p=[0,1].find(i=>players[i]?.clock?.length>=7);
- if(p===undefined){mandatoryLevelPlayer=null;return}
- mandatoryLevelPlayer=p;
  const d=document.getElementById("dialog");
- if(d.open)return; // The current operation must finish before level resolution.
- openMandatoryLevel(p);
+ if(ruleBusy || d.open || !isMatchActive())return;
+ const order=[side,1-side];
+ if(!order.some(p=>players[p].clock.length>=7 || (!players[p].deck.length && players[p].waiting.length)))return;
+ runRuleOperation(done=>resolveBoardRules(order[0],()=>resolveBoardRules(order[1],done)));
 }
-function openMandatoryLevel(p){
+
+function openRuleOrderChoice(refreshFirst,levelFirst){
+ const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
+ d.classList.remove("zoom-mode");
+ document.getElementById("dialogTitle").textContent="強制処理の順番を選択";
+ body.replaceChildren();
+ const labels=[
+   ["リフレッシュ → レベルアップ → リフレッシュポイント",refreshFirst],
+   ["レベルアップ → リフレッシュ → リフレッシュポイント",levelFirst]
+ ];
+ for(const [label,next] of labels){
+   deckButton(body,label,()=>{
+     setRuleModal(false);
+     d.close();
+     next();
+   });
+ }
+ setRuleModal(true);
+ d.showModal();
+}
+
+function openMandatoryLevel(p,next){
  const board=players[p];
  if(!board || board.clock.length<7)return;
- mandatoryLevelPlayer=p;
+ setRuleModal(true);
  if(side!==p){
    side=p;
    const sideControl=document.getElementById("battleSide");
@@ -371,8 +492,9 @@ function openMandatoryLevel(p){
      const seven=board.clock.splice(0,7),chosen=seven.splice(i,1)[0];
      chosen.faceUp=true;board.level.push(chosen);
      for(const card of seven){card.faceUp=true;board.waiting.push(card)}
-     mandatoryLevelPlayer=null;d.close();updateBoard();
+     setRuleModal(false);d.close();render();
      message("プレイヤー"+(p+1)+"がレベルアップしました");
+     next();
    };
    body.append(b);
  });
@@ -380,20 +502,12 @@ function openMandatoryLevel(p){
 }
 document.getElementById("level").onclick=()=>checkMandatoryLevel();
 document.getElementById("close").onclick=()=>{
- if(mandatoryLevelPlayer!==null)return;
- document.getElementById("dialog").close();
+ if(!ruleModal)document.getElementById("dialog").close();
 };
 document.getElementById("dialog").addEventListener("cancel",e=>{
- if(mandatoryLevelPlayer!==null)e.preventDefault();
+ if(ruleModal)e.preventDefault();
 });
-document.getElementById("dialog").addEventListener("close",()=>{
- if(mandatoryLevelPlayer!==null){
-   // A preceding modal has closed; now resolve the mandatory level-up.
-   const p=mandatoryLevelPlayer;
-   mandatoryLevelPlayer=null;
-   queueMicrotask(()=>{if(players[p]?.clock?.length>=7)openMandatoryLevel(p)});
- }
-});
+document.getElementById("dialog").addEventListener("close",checkMandatoryLevel);
 
 // Turn progression is separate from match.phase (setup/mulligan/active/ended).
 const TURN_PHASES=["stand","draw","clock","main","climax","attack","end"];
@@ -413,7 +527,7 @@ function enterTurnPhase(){
    for(const z of ["front0","front1","front2","back0","back1"])
      for(const c of players[t.player][z])if(c.orientation===90)c.orientation=0;
  }else if(t.phase==="draw"){
-   if(!pullDeck(t.player,1,"hand"))message("山札と控え室が空です");
+   pullDeck(t.player,1,"hand",true,false,moved=>{if(!moved)message("山札と控え室が空です")});
  }
  selected=null;
  updateBoard();
@@ -443,9 +557,10 @@ function clockAction(){
  
  const card=players[side].hand.splice(selected.index,1)[0];
  card.faceUp=true;players[side].clock.push(card);
- pullDeck(side,2,"hand");
- setTurnPhase("main");
- message("クロックに1枚置いて2枚ドローしました。メインフェイズです");
+ pullDeck(side,2,"hand",true,false,moved=>{
+   setTurnPhase("main");
+   message("クロックに1枚置いて"+moved+"枚ドローしました。メインフェイズです");
+ });
 }
 function renderTurnControls(){
  const bar=document.getElementById("turnControls");
@@ -464,6 +579,6 @@ document.getElementById("clockAction").onclick=()=>{clockAction();renderTurnCont
 document.getElementById("clockSkip").onclick=()=>{if(match?.turn?.phase==="clock"){setTurnPhase("main");renderTurnControls()}};
 
 </script>
-<script src="match-state.js?v=0.38"></script>
-<script src="decklog-import.js?v=0.38"></script>
+<script src="match-state.js?v=0.39"></script>
+<script src="decklog-import.js?v=0.39"></script>
 </body></html>
