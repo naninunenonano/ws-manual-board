@@ -1,0 +1,137 @@
+"use strict";
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const http=require("node:http");
+const {randomUUID}=require("node:crypto");
+const {chromium}=require("playwright");
+const {onlineTestDatabase}=require("./online-db.cjs");
+
+async function main() {
+  const db=await onlineTestDatabase();
+  const [host,guest,late]=Array.from({length:3},()=>randomUUID());
+  for(const id of [host,guest,late])await db.query("insert into auth.users values ($1)",[id]);
+  const channels=new Set();
+  let work=Promise.resolve();
+  let dropHostReply=false;
+  function query(user,args) {
+    const result=work.then(async()=>{
+      await db.exec("set role authenticated");
+      try{
+        await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user]);
+        const {p_action,p_room=null,p_revision=null,p_operation=null,p_data={}}=args;
+        const response=await db.query("select ws_online_room($1,$2,$3,$4,$5) as data",[p_action,p_room,p_revision,p_operation,p_data]);
+        return {data:response.rows[0].data,error:null};
+      }catch(e){return {data:null,error:{code:e.code,message:e.message}}}
+      finally{await db.exec("reset role")}
+    });
+    work=result.catch(()=>{});
+    return result;
+  }
+  const asset=new Map([["/","index.html"],["/cloud-decks.js","cloud-decks.js"],["/decklog-import.js","decklog-import.js"],
+    ["/online-match.js","online-match.js"],["/board-layout.css","board-layout.css"],["/match-state.js","match-state.js"]]);
+  const server=http.createServer((req,res)=>{
+    const url=new URL(req.url,"http://localhost");
+    const field=asset.get(url.pathname);
+    if(!field){res.writeHead(404).end();return}
+    res.setHeader("Content-Type",field.endsWith(".html")?"text/html":field.endsWith(".css")?"text/css":"application/javascript");
+    let script=fs.readFileSync(field,"utf8");
+    if(field==="cloud-decks.js")script+="\nloadDeckCloudClient=()=>Promise.resolve(window.fixtureCloud);";
+    res.end(script);
+  });
+  await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
+  let browser;
+  async function pageFor(user,title) {
+    const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
+    await ctx.exposeBinding("testOnlineRpc",async(_source,args)=>{
+      const result=await query(user,args);
+      if(args.p_action!=="read" && result.data?.room && !result.error){
+        for(const page of channels)page.evaluate(()=>window.testReceiveRevision?.()).catch(()=>{});
+      }
+      if(user===host && args.p_action==="board" && dropHostReply){
+        dropHostReply=false;
+        return {error:{message:"network disconnected after commit"}};
+      }
+      return result;
+    });
+    await ctx.route("https://ws-tcg.com/**",route=>route.abort());
+    await ctx.addInitScript(({user,title})=>{
+      const fixture={id:"fixture-"+user,deck:{title,list:Array.from({length:13},(_,n)=>({
+        card_number:title+"-"+n,num:n===12?2:4,cx:n<2
+      }))}};
+      if(!localStorage.getItem("ws-manual-deck-library-v1"))localStorage.setItem("ws-manual-deck-library-v1",JSON.stringify([fixture]));
+      const client={
+        auth:{getSession:async()=>({data:{session:{user:{id:user}}}})},
+        from:()=>({select(){return this},eq(){return this},order(){return this},limit(){return this},then(resolve){resolve({data:[]})}}),
+        rpc:(_name,args)=>window.testOnlineRpc(args),
+        channel:()=>({
+          on(_kind,_filter,cb){window.testReceiveRevision=cb;return this},
+          subscribe(cb){cb("SUBSCRIBED");return this}
+        }),
+        removeChannel:()=>{window.testReceiveRevision=null}
+      };
+      window.fixtureCloud=client;
+    },{user,title});
+    const page=await ctx.newPage();
+    channels.add(page);
+    await page.goto("http://127.0.0.1:"+server.address().port);
+    return page;
+  }
+  try{
+    browser=await chromium.launch(fs.existsSync("/usr/bin/google-chrome")?{channel:"chrome"}:{});
+    const a=await pageFor(host,"HOST"),b=await pageFor(guest,"GUEST"),c=await pageFor(late,"LATE");
+    const $=(page,id)=>page.locator("#"+id);
+    const begin=page=>page.locator("#onlineControls summary").click();
+    await Promise.all([begin(a),begin(b),begin(c)]);
+    await $(a,"onlineCreate").click();
+    await $(a,"onlineCodeOutput").waitFor();
+    const code=await $(a,"onlineCodeOutput").textContent();
+    assert.match(code,/^[0-9A-F]{12}$/);
+    await $(b,"onlineCode").fill(code);
+    await $(b,"onlineJoin").click();
+    await $(b,"onlineReady").waitFor();
+    await $(c,"onlineCode").fill(code);
+    await $(c,"onlineJoin").click();
+    await c.getByText("ルームの参加枠が埋まっています",{exact:true}).first().waitFor();
+    await $(a,"onlineReady").click();
+    await b.getByText(/相手 準備済み/).first().waitFor();
+    await $(b,"onlineReady").click();
+    await $(a,"onlineStart").click();
+    await Promise.all([$(a,"mulliganScreen").waitFor(),$(b,"mulliganScreen").waitFor()]);
+    assert.equal(await a.locator("#mulliganCards button").count(),5);
+    assert.equal(await b.locator("#mulliganCards button").count(),5);
+    assert.doesNotMatch(await b.locator("#mulliganCards").innerText(),/HOST/);
+    await $(a,"confirmMulligan").click();
+    await a.getByText(/相手のマリガンを待っています/).first().waitFor();
+    await $(b,"onlineMulliganReconnect").click();
+    await $(b,"confirmMulligan").click();
+    await Promise.all([$(a,"battleScreen").waitFor(),$(b,"battleScreen").waitFor()]);
+    const me=a.locator("#boards .player.active .hand .card").first();
+    const zone=a.locator('#boards .zone[data-p="0"][data-z="front0"]');
+    await me.click();
+    await a.locator("#boards .card.selected").waitFor();
+    dropHostReply=true;
+    await zone.click();
+    await b.locator('#boards .zone[data-p="0"][data-z="front0"].has-card').waitFor();
+    assert.equal(await b.evaluate(()=>players[0].hand.every(card=>!card.id&&!card.uid)),true);
+    assert.equal(await b.evaluate(()=>players[0].deck.every(card=>!card.id&&!card.uid)),true);
+    assert.equal(await b.evaluate(()=>players[0].front0.length),1);
+    await $(b,"onlineReveal").click();
+    await b.locator("#dialogBody select option").first().evaluate(o=>o.value).then(value=>b.locator("#dialogBody select").selectOption(value));
+    await b.getByRole("button",{name:"選んだカードを公開",exact:true}).click();
+    await $(a,"onlineOpponentReveal").waitFor();
+    await $(b,"onlineEndReveal").click();
+    await $(a,"onlineOpponentReveal").waitFor({state:"hidden"});
+    await a.reload();
+    await $(a,"battleScreen").waitFor();
+    assert.equal(await a.evaluate(()=>players[0].front0.length),1);
+    b.once("dialog",dialog=>dialog.accept());
+    await $(b,"surrender").click();
+    await a.getByText("プレイヤー2が降参しました。勝者：プレイヤー1",{exact:true}).waitFor();
+    console.log("Chromium: independent sessions joined, started, moved once across response loss, revealed, reconnected, and ended");
+  } finally {
+    await browser?.close();
+    await new Promise(resolve=>server.close(resolve));
+    await db.close();
+  }
+}
+main().catch(error=>{console.error(error);process.exitCode=1});
