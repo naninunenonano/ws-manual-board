@@ -24,57 +24,57 @@
     $("applyDeck").disabled=!cxReady(deck);
   }
   const storageKey=p=>"ws-manual-deck-v1-p"+p;
-  const defaultDeck={title:"フリーレン（1TK8A8）",cards:[["SFN/S128-003",4],["SFN/S128-009",1],["SFN/S136-012",1],["SFN/S128-017",4],["SFN/S108-T04",4],["SFN/S136-001",3],["SFN/S136-005",3],["SFN/S136-002",2],["SFN/S136-006",4],["SFN/S136-065",1],["SFN/S136-076",3],["SFN/S108-T13",4],["SFN/S136-078",4],["SFN/S128-021",4],["SFN/S108-T09",4],["SFN/S128-022",4]].map(([id,num])=>({id,num})),total:50};
-  function savedDeck(p) {
-    try {
-      const raw = localStorage.getItem(storageKey(p));
-      if (!raw) return null;
-      const data = JSON.parse(raw);
-      if (!Array.isArray(data?.list) && Array.isArray(data?.cards)) {
-        data.list = data.cards.map(card => ({card_number:card?.id,num:card?.num,cx:card?.cx}));
-      }
-      return parse(data);
-    } catch (e) {
-      return null;
-    }
+  const libraryKey="ws-manual-deck-library-v1";
+  const selectedKey=p=>"ws-manual-deck-selected-v1-p"+p;
+  function library(){try{const v=JSON.parse(localStorage.getItem(libraryKey)||"[]");return Array.isArray(v)?v:[]}catch(e){return []}}
+  function normalize(v){return parse({title:v.title,list:Array.isArray(v.list)?v.list:v.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))})}
+  function migrate(){
+    const list=library();let changed=false;
+    for(const p of [0,1])try{
+      const raw=localStorage.getItem(storageKey(p));if(!raw)continue;
+      const deck=normalize(JSON.parse(raw)),id="legacy-"+p;
+      if(!list.some(x=>x.id===id)){list.push({id,deck:{title:deck.title,list:deck.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))}});changed=true}
+      if(!localStorage.getItem(selectedKey(p)))localStorage.setItem(selectedKey(p),id);
+      localStorage.removeItem(storageKey(p));
+    }catch(e){}
+    if(changed)localStorage.setItem(libraryKey,JSON.stringify(list));
   }
-  function updateSavedStatus(){const d=savedDeck(side);$("savedDeckStatus").textContent="プレイヤー"+(side+1)+"の保存デッキ："+(d?d.title+"（50枚）":"なし。初回はデッキ登録が必要です")}
-  function apply(deck,ask=true){
-    if(!cxReady(deck)){message("CXが8枚に確定していません。デッキを確認してください");return}
-    if (!isDeckSetup()) return;
-    if (ask && !confirm("プレイヤー"+(side+1)+"のデッキとして50枚を登録しますか？")) return;
-    try {
-      localStorage.setItem(storageKey(side), JSON.stringify({
-        title:deck.title,list:deck.cards.map(card=>({card_number:card.id,num:card.num,cx:card.cx}))
-      }));
-    } catch (e) {
-      message("デッキを保存できませんでした。端末の保存設定を確認してください");
-      return;
-    }
-    $("deckTransferStatus").textContent="";
-    updateSavedStatus();
-    message("プレイヤー"+(side+1)+"に"+deck.total+"枚を登録・保存しました");
+  function savedDeck(p){
+    try{const id=localStorage.getItem(selectedKey(p)),item=library().find(x=>x.id===id);return item?normalize(item.deck):null}catch(e){return null}
   }
-  $("loadSavedDeck").onclick=async()=>{
-    if (!isDeckSetup()) return;
+  function updateSavedStatus(){
+    const list=library(),select=$("savedDeckSelect"),id=localStorage.getItem(selectedKey(side));
+    select.replaceChildren();const empty=document.createElement("option");empty.value="";empty.textContent="未選択";select.append(empty);
+    for(const item of list){const o=document.createElement("option");o.value=item.id;o.textContent=item.deck.title;select.append(o)}
+    select.value=list.some(x=>x.id===id)?id:"";
     const deck=savedDeck(side);
-    if (deck) preview(await classify(deck));
-    else if (confirm("保存デッキがありません。以前取得したフリーレン（1TK8A8）を確認しますか？")) preview(await classify(defaultDeck));
-  };
-  $("clearSavedDeck").onclick=()=>{
-    if (!isDeckSetup() || !savedDeck(side)) return;
-    if (!confirm("プレイヤー"+(side+1)+"の保存デッキを削除しますか？")) return;
-    try {
-      localStorage.removeItem(storageKey(side));
-    } catch (e) {
-      message("保存デッキを削除できませんでした");
-      return;
-    }
-    pending=null;
-    $("applyDeck").disabled=true;
-    $("deckPreview").replaceChildren();
+    $("savedDeckStatus").textContent="登録済み "+list.length+"件／プレイヤー"+(side+1)+"："+(deck?deck.title:"未選択");
+  }
+  $("savedDeckSelect").onchange=()=>{
+    try{localStorage.setItem(selectedKey(side),$("savedDeckSelect").value)}catch(e){message("選択を保存できません")}
     updateSavedStatus();
-    message("保存デッキを削除しました");
+  };
+  function apply(deck){
+    if(!cxReady(deck)){message("CXを8枚に確定してください");return}
+    if(!isDeckSetup())return;
+    const input=prompt("デッキ名",deck.title||"新しいデッキ");if(input===null)return;
+    const title=input.trim();if(!title){message("デッキ名が空です");return}
+    const list=library(),id="deck-"+Date.now()+"-"+Math.random().toString(36).slice(2,8);
+    list.push({id,deck:{title,list:deck.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))}});
+    try{localStorage.setItem(libraryKey,JSON.stringify(list));localStorage.setItem(selectedKey(side),id)}
+    catch(e){message("デッキを保存できません");return}
+    updateSavedStatus();message("「"+title+"」を登録しました");
+  }
+  $("loadSavedDeck").onclick=async()=>{if(!isDeckSetup())return;const deck=savedDeck(side);if(deck)preview(await classify(deck));else message("デッキを選択してください")};
+  $("clearSavedDeck").onclick=()=>{
+    if(!isDeckSetup())return;
+    const id=$("savedDeckSelect").value,item=library().find(x=>x.id===id);if(!item)return;
+    if(!confirm("「"+item.deck.title+"」を削除しますか？"))return;
+    try{
+      localStorage.setItem(libraryKey,JSON.stringify(library().filter(x=>x.id!==id)));
+      for(const p of [0,1])if(localStorage.getItem(selectedKey(p))===id)localStorage.removeItem(selectedKey(p));
+    }catch(e){message("削除に失敗しました");return}
+    pending=null;$("applyDeck").disabled=true;$("deckPreview").replaceChildren();updateSavedStatus();
   };
   $("side").addEventListener("change",updateSavedStatus);
 
@@ -119,27 +119,6 @@
     if(!cxReady(deck))confirmCx(deck);
     message(cxReady(deck)?"CX8枚を確認しました。登録できます":"CX判定を確認してください（合計8枚で登録可能）");
   }
-  $("importDeck").onclick=async()=>{
-    pending=null;$("applyDeck").disabled=true;
-    const code=codeOf($("deckCode").value);
-    if(!code){message("デッキコードまたは日本語版Deck Log URLが不正です");return}
-    $("importDeck").disabled=true;
-    message("Deck Logから取得しています…");
-    const revision = transferRevision;
-    try {
-      const configured = proxyBase.includes("YOUR-SUBDOMAIN") ? "" : proxyBase;
-      if (!configured) throw Error("中継URL未設定：Cloudflare Workers公開後にURLを設定してください");
-      const response=await fetch(configured+"/deck/"+encodeURIComponent(code),{
-        method:"GET",headers:{"Accept":"application/json"},signal:AbortSignal.timeout(15000)
-      });
-      if(!response.ok){const err=await response.json().catch(()=>({}));throw Error(err.error||"HTTP "+response.status)}
-      const data = await response.json();
-      if (revision === transferRevision) preview(await classify(parse(data)));
-    } catch(e) {
-      if (revision === transferRevision) message("デッキ取得に失敗しました: "+e.message);
-    } finally {$("importDeck").disabled=false}
-  };
-
   function parseText(value) {
     const rows=[];
     const lines=value.split(/\r?\n/);
@@ -185,11 +164,6 @@
     try{await navigator.clipboard.writeText(transferBookmarklet);message("転送用コードをコピーしました。SafariのブックマークURLに貼り付けてください")}
     catch(e){$("transferCode").focus();$("transferCode").select();message("コピーできないためコードを選択しました。手動でコピーしてください")}
   };
-  $("openDeckLog").onclick=()=>{
-    const code=codeOf($("deckCode").value);
-    if(!code){message("デッキコードが不正です");return}
-    location.href="https://decklog.bushiroad.com/view/"+encodeURIComponent(code);
-  };
   function decodeTransfer(encoded) {
     if (!encoded) throw Error("転送データが空です");
     if (encoded.length > 16000) throw Error("転送データが大きすぎます");
@@ -228,6 +202,7 @@
     $("importer").scrollIntoView({block:"start"});
   }
   window.addEventListener("hashchange", receiveTransferredDeck);
+  migrate();
   initializeMatch(savedDeck, () => {
     updateSavedStatus();
     receiveTransferredDeck();
