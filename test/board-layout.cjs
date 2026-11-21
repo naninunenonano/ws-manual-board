@@ -50,7 +50,7 @@ async function main() {
     await desktop.locator("#applyDeck").click();
     assert.equal(await desktop.locator("#savedDeckSelect").inputValue(),"");
     await desktop.reload();
-    assert.equal(await desktop.locator("#savedDeckSelect option").last().textContent(),"PC検証デッキ");
+    assert.equal(await desktop.locator("#savedDeckSelect option").last().textContent(),"PC検証デッキ［同期待ち］");
     await desktop.close();
     const page = await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
     await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
