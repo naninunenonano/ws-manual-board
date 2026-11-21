@@ -36,6 +36,7 @@ function writeMatch(snapshot) {
 
 function saveMatchProgress() {
   if (isMatchActive()) {
+    if (match.online) { onlineMatch?.commit(); return; }
     match.side = side;
     writeMatch(match);
   }
@@ -131,7 +132,7 @@ function showMatchScreen() {
     matchElement("firstPlayerResult").textContent = "先攻：プレイヤー" + (first + 1) +
       " ／ 後攻：プレイヤー" + (2 - first);
     render();
-    if (match.turn.phase==="draw" && match.turn.drawPending) beforeDrawConfirmation();
+    if (match.turn.phase==="draw" && match.turn.drawPending && (!match.online || match.turn.player===side)) beforeDrawConfirmation();
     renderTurnControls();
     checkMandatoryLevel();
   } else if (match?.phase === "ended") {
@@ -145,6 +146,7 @@ function showMatchScreen() {
 
 function startMatch(readDeck) {
   if (!isDeckSetup()) return;
+  if (typeof onlineMatch!=="undefined" && onlineMatch?.active()) { message("オンラインルームを退出してから開始してください"); return; }
   const decks = [readDeck(0), readDeck(1)];
   const missing = decks.findIndex(deck => !deck);
   if (missing !== -1) {
@@ -200,12 +202,14 @@ function renderMulligan(){
     const label=document.createElement("span");
     label.textContent=mulliganSelection.has(i)?"交換":"残す";
     button.append(label);
+    button.disabled=match.online===true && matchElement("confirmMulligan").disabled;
     button.onclick=()=>{if(mulliganSelection.has(i))mulliganSelection.delete(i);else mulliganSelection.add(i);renderMulligan();};
     root.append(button);
   });
 }
 function completeMulligan(){
   if(match?.phase!=="mulligan")return;
+  if(match.online){onlineMatch.mulligan();return;}
   const p=match.mulliganPlayer,old=match.players[p];
   const board=Object.fromEntries(zones.map(z=>[z,old[z].slice()]));
   const indices=[...mulliganSelection].sort((a,b)=>b-a);
@@ -223,6 +227,7 @@ function finishMatch(reason) {
   const prompt = surrender ? "プレイヤー" + (side + 1) + "が降参しますか？" :
     "勝敗を付けずに対戦を終了しますか？";
   if (!confirm(prompt)) return;
+  if (match.online) { onlineMatch.finish(reason); return; }
   const snapshot = {
     ...match, side, phase: "ended", screen: "result",
     result: { reason, winner: surrender ? 1 - side : null }
@@ -290,13 +295,15 @@ function initializeMatch(readDeck, refreshSetup) {
   matchElement("leaveBattle").onclick = () => finishMatch("left");
   matchElement("viewDecks").onclick = showRegisteredDecks;
   matchElement("battleSide").onchange = event => {
-    if (!isMatchActive()) return;
+    if (!isMatchActive() || match.online) return;
     side = Number(event.target.value);
     selected = null;
     updateBoard();
   };
   matchElement("nextBattle").onclick = () => {
-    if (match?.phase !== "ended" || !writeMatch(null)) return;
+    if (match?.phase !== "ended") return;
+    if (match.online) onlineMatch.reset();
+    else if (!writeMatch(null)) return;
     match = null;
     mulliganSelection = new Set();
     players = [];

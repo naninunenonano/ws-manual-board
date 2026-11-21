@@ -8,9 +8,14 @@ const deckCloudConfig = {
 function createDeckCloudStore({loadClient, read, write, validate, uuid, storage, status, lock}) {
   const ownerKey = "ws-manual-cloud-owner-v1";
   const columns = "id,user_id,name,cards,created_at,updated_at";
-  let clientPromise, user, busy = false, online = false;
+  let clientPromise, authPromise, user, busy = false, online = false;
 
-  async function authenticate() {
+  function authenticate() {
+    authPromise ??= restoreSession().finally(()=>{authPromise=undefined});
+    return authPromise;
+  }
+
+  async function restoreSession() {
     if (!clientPromise) clientPromise = loadClient().catch(error=>{ clientPromise=undefined; throw error; });
     const client = await clientPromise;
     const restored = await client.auth.getSession();
@@ -213,6 +218,7 @@ function createDeckCloudStore({loadClient, read, write, validate, uuid, storage,
 
   return {
     synchronize,resolve,
+    authenticate:()=>lock(authenticate),
     busy:()=>busy,
     online:()=>online,
     newMetadata:()=>({id:uuid(),owner:user??storage.getItem(ownerKey),revision:null,dirty:"insert"})

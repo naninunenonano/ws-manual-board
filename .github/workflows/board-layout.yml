@@ -4,7 +4,7 @@ on:
   push:
     branches: [feature/photo-board-layout]
   pull_request:
-    paths: [index.html, board-layout.css, match-state.js, decklog-import.js, 'test/**', '.github/workflows/board-layout.yml']
+    paths: [index.html, board-layout.css, match-state.js, decklog-import.js, cloud-decks.js, online-match.js, 'supabase/**', 'test/**', '.github/workflows/board-layout.yml']
 
 permissions:
   contents: read
@@ -18,9 +18,11 @@ jobs:
         with:
           node-version: '24'
       - run: node --test test/*.test.cjs
-      - run: npm install --no-save --package-lock=false playwright@1.58.2
+      - run: npm install --no-save --package-lock=false playwright@1.58.2 @electric-sql/pglite@0.5.17
       - run: command -v google-chrome || npx playwright install chromium
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+      - run: node test/online-db.cjs
+      - run: node test/online-browser.cjs
       - run: node test/board-layout.cjs
       - uses: actions/upload-artifact@v4
         if: always()

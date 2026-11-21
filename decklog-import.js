@@ -128,6 +128,7 @@
     select.replaceChildren();const empty=document.createElement("option");empty.value="";empty.textContent="未選択";select.append(empty);
     for(const item of list){const o=document.createElement("option");o.value=item.id;o.textContent=item.deck.title+(item.cloud?.conflict?"［競合］":item.cloud?.dirty?"［同期待ち］":item.cloud?"［同期済み］":"");select.append(o)}
     select.value=list.some(x=>x.id===id)?id:"";
+    if(typeof onlineMatch!=="undefined")onlineMatch?.refreshDecks();
     const deck=savedDeck(side);
     $("savedDeckStatus").textContent="登録済み "+list.length+"件／プレイヤー"+(side+1)+"："+(deck?deck.title:"未選択");
   }
@@ -350,6 +351,15 @@
     updateSavedStatus();
     receiveTransferredDeck();
   });
+  if(cloud && typeof initializeOnlineMatch==="function"){
+    onlineMatch=initializeOnlineMatch({
+      authenticate:cloud.authenticate,
+      getDecks:()=>{
+        try{return library().map(item=>({id:item.id,title:item.deck.title,deck:normalize(item.deck)}))}
+        catch{return []}
+      }
+    });
+  }
   cloud?.synchronize();
 
 })();

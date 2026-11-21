@@ -16,7 +16,8 @@ const files = new Map([
   ["/",["index.html","text/html"]],["/board-layout.css",["board-layout.css","text/css"]],
   ["/match-state.js",["match-state.js","text/javascript"]],
   ["/decklog-import.js",["decklog-import.js","text/javascript"]],
-  ["/cloud-decks.js",["cloud-decks.js","text/javascript"]]
+  ["/cloud-decks.js",["cloud-decks.js","text/javascript"]],
+  ["/online-match.js",["online-match.js","text/javascript"]]
 ]);
 
 async function main() {
