@@ -8,6 +8,8 @@
   const phaseNames = {conditions:"条件",costs:"支払い",target:"対象",steps:"処理",limit:"使用回数"};
   const results = {success:"解決",invalid:"定義エラー",unsupported:"未実装",failed:"途中停止",
     unconfirmed:"未確認",skipped:"任意効果を辞退","needs-choice":"再選択が必要","condition-not-met":"使用できません"};
+  const params=new URLSearchParams(location.search);
+  const solo=params.get("mode")==="solo";
   let catalog, card, sample;
   let board = WSEffects.emptyBoard(), turn = 1, used = new Map(), serial = 0, selected = null;
   let undo = null, lastStart = null, session = null;
@@ -28,7 +30,7 @@
   }
   const makeOptions=(el,items)=>options(el,Object.entries(items));
   const effect=()=>card?.effects?.find(item=>item.id===$("testEffect").value);
-  const name=entry=>entry.name??entry.cardNumber;
+  const name=entry=>entry.name??(solo&&entry.cardNumber==="STS/W140-001"?"黎明の刻 レイス":entry.cardNumber);
   const tags=id=>[...new Set($(id).value.split(/[,、]/).map(item=>item.trim()).filter(Boolean))];
   const numeric=id=>$(id).value.trim()===""?null:Number($(id).value);
   const label=(side,zone)=>sides[side]+"の"+displayZones[zone];
@@ -87,6 +89,7 @@
           pick.disabled=!!session;
           if(entry.host)pick.append(node("small","持ち主 "+name(entry.host)));
           cards.append(pick);
+          if(solo&&!session&&side==="self"&&selected===entry.card.uid)renderSoloActions(cards,entry.card,zone);
         }
         details.append(cards);
         section.append(details);
@@ -122,7 +125,7 @@
     }
   }
 
-  function usageKey(uid,ability=effect()){return JSON.stringify([card.cardNumber,ability.id,uid]);}
+  function usageKey(uid,ability=effect(),definition=card){return JSON.stringify([definition.cardNumber,ability.id,uid]);}
   function render(){
     $("turnNumber").textContent=turn+"ターン目";
     const ability=effect();
@@ -136,6 +139,7 @@
     $("cancelEffect").hidden=!session;
     $("restoreStart").hidden=!lastStart||!!session;
     $("repeatTest").hidden=!lastStart||!!session;
+    $("runEffectTest").hidden=solo;
     $("runEffectTest").disabled=!ability||!!session;
     document.querySelector("#testFind button").disabled=!!session;
     refreshDestination("place");
@@ -210,7 +214,9 @@
     const before=snapshot();
     changeBoard(()=>moveEntry(entry,dest,$("editPosition").value));
     $("boardStatus").textContent=name(entry.card)+"を"+label(dest.side,dest.zone)+"に移動しました。";
-    if(dest.side==="self"&&dest.zone==="stage"&&(entry.side!==dest.side||entry.zone!==dest.zone)&&isOnPlay(effect())&&matches(entry.card)){
+    if(solo&&dest.side==="self"&&dest.zone==="stage"&&entry.side==="self"&&entry.zone==="hand"){
+      dispatchEntry(entry.card,before);
+    }else if(dest.side==="self"&&dest.zone==="stage"&&(entry.side!==dest.side||entry.zone!==dest.zone)&&isOnPlay(effect())&&matches(entry.card)){
       if(entry.side==="self"&&entry.zone==="hand")begin(entry.card.uid,before,true);
       else $("effectResult").textContent="手札以外からの登場なので、この能力は誘発しません。";
     }
@@ -253,7 +259,9 @@
     $("testEffectStatus").textContent=review?WSFormalCards.labels[review.status]+(review.issues.length?" ／ "+review.issues.map(i=>i.message).join(" ／ "):""):"選択できる能力はありません。";
     $("effectText").hidden=!ability;
     $("effectText").textContent=ability?.sourceText??ability?.description??"";
-    $("operationDescription").textContent=!ability?"":isOnPlay(ability)?"テスト対象のカードを手札から舞台に登場させると、能力の確認に進みます。":"テスト開始から、使用するカードと必要な対象を選択できます。";
+    $("soloEffectText").hidden=!solo||!ability;
+    $("soloEffectText").textContent=$("effectText").textContent;
+    $("operationDescription").textContent=solo?"":!ability?"":isOnPlay(ability)?"テスト対象のカードを手札から舞台に登場させると、能力の確認に進みます。":"テスト開始から、使用するカードと必要な対象を選択できます。";
     const check=reisCheckKind();
     $("expectedOutcome").hidden=!check;
     $("expectedOutcome").textContent=check==="search"?
@@ -298,11 +306,15 @@
     changeBoard(()=>{
       board=WSEffects.emptyBoard();used.clear();turn=1;selected=null;
       board.self.hand.push(formalCard(card));
-      board.self.stage.push(formalCard(card),temporaryCard({name:"回想を持つキャラ",keywords:["回想"]}));
+      if(!solo)board.self.stage.push(formalCard(card));
+      board.self.stage.push(temporaryCard({name:"回想を持つキャラ",keywords:["回想"]}));
       board.self.stock.push(temporaryCard({name:"支払い用ストック"}));
       board.self.waiting.push(temporaryCard({name:"巡遊者のキャラ",traits:["巡遊者"]}));
       board.self.deck.push(temporaryCard({name:"レベル1のキャラ",level:1}),temporaryCard({name:"レベル0のキャラ"}));
     });
+    if(solo){
+      for(const zone of ["hand","stage"])$("boardEditor").querySelector('[data-key="self.'+zone+'"]').open=true;
+    }
     $("boardStatus").textContent="両方の能力を試せる盤面を配置しました。";
     clearResults();
   };
@@ -402,12 +414,57 @@
     }
     panel.append(node("p",step.text),button("コストを支払う",()=>advance()));
   }
+  function renderSoloActions(container,entry,zone){
+    if(zone==="hand"&&entry.type==="character"){
+      container.append(button("舞台に出す",()=>enterFromHand(entry.uid)));
+      return;
+    }
+    if(zone!=="stage"||!catalog)return;
+    const definition=WSFormalCards.find(catalog,entry.cardNumber);
+    for(const ability of definition?.effects?.filter(item=>item.type==="activated")??[]){
+      const usedUp=ability.limit?.perTurn&&
+        (used.get(usageKey(entry.uid,ability,definition))??0)>=ability.limit.perTurn;
+      const el=button("起動能力を使う · "+(ability.category??ability.id)+(usedUp?"（使用済み）":""),()=>{
+        launchSoloAbility(definition,ability,entry.uid,snapshot(),false);
+      });
+      el.disabled=!!usedUp;
+      container.append(el);
+    }
+  }
+
+  function launchSoloAbility(definition,ability,uid,start,entered){
+    sample=null;
+    showCard(definition,ability.id);
+    $("operationDescription").textContent=(entered?"手札から登場して誘発":"舞台から起動")+" ／ "+(ability.category??ability.id);
+    begin(uid,start,entered);
+  }
+
+  function dispatchEntry(entry,before){
+    const definition=catalog&&WSFormalCards.find(catalog,entry.cardNumber);
+    const abilities=definition?.effects?.filter(ability=>ability.type==="auto"&&isOnPlay(ability))??[];
+    if(!abilities.length){render();return}
+    if(abilities.length===1){launchSoloAbility(definition,abilities[0],entry.uid,before,true);return}
+    session={};
+    render();
+    $("effectChoices").replaceChildren(node("p","手札から登場したときの能力を選んでください。"),
+      ...abilities.map(ability=>button(ability.category??ability.id,()=>{
+        session=null;
+        launchSoloAbility(definition,ability,entry.uid,before,true);
+      })));
+    focusOperation();
+  }
+
   function enterFromHand(uid){
     const entry=WSEffects.cardsIn(board).find(item=>item.card.uid===uid&&item.side==="self"&&item.zone==="hand");
     if(!entry)return;
     const before=snapshot();
     moveEntry(entry,{side:"self",zone:"stage",pile:board.self.stage},"top");
-    begin(uid,before,true);
+    if(solo){
+      selected=null;
+      $("boardEditor").querySelector('[data-key="self.stage"]').open=true;
+      $("boardStatus").textContent=name(entry.card)+"を手札から舞台に出しました。";
+      dispatchEntry(entry.card,before);
+    }else begin(uid,before,true);
   }
   $("runEffectTest").onclick=()=>{
     const ability=effect();
@@ -540,6 +597,13 @@
       WSEffects.compare(actual,sample.expected)?"盤面全体と結果が一致しました。":"テスト例の期待結果とは異なります。"));
   }
 
+  if(solo){
+    $("labTitle").textContent="カード効果の壁打ち";
+    $("cardSelector").hidden=true;
+    $("soloHelp").hidden=false;
+    $("modeLink").href="card-effect-test.html?card=STS%2FW140-001";
+    $("modeLink").textContent="効果単体テスト";
+  }
   render();
   WSFormalCards.load().then(data=>{
     catalog=data;
@@ -548,8 +612,12 @@
     options($("testNumbers"),numbers);
     options($("placeNumber"),[...numbers.map(([number,title])=>[number,title===number?number:title+" ／ "+number]),["mock","仮カードを作る"]]);
     $("placeNumber").onchange();
-    const params=new URLSearchParams(location.search);
-    if(params.has("card"))openNumber(params.get("card"),params.get("effect"));
+    if(solo){
+      openNumber(params.get("card")??"STS/W140-001");
+      if(card?.cardNumber==="STS/W140-001")$("loadPractice").click();
+      $("soloEffectText").hidden=true;
+      $("expectedOutcome").hidden=true;
+    }else if(params.has("card"))openNumber(params.get("card"),params.get("effect"));
     else renderProduct();
   }).catch(error=>{$("testCardStatus").textContent=error.message});
 })();

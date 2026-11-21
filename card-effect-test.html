@@ -9,15 +9,16 @@
   <script src="card-catalog.js?v=3" defer></script>
   <script src="effects/engine.js?v=3" defer></script>
   <script src="card-data/load.js?v=2" defer></script>
-  <script src="card-effect-test.js?v=4" defer></script>
+  <script src="card-effect-test.js?v=5" defer></script>
 </head>
 <body>
   <header class="site-header"><div class="shell header-content">
-    <h1>カード効果テスト</h1>
+    <h1 id="labTitle">カード効果テスト</h1>
+    <a id="modeLink" href="card-effect-test.html?mode=solo&amp;card=STS%2FW140-001">壁打ちモード</a>
     <a href="card-registration.html">カード情報・効果登録</a>
   </div></header>
   <main class="shell">
-    <section class="panel" aria-labelledby="testCardHeading">
+    <section id="cardSelector" class="panel" aria-labelledby="testCardHeading">
       <h2 id="testCardHeading">テスト対象</h2>
       <div class="fields">
         <label>商品 <select id="testProduct"></select></label>
@@ -42,6 +43,7 @@
         <button id="resetEffectTest" type="button">盤面リセット</button>
       </div>
       <p id="turnUsed" class="muted"></p>
+      <p id="soloHelp" hidden>手札のカードから「舞台に出す」を選びます。舞台のカードをタップすると、使える起動能力が表示されます。</p>
       <details><summary>カードを配置</summary>
         <form id="placeCard" class="lab-form">
           <label>カード <select id="placeNumber"></select></label>
@@ -94,6 +96,7 @@
       <p id="operationDescription" class="muted"></p>
       <p id="expectedOutcome" hidden></p>
       <div id="effectChoices" aria-live="polite"></div>
+      <blockquote id="soloEffectText" class="effect-original" hidden></blockquote>
       <div class="row">
         <button class="primary" id="runEffectTest" type="button" disabled>テスト開始</button>
         <button id="cancelEffect" type="button" hidden>テストを中止</button>
