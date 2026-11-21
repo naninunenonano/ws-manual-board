@@ -470,6 +470,82 @@
           "implementationStatus": "unimplemented"
         }
       ]
+    },
+    {
+      "cardNumber": "STS/W140-031",
+      "variants": [
+        "STS/W140-031",
+        "STS/W140-031R"
+      ],
+      "name": "黎明告げる凱旋歌",
+      "nameKana": "レイメイツゲルガイセンカ",
+      "product": "ブースターパック ステラソラ",
+      "type": "climax",
+      "color": "緑",
+      "stats": {
+        "level": null,
+        "cost": null,
+        "power": null,
+        "soul": null
+      },
+      "triggers": [
+        "treasure"
+      ],
+      "traits": [],
+      "keywords": [
+        "トレジャー"
+      ],
+      "effects": [
+        {
+          "id": "triumphal-song-continuous",
+          "category": "CX永続",
+          "type": "continuous",
+          "timing": "while_in_cx",
+          "optional": false,
+          "sourceText": "【永】 あなたのキャラすべてに、パワーを＋1000し、ソウルを＋1。",
+          "description": "CX置場にある間、自分のキャラすべてのパワー＋1000、ソウル＋1。",
+          "conditions": [],
+          "costs": [],
+          "steps": [
+            {
+              "handler": "modifyPower",
+              "params": {
+                "selection": "cxCharacters",
+                "amount": 1000
+              }
+            },
+            {
+              "handler": "modifySoul",
+              "params": {
+                "selection": "cxCharacters",
+                "amount": 1
+              }
+            }
+          ],
+          "implementationStatus": "implemented"
+        },
+        {
+          "id": "triumphal-song-treasure",
+          "category": "トレジャー",
+          "type": "auto",
+          "timing": "on_trigger",
+          "optional": false,
+          "sourceText": "（トレジャー：このカードがトリガーした時、あなたはこのカードを手札に戻す。あなたは自分の山札の上から1枚を、ストック置場に置いてよい）",
+          "description": "トリガーしたCXを手札に戻し、任意で山札上1枚をストックに置く。",
+          "conditions": [],
+          "costs": [],
+          "steps": [
+            {
+              "handler": "treasureTrigger",
+              "params": {
+                "side": "self",
+                "triggerUid": "@source"
+              }
+            }
+          ],
+          "implementationStatus": "implemented"
+        }
+      ]
     }
   ]
 }
