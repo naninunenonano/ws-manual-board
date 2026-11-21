@@ -91,7 +91,8 @@ function validMatch(snapshot) {
   if (snapshot.phase === "mulligan") return snapshot.screen === "mulligan" && snapshot.result === null && [0,1].includes(snapshot.mulliganPlayer) && snapshot.players.every(board=>board.hand.length===5 && board.deck.length===45);
   if (snapshot.phase === "active") return snapshot.screen === "battle" && snapshot.result === null;
   if (snapshot.phase !== "ended" || snapshot.screen !== "result") return false;
-  return (snapshot.result?.reason === "left" && snapshot.result.winner === null) ||
+  return (snapshot.bot && snapshot.result?.reason === "level" && isPlayer(snapshot.result.winner)) ||
+    (snapshot.result?.reason === "left" && snapshot.result.winner === null) ||
     (snapshot.result?.reason === "surrender" && snapshot.result.winner === 1 - snapshot.side);
 }
 
@@ -121,27 +122,44 @@ function restoreMatch() {
 function showMatchScreen() {
   matchElement("setupScreen").hidden = !isDeckSetup();
   matchElement("battleScreen").hidden = !isMatchActive();
+  matchElement("botControls").hidden=!match?.bot;
   matchElement("mulliganScreen").hidden = match?.phase !== "mulligan";
   if(match?.phase === "mulligan") renderMulligan();
   matchElement("resultScreen").hidden = match?.phase !== "ended";
   matchElement("side").value = String(side);
   matchElement("battleSide").value = String(side);
+  matchElement("battleSide").disabled=!!match?.bot;
   if (isMatchActive()) {
     ensureTurn();
     const first = match.firstPlayer;
     matchElement("firstPlayerResult").textContent = "先攻：プレイヤー" + (first + 1) +
       " ／ 後攻：プレイヤー" + (2 - first);
     render();
-    if (match.turn.phase==="draw" && match.turn.drawPending && (!match.online || match.turn.player===side)) beforeDrawConfirmation();
+    if (match.turn.phase==="draw" && match.turn.drawPending && (!match.bot||match.turn.player===0) && (!match.online || match.turn.player===side)) beforeDrawConfirmation();
     renderTurnControls();
     checkMandatoryLevel();
   } else if (match?.phase === "ended") {
     const { reason, winner } = match.result;
-    matchElement("battleResult").textContent = reason === "surrender"
+    matchElement("battleResult").textContent = reason === "level"
+      ? winner===0?"Botがレベル4になりました。あなたの勝ちです":"レベル4になりました。Botの勝ちです"
+      : reason === "surrender"
       ? "プレイヤー" + (2 - winner) + "が降参しました。勝者：プレイヤー" + (winner + 1)
       : "対戦を離れました。勝敗はありません";
   }
   window.scrollTo(0, 0);
+}
+
+function buildMatchBoard(deck,p) {
+    const board = Object.fromEntries(zones.map(zone => [zone, []]));
+    for (const { id, num, cx } of deck.cards) {
+      for (let i = 0; i < num; i++) {
+        board.deck.push({
+          uid: p + "-" + id + "-" + i, id,
+          level: cardCatalog[id]?.level ?? "?", orientation: 0, faceUp: false, cx:typeof cx==="boolean"?cx:null
+        });
+      }
+    }
+    return board;
 }
 
 function startMatch(readDeck) {
@@ -153,16 +171,8 @@ function startMatch(readDeck) {
     message("プレイヤー" + (missing + 1) + "の使用デッキを選択してください");
     return;
   }
-  const boards = decks.map((deck, p) => {
-    const board = Object.fromEntries(zones.map(zone => [zone, []]));
-    for (const { id, num, cx } of deck.cards) {
-      for (let i = 0; i < num; i++) {
-        board.deck.push({
-          uid: p + "-" + id + "-" + i, id,
-          level: cardCatalog[id]?.level ?? "?", orientation: 0, faceUp: false, cx:typeof cx==="boolean"?cx:null
-        });
-      }
-    }
+  const boards = decks.map((deck,p)=>{
+    const board=buildMatchBoard(deck,p);
     shuffle(board.deck);
     return board;
   });
@@ -216,10 +226,10 @@ function completeMulligan(){
   for(const i of indices)board.waiting.push(board.hand.splice(i,1)[0]);
   for(let i=0;i<indices.length;i++){const c=board.deck.pop();c.faceUp=true;board.hand.push(c);}
   shuffle(board.deck);
-  const next={...match,players:match.players.map((b,i)=>i===p?board:b),mulliganPlayer:p+1,phase:p===0?"mulligan":"active",screen:p===0?"mulligan":"battle"};
+  const next={...match,players:match.players.map((b,i)=>i===p?board:b),mulliganPlayer:p+1,phase:p===0&&!match.bot?"mulligan":"active",screen:p===0&&!match.bot?"mulligan":"battle"};
   if(!writeMatch(next))return;
   match=next;players=next.players;mulliganSelection=new Set();showMatchScreen();
-  if(p===1){ensureTurn();message("両プレイヤーのマリガンが完了しました");}
+  if(p===1||match.bot){ensureTurn();message(match.bot?"マリガンが完了しました":"両プレイヤーのマリガンが完了しました");}
 }
 function finishMatch(reason) {
   if (!isMatchActive()) return;
@@ -290,12 +300,13 @@ function showDeckContents(deck,p) {
 
 function initializeMatch(readDeck, refreshSetup) {
   matchElement("startBattle").onclick = () => startMatch(readDeck);
+  matchElement("startBotBattle").onclick=()=>startBotMatch(readDeck(0),matchElement("botScenario").value);
   matchElement("confirmMulligan").onclick = completeMulligan;
   matchElement("surrender").onclick = () => finishMatch("surrender");
   matchElement("leaveBattle").onclick = () => finishMatch("left");
   matchElement("viewDecks").onclick = showRegisteredDecks;
   matchElement("battleSide").onchange = event => {
-    if (!isMatchActive() || match.online) return;
+    if (!isMatchActive() || match.online || match.bot) return;
     side = Number(event.target.value);
     selected = null;
     updateBoard();

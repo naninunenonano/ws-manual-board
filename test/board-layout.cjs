@@ -18,7 +18,9 @@ const files = new Map([
   ["/decklog-import.js",["decklog-import.js","text/javascript"]],
   ["/cloud-decks.js",["cloud-decks.js","text/javascript"]],
   ["/card-images.js",["card-images.js","application/javascript"]],
-  ["/online-match.js",["online-match.js","text/javascript"]]
+  ["/online-match.js",["online-match.js","text/javascript"]],
+  ...["bot-match.js","card-catalog.js","effects/engine.js","card-data/load.js"].map(file=>["/"+file,[file,"text/javascript"]]),
+  ["/card-data/catalog.json",["card-data/catalog.json","application/json"]]
 ]);
 
 async function main() {
@@ -32,7 +34,8 @@ async function main() {
   await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
   let browser;
   try {
-    browser = await chromium.launch(fs.existsSync("/usr/bin/google-chrome") ? {channel:"chrome"} : {});
+    browser = await chromium.launch(fs.existsSync("/usr/bin/google-chrome") ? {channel:"chrome"} :
+      fs.existsSync("/usr/bin/chromium") ? {executablePath:"/usr/bin/chromium"} : {});
     const desktop = await browser.newPage({viewport:{width:1280,height:800}});
     const url="http://127.0.0.1:"+server.address().port;
     await desktop.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
@@ -236,9 +239,112 @@ async function main() {
     assert.deepEqual(forced,{clock:1,level:4,waiting:0,busy:false});
     assert.deepEqual(errors,[]);
     console.log(JSON.stringify(geometry));
+    await checkBot(browser,url);
   } finally {
     if(browser)await browser.close();
     server.close();
   }
 }
+async function checkBot(browser,url){
+  const page=await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
+  const errors=[];
+  page.on("pageerror",error=>errors.push(error.message));
+  await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
+  await page.route("https://ws-tcg.com/**",route=>route.abort());
+  const practice={title:"ステラソラ検証",list:[
+    {card_number:"STS/W140-001",num:4,cx:false},
+    {card_number:"STS/W140-002",num:4,cx:false},
+    {card_number:"STS/W140-031",num:4,cx:true},
+    ...fixture.list.slice(0,8).map(({card_number})=>({card_number,num:4,cx:false})),
+    {card_number:"SFN/S128-021",num:2,cx:false},
+    {card_number:"SFN/S128-022",num:4,cx:true}
+  ]};
+  await page.addInitScript(deck=>{
+    if(!sessionStorage.botFixture){
+      localStorage.setItem("ws-manual-deck-v1-p0",JSON.stringify(deck));
+      sessionStorage.botFixture="1";
+    }
+  },practice);
+  await page.goto(url);
+  const button=(name)=>page.getByRole("button",{name,exact:true});
+  const state=(source)=>page.evaluate(source);
+  const checkTotals=async()=>assert.deepEqual(await state(()=>players.map(board=>zones.reduce((n,z)=>
+    n+board[z].reduce((count,c)=>count+1+(c.markers?.length??0),0),0))),[50,50]);
+  const start=async scenario=>{
+    const setup=page.locator("#botSetup");
+    if(!await setup.evaluate(el=>el.open))await setup.locator("summary").tap();
+    await page.locator("#botScenario").selectOption(scenario);
+    await page.locator("#startBotBattle").tap();
+  };
+  const reset=async()=>{
+    page.once("dialog",dialog=>dialog.accept());
+    await page.evaluate(()=>{finishMatch("leave")});
+    await page.locator("#nextBattle").tap();
+  };
+  await start("opening");
+  assert.equal(await state(()=>match.phase),"mulligan");
+  await page.locator("#confirmMulligan").tap();
+  assert.deepEqual(await state(()=>players.map(board=>[board.hand.length,board.deck.length])),[[5,45],[5,45]]);
+  await reset();
+  await start("open");
+  assert.deepEqual(await state(()=>[players[1].front0.length,players[1].front1.length,players[1].deck.at(-1).cx]),[0,1,false]);
+  await reset();
+  await start("front");
+  assert.equal(await state(()=>players[1].deck.at(-1).cx),true);
+  assert.equal(await page.locator("#battleSide").isDisabled(),true);
+  await page.evaluate(()=>{
+    const board=players[0];
+    const i=board.deck.findIndex(card=>card.id==="STS/W140-001");
+    board.front0.push(...board.deck.splice(i,1));
+    board.front0[0].faceUp=true;
+    board.deck.push(...board.deck.splice(board.deck.findIndex(card=>card.cx===false),1));
+    match.turn.phase="attack";
+    updateBoard();
+    selected={p:0,z:"front0",index:0};
+    renderTurnControls();
+  });
+  await page.locator("#autoAttack").tap();
+  await button("ストックに置く").tap();
+  await button("ダメージを与える").tap();
+  await button("控え室へ").tap();
+  assert.match(await page.locator("#botStatus").innerText(),/キャンセル/);
+  assert.deepEqual(await state(()=>[players[0].front0[0].orientation,players[0].stock.length,players[1].clock.length]),[180,1,0]);
+  await checkTotals();
+  await page.reload();
+  assert.equal(await state(()=>match.bot.scenario),"front");
+  await reset();
+
+  await page.waitForFunction(()=>typeof botCatalog!=="undefined");
+  await start("firen");
+  await page.evaluate(()=>move(0,"hand",players[0].hand.findIndex(card=>card.id==="STS/W140-002"),"front0"));
+  await button("能力を使う").tap();
+  await button("黎明の刻 レイス").tap();
+  await button("選択を確定").tap();
+  await button("コストを支払う").tap();
+  await button("鋼に宿る優しき心 フィレン").tap();
+  await button("選択を確定").tap();
+  await button("後列②").tap();
+  assert.deepEqual(await state(()=>[players[0].back1[0].botLevel,botStats(0,players[0].front0[0]).power]),[2,7000]);
+  await page.evaluate(()=>{
+    move(0,"hand",players[0].hand.findIndex(card=>card.id==="STS/W140-031"),"cx");
+    match.turn.phase="attack";
+    selected={p:0,z:"front0",index:0};
+    updateBoard();
+  });
+  assert.deepEqual(await state(()=>botStats(0,players[0].front0[0])),{power:8000,soul:2});
+  await page.locator("#autoAttack").tap();
+  await button("黎明の刻 レイス").first().tap();
+  await button("選択を確定").tap();
+  await button("手札へ").tap();
+  await button("山札の上をストックへ").tap();
+  assert.equal(await state(()=>players[0].hand.some(card=>card.id==="STS/W140-031")),true);
+  await button("ダメージを与える").tap();
+  await button("クロックへ").tap();
+  assert.equal(await state(()=>players[1].front0[0].orientation),180);
+  await checkTotals();
+  assert.deepEqual(errors,[]);
+  await page.close();
+  console.log("Bot opening, presets, attack, Firen, Treasure and reload passed at 390px");
+}
+
 main().catch(error=>{console.error(error);process.exitCode=1});

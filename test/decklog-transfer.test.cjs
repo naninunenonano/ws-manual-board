@@ -38,7 +38,7 @@ const [frieren, idol] = decks;
 const fragment = deck => "#decklog=" + encodeURIComponent(JSON.stringify(deck));
 const key = p => "ws-manual-deck-v1-p" + p;
 
-function launch(hash = "", storage = new Map(), replaceState = null, randomValue = 100, failingKey = null) {
+function launch(hash = "", storage = new Map(), replaceState = null, randomValue = 100, failingKey = null, botFixture = false) {
   const handlers = new Map();
   const settle = () => new Promise(resolve=>setImmediate(resolve));
   let randomCalls = 0;
@@ -55,7 +55,8 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
   elements.get("applyDeck").disabled = true;
   const location = {hash,pathname:"/ws-manual-board/",search:""};
   const context = vm.createContext({
-    document:{getElementById:id=>elements.get(id),createElement:element},
+    document:{getElementById:id=>elements.get(id),createElement:element,createTextNode:text=>({textContent:text})},
+    structuredClone,
     location, setTimeout, clearTimeout, prompt:(_,title)=>title,
     window:{
       history:{replaceState:replaceState ?? (()=>{location.hash = "";})},
@@ -69,6 +70,13 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
   vm.runInContext(read("card-images.js"),context);
   vm.runInContext(boardScript,context);
   vm.runInContext(matchScript,context);
+  if(botFixture){
+    vm.runInContext(read("effects/engine.js"),context);
+    vm.runInContext(read("card-catalog.js"),context);
+    vm.runInContext(read("card-data/load.js"),context);
+    context.fetch=async()=>({ok:true,text:async()=>read("card-data/catalog.json")});
+  }
+  vm.runInContext(read("bot-match.js"),context);
   vm.runInContext(importScript,context);
   return {
     get:id=>elements.get(id), location, storage, settle,
@@ -811,4 +819,100 @@ test("clock encore refreshes and both players finish before end; newly reversed 
   page.click("nextPhase");
   assert.equal(page.run("match.turn.phase"),"end");
   assert.equal(page.run("match.encore"),undefined);
+});
+
+
+test("Bot scenarios accept interchangeable player decks and keep the selected setup on reload",async()=>{
+  const page=launch("",new Map([[key(0),JSON.stringify(frieren)],[key(1),JSON.stringify(idol)]]));
+  page.get("botScenario").value="front";
+  page.click("startBotBattle");
+  assert.equal(snapshot(page).bot.scenario,"front");
+  assert.equal(snapshot(page).decks[0].title,frieren.title);
+  assert.equal(snapshot(page).players[1].front0.length,1);
+  assert.equal(snapshot(page).players[1].deck.at(-1).cx,true);
+  assert.equal(page.get("battleSide").disabled,true);
+  const resumed=launch("",page.storage);
+  assert.deepEqual(snapshot(resumed),snapshot(page));
+  resumed.run('finishMatch("leave")');
+  resumed.click("nextBattle");
+  const library=JSON.parse(page.storage.get(libraryKey));
+  resumed.select(0,library.find(item=>item.deck.title===idol.title).id);
+  resumed.get("botScenario").value="opening";
+  resumed.click("startBotBattle");
+  assert.equal(snapshot(resumed).decks[0].title,idol.title);
+  assert.equal(snapshot(resumed).phase,"mulligan");
+  resumed.click("confirmMulligan");
+  assert.equal(snapshot(resumed).phase,"active");
+  assert.equal(snapshot(resumed).players[1].hand.length,5);
+  assert.equal(snapshot(resumed).players[0].hand.length,5);
+});
+
+test("フィレンの登場時能力は手札から誘発し、枠の選択と連続効果に反映する",async()=>{
+  const deck={title:"テスト",list:[
+    {card_number:"STS/W140-001",num:4,cx:false},
+    {card_number:"STS/W140-002",num:4,cx:false},
+    {card_number:"STS/W140-031",num:4,cx:true},
+    ...frieren.list.slice(0,8).map(({card_number})=>({card_number,num:4,cx:false})),
+    {card_number:"SFN/S128-021",num:2,cx:false},
+    {card_number:"SFN/S128-022",num:4,cx:true}
+  ]};
+  const page=launch("",new Map([[key(0),JSON.stringify(deck)]]),null,100,null,true);
+  await page.settle();
+  page.get("botScenario").value="firen";
+  page.click("startBotBattle");
+  assert.equal(snapshot(page).phase,"active");
+  page.run('move(0,"hand",players[0].hand.findIndex(card=>card.id==="STS/W140-002"),"front0")');
+  const click=label=>{
+    const button=page.get("dialogBody").children.find(el=>el.textContent===label);
+    assert.ok(button,label);
+    button.onclick();
+  };
+  click("能力を使う");
+  click("黎明の刻 レイス");
+  click("選択を確定");
+  click("コストを支払う");
+  click("鋼に宿る優しき心 フィレン");
+  click("選択を確定");
+  click("後列②");
+  assert.equal(snapshot(page).players[0].back1[0].botLevel,2);
+  assert.equal(page.run("botStats(0,players[0].front0[0]).power"),7000);
+  page.run('move(0,"hand",players[0].hand.findIndex(card=>card.id==="STS/W140-031"),"cx")');
+  assert.equal(page.run("botStats(0,players[0].front0[0]).power"),8000);
+  assert.equal(page.run("botStats(0,players[0].front0[0]).soul"),2);
+  page.run('match.turn.phase="attack";startAutoAttack(0,"front0",0)');
+  click("黎明の刻 レイス");
+  click("選択を確定");
+  click("手札へ");
+  click("山札の上をストックへ");
+  click("ダメージを与える");
+  click("クロックへ");
+  const {players}=snapshot(page);
+  assert.equal(players[1].front0[0].orientation,180);
+  assert.equal(players[1].clock.length,2);
+  assert.equal(players[0].stock.length,1);
+  assert.equal(players[0].hand.some(card=>card.id==="STS/W140-031"),true);
+  assert.deepEqual(players.map(board=>Object.values(board).flat().length),[50,50]);
+});
+
+
+test("Bot draws, deploys and attacks only on its turn",()=>{
+  const page=launch("",new Map([[key(0),JSON.stringify(frieren)]]));
+  page.get("botScenario").value="open";
+  page.click("startBotBattle");
+  assert.equal(page.get("botStep").disabled,true);
+  page.run('finishEndTurn()');
+  page.click("botStep");
+  assert.equal(snapshot(page).players[1].hand.length,5);
+  page.click("botStep");
+  assert.deepEqual(["front0","front1","front2"].map(zone=>snapshot(page).players[1][zone].length),[1,1,1]);
+  page.click("botStep");
+  page.click("botStep");
+  const confirm=page.get("dialogBody").children.find(e=>["クロックへ","控え室へ"].includes(e.textContent));
+  assert.ok(confirm);
+  confirm.onclick();
+  const {players,side}=snapshot(page);
+  assert.equal(side,0);
+  assert.equal(players[1].front0[0].orientation,90);
+  assert.equal(players[1].stock.length,1);
+  assert.deepEqual(players.map(board=>Object.values(board).flat().length),[50,50]);
 });
