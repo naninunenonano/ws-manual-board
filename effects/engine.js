@@ -154,7 +154,7 @@ const WSEffects = (() => {
       const picks = Object.hasOwn(ctx.choices,p.as) ? ctx.choices[p.as] : (p.count===0 ? [] : undefined);
       if (picks===undefined) fail("選択「"+p.as+"」に"+p.count+"枚指定してください","needs-choice");
       const available = new Map(pile(ctx,p.from).map(card=>[card.uid,card]));
-      if (!Array.isArray(picks) || picks.length>(p.count) || picks.length<(p.min??p.count) || new Set(picks).size!==p.count
+      if (!Array.isArray(picks) || picks.length>(p.count) || picks.length<(p.min??p.count) || new Set(picks).size!==picks.length
           || !picks.every(id=>available.has(id))) fail("選択「"+p.as+"」の枚数・対象を確認してください","needs-choice");
       for(const uid of picks){
         if(!matching(available.get(uid),{...p,excludeUid:p.excludeUid==="@source"?ctx.choices.sourceUid:p.excludeUid}))fail("選択「"+p.as+"」はカード条件に合いません","needs-choice");
@@ -311,7 +311,7 @@ const WSEffects = (() => {
         const cards=entry.implementation.run(context,entry.step.params);
         log.push({phase:entry.phase,handler:entry.step.handler,ok:true,cards});
       }
-      if(effect.limit?.perTurn)log.push({phase:"limit",handler:"perTurn",ok:true,usedThisTurn:(choices.usedThisTurn??0)+1});
+      if(effect.limit?.perTurn){choices.usedThisTurn=(choices.usedThisTurn??0)+1;log.push({phase:"limit",handler:"perTurn",ok:true,usedThisTurn:choices.usedThisTurn});}
       return result("success");
     } catch(error) {
       if (at)log.push({phase:at.phase,handler:at.step.handler,ok:false,message:error.message});
