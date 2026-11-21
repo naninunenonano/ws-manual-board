@@ -26,7 +26,7 @@
   const storageKey=p=>"ws-manual-deck-v1-p"+p;
   const libraryKey="ws-manual-deck-library-v1";
   const selectedKey=p=>"ws-manual-deck-selected-v1-p"+p;
-  function library(){
+  function readLibrary(){
     const raw=localStorage.getItem(libraryKey);
     const list=raw===null?[]:JSON.parse(raw);
     if(!Array.isArray(list))throw Error("登録データの形式が不正です");
@@ -38,9 +38,63 @@
     }
     return list;
   }
+  function library(){return readLibrary().filter(item=>!item.cloud?.removed && item.cloud?.dirty!=="delete")}
+  function writeLibrary(list){localStorage.setItem(libraryKey,JSON.stringify(list))}
+  let editing=null;
+  let cloud;
+  function showCloudStatus(text){
+    $("cloudDeckStatus").textContent=text;
+    try{
+      updateSavedStatus();
+      const panel=$("cloudDeckConflicts");
+      panel.replaceChildren();
+      for(const item of readLibrary().filter(item=>item.cloud?.conflict)){
+        const line=document.createElement("p");
+        const other=item.cloud.conflictingRow;
+        line.textContent="同期競合 ／ 端末："+item.deck.title+" ／ クラウド："+(other?other.name+"（更新 "+other.updated_at+"）":"削除済み");
+        panel.append(line);
+        const inspect=document.createElement("details");
+        const summary=document.createElement("summary");
+        summary.textContent="競合したカード一覧を比較";
+        inspect.append(summary);
+        for(const [label,cards] of [["端末版",item.deck.list],["クラウド版",other?.cards]]){
+          if(!cards)continue;
+          const block=document.createElement("p");
+          block.textContent=label+"："+cards.map(card=>card.card_number+" ×"+card.num+(card.cx?"（CX）":"")).join("、");
+          inspect.append(block);
+        }
+        panel.append(inspect);
+        for(const [label,keepLocal] of [["クラウド版を採用",false],["端末の変更をクラウドに反映",true]]){
+          if(keepLocal&&!other)continue;
+          const button=document.createElement("button");
+          button.type="button";button.textContent=label;
+          button.onclick=()=>{if(confirm("「"+item.deck.title+"」を「"+label+"」で解決しますか？"))cloud.resolve(item.id,keepLocal)};
+          panel.append(button);
+        }
+      }
+    }catch(e){ /* The existing library error is shown by updateSavedStatus. */ }
+  }
+  if(typeof createDeckCloudStore==="function"){
+    cloud=createDeckCloudStore({
+      loadClient:loadDeckCloudClient,read:readLibrary,write:writeLibrary,storage:localStorage,
+      validate:deck=>{if(!cxReady(normalize(deck)))throw Error("CXを8枚に確定してください")},
+      uuid:()=>crypto.randomUUID(),status:showCloudStatus,
+      lock:task=>navigator.locks?.request("ws-manual-cloud-sync",task) ?? task()
+    });
+    $("syncCloudDecks").onclick=()=>cloud.synchronize();
+    $("uploadLocalDecks").onclick=()=>{
+      if(confirm("クラウドに未登録の端末内デッキをアップロードしますか？ CXが未確定のデッキは端末内に残ります。"))
+        cloud.synchronize({legacy:true});
+    };
+  }
+  function setEditing(item=null){
+    editing=item;
+    $("deckRegistrationTitle").textContent=item?"登録デッキの編集":"新規デッキ登録";
+    $("applyDeck").textContent=item?"選択デッキを更新":"新しいデッキとして保存";
+  }
   function normalize(v){return parse({title:v.title,list:Array.isArray(v.list)?v.list:v.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))})}
   function migrate(){
-    const list=library(), migrated=[];
+    const list=readLibrary(), migrated=[];
     for(const p of [0,1]){
       const raw=localStorage.getItem(storageKey(p));
       if(!raw)continue;
@@ -72,7 +126,7 @@
       return;
     }
     select.replaceChildren();const empty=document.createElement("option");empty.value="";empty.textContent="未選択";select.append(empty);
-    for(const item of list){const o=document.createElement("option");o.value=item.id;o.textContent=item.deck.title;select.append(o)}
+    for(const item of list){const o=document.createElement("option");o.value=item.id;o.textContent=item.deck.title+(item.cloud?.conflict?"［競合］":item.cloud?.dirty?"［同期待ち］":item.cloud?"［同期済み］":"");select.append(o)}
     select.value=list.some(x=>x.id===id)?id:"";
     const deck=savedDeck(side);
     $("savedDeckStatus").textContent="登録済み "+list.length+"件／プレイヤー"+(side+1)+"："+(deck?deck.title:"未選択");
@@ -87,12 +141,48 @@
     const input=prompt("デッキ名",deck.title||"新しいデッキ");if(input===null)return;
     const title=input.trim();if(!title){message("デッキ名が空です");return}
     try{
-      const list=library(),id="deck-"+Date.now()+"-"+Math.random().toString(36).slice(2,8);
-      list.push({id,deck:{title,list:deck.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))}});
-      localStorage.setItem(libraryKey,JSON.stringify(list));
-    }catch(e){message("デッキを保存できません。保存容量または登録データを確認してください");return}
-    updateSavedStatus();message("「"+title+"」を登録しました");
+      const list=readLibrary();
+      const index=editing?list.findIndex(item=>item.id===editing.id):-1;
+      if(editing && (index===-1 || JSON.stringify(list[index])!==JSON.stringify(editing))){
+        message("編集中にデッキが変更されました。選択し直してください");
+        return;
+      }
+      const data={title,list:deck.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))};
+      if(editing){
+        const meta=editing.cloud;
+        list[index]={...editing,deck:data,...(meta?{cloud:{...meta,dirty:meta.revision?"update":"insert"}}:{})};
+      }else{
+        const id="deck-"+Date.now()+"-"+Math.random().toString(36).slice(2,8);
+        list.push({id,deck:data,...(cloud?{cloud:cloud.newMetadata()}:{})});
+      }
+      writeLibrary(list);
+    }catch(e){message("端末にデッキを保存できません。保存容量または登録データを確認してください");return}
+    pending=null;
+    $("applyDeck").disabled=true;
+    $("deckPreview").replaceChildren();
+    setEditing();
+    updateSavedStatus();
+    message("「"+title+"」を端末に保存しました");
+    if(cloud?.online())cloud.synchronize();
+    else if(cloud && !cloud.busy())$("cloudDeckStatus").textContent="クラウド未接続。変更は端末に保存済みです。「同期・再試行」で接続できます。";
   }
+  $("editSavedDeck").onclick=async()=>{
+    if(!isDeckSetup())return;
+    let item;
+    try{item=library().find(entry=>entry.id===$("savedDeckSelect").value)}
+    catch(e){message("登録済みデッキを読み込めません");return}
+    if(!item){message("編集するデッキを選択してください");return}
+    if(item.cloud?.conflict){message("先にクラウドの競合を解決してください");return}
+    const revision=++transferRevision;
+    setEditing(item);
+    pending=null;$("applyDeck").disabled=true;
+    $("deckJson").value=JSON.stringify(item.deck,null,2);
+    $("deckJson").closest("details").open=true;
+    $("registrationPanel").hidden=false;
+    $("toggleDeckRegistration").textContent="登録画面を閉じる";
+    const deck=await classify(normalize(item.deck));
+    if(revision===transferRevision && isDeckSetup())preview(deck);
+  };
   $("loadSavedDeck").onclick=()=>{
     if(!isDeckSetup())return;
     const deck=savedDeck(side);
@@ -102,12 +192,15 @@
   $("clearSavedDeck").onclick=()=>{
     if(!isDeckSetup())return;
     try{
-      const list=library(),id=$("savedDeckSelect").value,item=list.find(x=>x.id===id);
+      const list=readLibrary(),id=$("savedDeckSelect").value,item=list.find(x=>x.id===id);
       if(!item || !confirm("「"+item.deck.title+"」を削除しますか？"))return;
-      localStorage.setItem(libraryKey,JSON.stringify(list.filter(x=>x.id!==id)));
+      if(item.cloud)writeLibrary(list.map(entry=>entry.id===id?{...entry,cloud:{...entry.cloud,dirty:"delete"}}:entry));
+      else writeLibrary(list.filter(x=>x.id!==id));
       for(const p of [0,1])if(localStorage.getItem(selectedKey(p))===id)localStorage.removeItem(selectedKey(p));
     }catch(e){message("削除に失敗しました");return}
-    pending=null;$("applyDeck").disabled=true;$("deckPreview").replaceChildren();updateSavedStatus();
+    pending=null;setEditing();$("applyDeck").disabled=true;$("deckPreview").replaceChildren();updateSavedStatus();
+    if(cloud?.online())cloud.synchronize();
+    else if(cloud && !cloud.busy())$("cloudDeckStatus").textContent="クラウド未接続。変更は端末に保存済みです。「同期・再試行」で接続できます。";
   };
   $("side").addEventListener("change",updateSavedStatus);
 
@@ -199,6 +292,9 @@
   };
   $("toggleDeckRegistration").onclick=()=>{
     const panel=$("registrationPanel");panel.hidden=!panel.hidden;
+    if(editing && panel.hidden){
+      ++transferRevision;setEditing();pending=null;$("applyDeck").disabled=true;$("deckPreview").replaceChildren();
+    }
     $("toggleDeckRegistration").textContent=panel.hidden?"新しいデッキを登録":"登録画面を閉じる";
   };
   $("openDeckLog").onclick=()=>{
@@ -224,6 +320,7 @@
     }
     const encoded = location.hash.slice(prefix.length);
     const revision=++transferRevision;
+    setEditing();
     pending = null;
     $("applyDeck").disabled = true;
     $("deckPreview").replaceChildren();
@@ -253,5 +350,6 @@
     updateSavedStatus();
     receiveTransferredDeck();
   });
+  cloud?.synchronize();
 
 })();

@@ -15,7 +15,8 @@ const fixture = {title:"勇者一行",list:cardNumbers.map((number,i)=>({
 const files = new Map([
   ["/",["index.html","text/html"]],["/board-layout.css",["board-layout.css","text/css"]],
   ["/match-state.js",["match-state.js","text/javascript"]],
-  ["/decklog-import.js",["decklog-import.js","text/javascript"]]
+  ["/decklog-import.js",["decklog-import.js","text/javascript"]],
+  ["/cloud-decks.js",["cloud-decks.js","text/javascript"]]
 ]);
 
 async function main() {
@@ -32,6 +33,7 @@ async function main() {
     browser = await chromium.launch(fs.existsSync("/usr/bin/google-chrome") ? {channel:"chrome"} : {});
     const desktop = await browser.newPage({viewport:{width:1280,height:800}});
     const url="http://127.0.0.1:"+server.address().port;
+    await desktop.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
     await desktop.addInitScript(()=>{window.open=url=>{window.deckLogURL=url}});
     await desktop.goto(url);
     assert.equal(await desktop.locator("#deckCode").inputValue(),"");
@@ -51,6 +53,7 @@ async function main() {
     assert.equal(await desktop.locator("#savedDeckSelect option").last().textContent(),"PC検証デッキ");
     await desktop.close();
     const page = await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
+    await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
     const errors = [];
     page.on("pageerror",error=>errors.push(error.message));
     await page.addInitScript(deck=>{
