@@ -156,7 +156,7 @@ const WSEffects = (() => {
       if (!Array.isArray(picks) || picks.length>(p.count) || picks.length<(p.min??p.count) || new Set(picks).size!==p.count
           || !picks.every(id=>available.has(id))) fail("選択「"+p.as+"」の枚数・対象を確認してください","needs-choice");
       for(const uid of picks){
-        if(!matching(available.get(uid),p))fail("選択「"+p.as+"」はカード条件に合いません","needs-choice");
+        if(!matching(available.get(uid),{...p,excludeUid:p.excludeUid==="@source"?ctx.choices.sourceUid:p.excludeUid}))fail("選択「"+p.as+"」はカード条件に合いません","needs-choice");
       }
       for(const uid of picks)for(const kind of ["traits","keywords"]){
         if(p[kind]&&!checkTags(available.get(uid),kind,p[kind]))fail("選択「"+p.as+"」は"+tagFields[kind][2]+"の条件に合いません","needs-choice");
