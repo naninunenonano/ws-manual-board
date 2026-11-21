@@ -71,8 +71,8 @@
                   "side": "self",
                   "zone": "clock"
                 },
-                "selection": "clockCost",
-                "position": "bottom"
+                "position": "bottom",
+                "selection": "clockCost"
               }
             }
           ],
@@ -81,7 +81,7 @@
               "handler": "searchDeck",
               "params": {
                 "side": "self",
-                "as": "searched",
+                "as": "found",
                 "max": 1,
                 "cardType": "character",
                 "maxLevel": 1
@@ -90,7 +90,7 @@
             {
               "handler": "revealSelection",
               "params": {
-                "selection": "searched"
+                "selection": "found"
               }
             },
             {
@@ -104,7 +104,7 @@
                   "side": "self",
                   "zone": "hand"
                 },
-                "selection": "searched"
+                "selection": "found"
               }
             },
             {
@@ -146,7 +146,6 @@
                 },
                 "as": "recollectionCost",
                 "count": 1,
-                "excludeUid": "@source",
                 "cardType": "character",
                 "keywords": {
                   "names": [
