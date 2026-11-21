@@ -242,6 +242,7 @@ async function main() {
     await checkBot(browser,url);
     await checkAutoRules(browser,url);
     await checkPracticeCards(browser,url);
+    await checkLevelOnePractice(browser,url);
   } finally {
     if(browser)await browser.close();
     server.close();
@@ -429,6 +430,36 @@ async function checkPracticeCards(browser,url){
   await button("仮CX").first().tap();
   await button("選択を確定").tap();
   assert.equal(await page.evaluate(()=>players[0].stock.at(-1).id),"BOT/W000-105");
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
+  assert.deepEqual(errors,[]);
+  await page.close();
+}
+
+async function checkLevelOnePractice(browser,url){
+  const page=await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
+  const errors=[];
+  page.on("pageerror",error=>errors.push(error.message));
+  await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
+  await page.goto(url);
+  const button=name=>page.getByRole("button",{name,exact:true});
+  const hand=name=>page.locator('#boards .player.active .hand .card[title^="'+name+'"]')
+    .tap({position:{x:8,y:10}});
+  await page.locator("#botSetup summary").tap();
+  await page.locator("#botScenario").selectOption("practice-level-one");
+  await page.locator("#startBotBattle").tap();
+  await hand("仮キャラ カムバック連動");
+  await button("プレイする").tap();
+  await button("前列①").tap();
+  await page.locator("#nextPhase").tap();
+  await hand("仮CX カムバック");
+  await button("プレイする").tap();
+  await page.locator("#nextPhase").tap();
+  await page.locator('#boards .zone[data-p="0"][data-z="front0"]').tap({position:{x:14,y:10}});
+  await page.locator("#autoAttack").tap();
+  await button("ダイレクトアタック").tap();
+  await button("山札を見る").tap();
+  await page.getByRole("button",{name:/^1．.*を手札へ$/}).tap();
+  assert.match(await page.locator("#botStatus").innerText(),/CXコンボで4枚確認/);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
   assert.deepEqual(errors,[]);
   await page.close();
