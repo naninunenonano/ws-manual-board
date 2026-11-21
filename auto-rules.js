@@ -47,17 +47,17 @@ const practiceClimax={
   ],{type:"continuous"})]
 };
 const practiceCards={
-  "101":{name:"仮キャラ 3000",stats:{level:0,cost:0,power:3000,soul:1}},
-  "102":{name:"仮キャラ 応援",stats:{level:0,cost:0,power:1000,soul:1},assist:{power:500}},
-  "103":{name:"仮キャラ 集中",stats:{level:0,cost:0,power:1500,soul:1},effects:[
+  "101":{name:"仮キャラ 3000",color:"red",stats:{level:0,cost:0,power:3000,soul:1}},
+  "102":{name:"仮キャラ 応援",color:"blue",stats:{level:0,cost:0,power:1000,soul:1},assist:{power:500}},
+  "103":{name:"仮キャラ 集中",color:"blue",stats:{level:0,cost:0,power:1500,soul:1},effects:[
     ruleEffect("draw-brainstorm","集中（1ストック・自身レスト）","main",[],{
       type:"activated",brainstorm:{stock:1,reveal:5}
     })
   ]},
-  "104":{...practiceClimax,name:"仮CX カムバック",triggers:["カムバック"],effects:[
+  "104":{...practiceClimax,name:"仮CX カムバック",color:"red",triggers:["カムバック"],effects:[
     ...practiceClimax.effects,salvageTrigger("カムバック","character")
   ]},
-  "105":{...practiceClimax,name:"仮CX ゲート",triggers:["ゲート"],effects:[
+  "105":{...practiceClimax,name:"仮CX ゲート",color:"blue",triggers:["ゲート"],effects:[
     ...practiceClimax.effects,salvageTrigger("ゲート","climax")
   ]}
 };
