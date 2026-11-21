@@ -164,6 +164,15 @@
     try{await navigator.clipboard.writeText(transferBookmarklet);message("転送用コードをコピーしました。SafariのブックマークURLに貼り付けてください")}
     catch(e){$("transferCode").focus();$("transferCode").select();message("コピーできないためコードを選択しました。手動でコピーしてください")}
   };
+  $("toggleDeckRegistration").onclick=()=>{
+    const panel=$("registrationPanel");panel.hidden=!panel.hidden;
+    $("toggleDeckRegistration").textContent=panel.hidden?"新しいデッキを登録":"登録画面を閉じる";
+  };
+  $("openDeckLog").onclick=()=>{
+    const code=codeOf($("deckCode").value);
+    if(!code){message("デッキコードを入力してください");return}
+    window.open("https://decklog.bushiroad.com/view/"+encodeURIComponent(code),"_blank","noopener,noreferrer");
+  };
   function decodeTransfer(encoded) {
     if (!encoded) throw Error("転送データが空です");
     if (encoded.length > 16000) throw Error("転送データが大きすぎます");
@@ -191,7 +200,8 @@
       const deck = await classify(parse(raw));
       preview(deck);
       // The transferred deck is stored in the shared library; no code field is needed.
-      status.textContent = "Deck Logから50枚を受信しました。登録先を確認し「操作側に50枚登録」を押してください";
+      $("registrationPanel").hidden=false;$("toggleDeckRegistration").textContent="登録画面を閉じる";
+      status.textContent = "Deck Logから50枚を受信しました。内容を確認して「新しいデッキとして保存」を押してください";
     } catch (e) {
       status.textContent = "Deck Log転送データを読み込めません: " + e.message;
     }
