@@ -136,6 +136,9 @@ async function checkProducts(browser,url) {
   await page.getByRole("button",{name:"選択を確定",exact:true}).click();
   await $("effectChoices").getByText("公開カードを確認",{exact:true}).waitFor();
   await page.getByRole("button",{name:"処理を続ける",exact:true}).click();
+  await $("resultVerification").getByText("確認項目はすべて期待どおり（4 / 4件）",{exact:true}).waitFor();
+  assert.equal(await $("resultVerification").locator(".check-pass").count(),4);
+  assert.equal(await page.evaluate(()=>document.activeElement.id),"resultHeading");
   await $("resultChanges").getByText("公開したカード",{exact:true}).waitFor();
   await self.getByText("クロック （1枚）",{exact:true}).waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -148,6 +151,7 @@ async function checkProducts(browser,url) {
   await page.getByRole("button",{name:"選択を確定",exact:true}).click();
   await page.getByRole("button",{name:"コストを支払う",exact:true}).click();
   await page.getByRole("button",{name:"処理を続ける",exact:true}).click();
+  await $("resultVerification").getByText("確認項目はすべて期待どおり（3 / 3件）",{exact:true}).waitFor();
   await $("turnUsed").getByText(/使用済み 1枚/).waitFor();
   await $("runEffectTest").click();
   assert.match(await $("effectResult").innerText(),/使用回数上限/);

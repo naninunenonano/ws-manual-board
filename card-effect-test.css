@@ -16,3 +16,10 @@
 #effectChoices > :not(:first-child), #resultChanges > :not(:first-child) { margin-top: .5rem; }
 #turnUsed, #operationDescription, #resultChanges { overflow-wrap: anywhere; }
 @media (max-width: 28rem) { .lab-boards .effect { padding: .5rem; } .lab-boards button { font-size: .875rem; } }
+#expectedOutcome { padding: .55rem .7rem; background: #101827; border-radius: .45rem; }
+#resultVerification { border: 1px solid #5a7493; border-radius: .55rem; padding: .75rem; }
+#resultVerification ul { margin-bottom: 0; padding-inline-start: 0; list-style: none; }
+#resultVerification li { display: flex; align-items: baseline; gap: .55rem; margin-top: .45rem; }
+.check-pass, .check-fail { flex: 0 0 auto; }
+.check-pass { color: #a3efc3; }
+.check-fail { color: #ffc2c2; }
