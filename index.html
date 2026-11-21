@@ -88,7 +88,7 @@ function manualTransfer(p,from,index,to,position="top"){
  if(["deck","stock"].includes(to)&&position==="bottom")players[p][to].unshift(card);
  else players[p][to].push(card);
  selected=null;updateBoard();
- if(pendingMarkerChoices.length)showPendingMarkerChoices();
+ if(pendingMarkerChoices.length&&!document.getElementById("dialog").open)showPendingMarkerChoices();
 }
 function showPendingMarkerChoices(){
  if(!pendingMarkerChoices.length)return;
@@ -140,6 +140,7 @@ function manualDestination(p,from,index){
    d.close();updateBoard();return;
   }
   d.close();manualTransfer(p,from,index,sel.value,pos.value);
+  if(pendingMarkerChoices.length&&!d.open)showPendingMarkerChoices();
  });
  d.showModal();
 }
