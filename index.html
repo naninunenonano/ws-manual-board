@@ -88,20 +88,39 @@ function manualTransfer(p,from,index,to,position="top"){
  else players[p][to].push(card);
  selected=null;updateBoard();
 }
+function openStageMarkers(p,z){
+ const owner=players[p][z]?.at(-1);if(!owner)return;
+ const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
+ d.classList.remove("zoom-mode");body.replaceChildren();document.getElementById("dialogTitle").textContent="マーカー";
+ (owner.markers||[]).forEach((m,i)=>deckButton(body,(m.faceUp?"表":"裏")+" "+m.card.id,()=>{
+  d.close();const marker=owner.markers.splice(i,1)[0];players[p].waiting.push(marker.card);updateBoard();manualDestination(p,"waiting",players[p].waiting.length-1);
+ }));
+ deckButton(body,"閉じる",()=>d.close());d.showModal();
+}
 function manualDestination(p,from,index){
  const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
  d.classList.remove("zoom-mode");body.replaceChildren();
  document.getElementById("dialogTitle").textContent="移動先を選択";
- const sel=document.createElement("select"),pos=document.createElement("select");
- for(const z of ["deck","waiting","stock","hand","memory","clock","level","cx","front0","front1","front2","back0","back1"]){
+ const sel=document.createElement("select"),pos=document.createElement("select"),target=document.createElement("select"),face=document.createElement("select");
+ for(const z of ["deck","waiting","stock","hand","memory","clock","level","cx","front0","front1","front2","back0","back1","marker"]){
   const o=document.createElement("option");o.value=z;o.textContent=labels[z];sel.append(o);
  }
  for(const [v,label] of [["top","上"],["bottom","下"]]){
   const o=document.createElement("option");o.value=v;o.textContent=label;pos.append(o);
  }
- sel.onchange=()=>{pos.hidden=!["deck","stock"].includes(sel.value)};sel.onchange();
- body.append(sel,pos);
- deckButton(body,"移動する",()=>{d.close();manualTransfer(p,from,index,sel.value,pos.value)});
+ for(const z of ["front0","front1","front2","back0","back1"]){const o=document.createElement("option");o.value=z;o.textContent=labels[z];target.append(o)}
+ for(const [v,label] of [["down","裏向き"],["up","表向き"]]){const o=document.createElement("option");o.value=v;o.textContent=label;face.append(o)}
+ sel.onchange=()=>{pos.hidden=!["deck","stock"].includes(sel.value);target.hidden=face.hidden=sel.value!=="marker"};sel.onchange();
+ body.append(sel,pos,target,face);
+ deckButton(body,"移動する",()=>{
+  if(sel.value==="marker"){
+   const owner=players[p][target.value]?.at(-1),card=players[p][from]?.[index];
+   if(!owner||!card){message("配置先のキャラがありません");return}
+   players[p][from].splice(index,1);(owner.markers??=[]).push({card,faceUp:face.value==="up"});
+   d.close();updateBoard();return;
+  }
+  d.close();manualTransfer(p,from,index,sel.value,pos.value);
+ });
  d.showModal();
 }
 function move(p,from,index,to){if(p!==side){message("操作するプレイヤーを切り替えてください");return}if(!players[p][from][index])return;const card=players[p][from].splice(index,1)[0];if(isStageZone(from)&&!isStageZone(to))card.orientation=0;card.faceUp=!["deck","stock"].includes(to);players[p][to].push(card);selected=null;updateBoard();message(labels[from]+" → "+labels[to])}
@@ -478,6 +497,7 @@ function openList(p,z){
       };
       item.append(button);
     }
+    if(card.markers?.length)deckButton(item,"マーカー "+card.markers.length+"枚",()=>{dialog.close();openStageMarkers(p,z)});
     list.append(item);
   });
   const info=document.createElement("p");
