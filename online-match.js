@@ -20,6 +20,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
   let client, channel, snapshot, timer;
   let roomId = null, sending = false, reading = false, online = false;
   let recheck = false, lastBoard = "", lastTurn = "", temporary = false, clearReveal = false;
+  let shownReveals = "";
   const errors = {
     INVALID_CODE:"参加コードを確認してください（12文字、期限30分）",
     ALREADY_STARTED:"対戦はすでに開始しています",
@@ -43,7 +44,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
     el("boards").inert=blocked;
     el("playerActions").inert=blocked;
     el("confirmMulligan").disabled=blocked || !!snapshot?.state.mulligan?.[snapshot.seat];
-    for(const id of ["surrender","leaveBattle","onlineReveal","onlineEndReveal","onlineDeckRequest","onlineAnswerDeck","onlineAcceptDeck","onlineOpponentReveal"]) {
+    for(const id of ["surrender","leaveBattle","onlineRevealDeckTop","onlineReveal","onlineEndReveal","onlineDeckRequest","onlineAnswerDeck","onlineAcceptDeck","onlineOpponentReveal"]) {
       el(id).disabled=blocked;
     }
   }
@@ -167,6 +168,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
     el("onlineAcceptDeck").hidden=el("onlineAnswerDeck").hidden;
     el("onlineOpponentReveal").hidden=!reveals?.[1-me]?.length;
     el("onlineEndReveal").hidden=!reveals?.[me]?.length;
+    renderPublicReveals(reveals,me);
     el("battleSide").disabled=true;
     if(!viewWasOnline || oldPhase!==match.phase || force){
       closeBoardDialog();
@@ -257,9 +259,39 @@ function initializeOnlineMatch({authenticate,getDecks}) {
     try{localStorage.removeItem(onlineRoomKey)}catch{}
     el("onlineBattle").hidden=true;
     el("onlineMulligan").hidden=true;
+    renderPublicReveals();
     el("battleSide").disabled=false;
     renderLobby();
     lockBoard();
+  }
+
+  function renderPublicReveals(reveals, me) {
+    const panel=el("onlinePublicReveals");
+    const groups=[reveals?.[me]??[],reveals?.[1-me]??[]];
+    const key=JSON.stringify(groups);
+    if(shownReveals===key)return;
+    shownReveals=key;
+    panel.hidden=!groups.some(cards=>cards.length);
+    panel.replaceChildren();
+    for(const [index,cards] of groups.entries()){
+      if(!cards.length)continue;
+      const title=document.createElement("p");
+      title.textContent=index===0?"自分の公開カード":"相手の公開カード";
+      const list=document.createElement("div");
+      list.className="modalcards";
+      for(const card of cards){
+        const button=document.createElement("button");
+        button.type="button";
+        button.className="modal-card";
+        addCardImage(button,card,card.id);
+        const label=document.createElement("span");
+        label.textContent=card.id;
+        button.append(label);
+        button.onclick=()=>showCardDetail(card);
+        list.append(button);
+      }
+      panel.append(title,list);
+    }
   }
 
   function showReveals() {
@@ -330,6 +362,11 @@ function initializeOnlineMatch({authenticate,getDecks}) {
       event.stopImmediatePropagation();
     }
   },true);
+  el("onlineRevealDeckTop").onclick=()=>{
+    const top=players[side].deck.at(-1);
+    if(!top){message("山札に公開できるカードがありません");return;}
+    send("reveal",{cards:[top.uid]});
+  };
   el("onlineReveal").onclick=selectReveal;
   el("onlineEndReveal").onclick=()=>send("reveal",{cards:[]});
   el("onlineOpponentReveal").onclick=showReveals;

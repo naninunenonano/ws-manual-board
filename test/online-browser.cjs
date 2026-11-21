@@ -115,6 +115,23 @@ async function main() {
     assert.equal(await b.evaluate(()=>players[0].hand.every(card=>!card.id&&!card.uid)),true);
     assert.equal(await b.evaluate(()=>players[0].deck.every(card=>!card.id&&!card.uid)),true);
     assert.equal(await b.evaluate(()=>players[0].front0.length),1);
+    const beforeReveal=await a.evaluate(()=>players[0].deck.map(card=>({id:card.id,uid:card.uid})));
+    const top=beforeReveal.at(-1);
+    await $(a,"onlineRevealDeckTop").tap();
+    await $(a,"onlinePublicReveals").getByText("自分の公開カード",{exact:true}).waitFor();
+    await $(b,"onlinePublicReveals").getByText("相手の公開カード",{exact:true}).waitFor();
+    for(const page of [a,b]){
+      const cards=$(page,"onlinePublicReveals").locator(".modal-card");
+      assert.equal(await cards.count(),1);
+      assert.equal((await cards.innerText()).trim(),top.id);
+    }
+    assert.deepEqual(await a.evaluate(()=>players[0].deck.map(card=>({id:card.id,uid:card.uid}))),beforeReveal);
+    assert.equal(await b.evaluate(()=>players[0].deck.every(card=>!card.id&&!card.uid)),true);
+    await $(b,"onlinePublicReveals").getByRole("button",{name:top.id,exact:true}).tap();
+    await b.getByRole("heading",{name:"カード情報",exact:true}).waitFor();
+    await $(b,"close").tap();
+    await $(a,"onlineEndReveal").tap();
+    await Promise.all([$(a,"onlinePublicReveals").waitFor({state:"hidden"}),$(b,"onlinePublicReveals").waitFor({state:"hidden"})]);
     await $(b,"onlineReveal").click();
     await b.locator("#dialogBody select option").first().evaluate(o=>o.value).then(value=>b.locator("#dialogBody select").selectOption(value));
     await b.getByRole("button",{name:"選んだカードを公開",exact:true}).click();
