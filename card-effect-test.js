@@ -67,13 +67,16 @@
       };
       label.append(select);panel.append(label);
     }
-    const entries=WSFormalCards.review(current).entries.filter(entry=>entry.step?.handler==="selectCards"
+    const entries=WSFormalCards.review(current).entries.filter(entry=>["selectCards","searchDeck"].includes(entry.step?.handler)
       && entry.implementation?.valid(entry.step.params));
     for(const {step:{params}} of entries){
-      const label=node("label",params.as+" ／ "+WSEffects.sides[params.from.side]+"の"+WSEffects.zones[params.from.zone]+"から"+params.count+"枚");
+      const from=params.from??{side:params.side,zone:"deck"};
+      const maximum=params.count??params.max;
+      const label=node("label",params.as+" ／ "+WSEffects.sides[from.side]+"の"+WSEffects.zones[from.zone]+"から最大"+maximum+"枚");
       const select=document.createElement("select");
       select.multiple=true;
       for(const {side,zone,card} of WSEffects.cardsIn(board)){
+        if(side!==from.side||zone!==from.zone)continue;
         const option=new Option(card.uid+" ／ "+card.cardNumber+" ／ "+WSEffects.sides[side]+"・"+WSEffects.zones[zone],card.uid);
         option.selected=(Object.hasOwn(choices,params.as)?choices[params.as]:[]).includes(card.uid);
         select.append(option);
@@ -81,6 +84,8 @@
       select.onchange=()=>{Object.defineProperty(choices,params.as,{value:[...select.selectedOptions].map(o=>o.value),writable:true,enumerable:true,configurable:true});clearResults();};
       label.append(select);panel.append(label);
     }
+    if(current.limit?.perTurn){const label=node("label","このターンの使用回数");const input=document.createElement("input");input.type="number";input.min="0";input.value=choices.usedThisTurn??0;input.onchange=()=>{choices.usedThisTurn=Number(input.value);clearResults();};label.append(input);panel.append(label);}
+    if(current.id==="memory-recollection-top-reveal"){const label=node("label","能力を使用するキャラの個体ID");const input=document.createElement("input");input.value=choices.sourceUid??"";input.onchange=()=>{choices.sourceUid=input.value;clearResults();};label.append(input);panel.append(label);}
     if(!panel.childElementCount)panel.append(node("p","事前に指定する選択はありません。"));
   }
 
@@ -142,7 +147,7 @@
     const tags=id=>$(id).value.split(/[,、]/).map(tag=>tag.trim()).filter(Boolean);
     const traitChanges={added:tags("traitsAdded"),removed:tags("traitsRemoved")};
     const keywordChanges={added:tags("keywordsAdded"),disabled:tags("keywordsDisabled")};
-    const entry={uid,cardNumber,power,soul,traits:found?.traits??null,keywords:found?.keywords??null};
+    const entry={uid,cardNumber,power,soul,type:found?.type??null,level:found?.stats?.level??null,traits:found?.traits??null,keywords:found?.keywords??null};
     if(Object.values(traitChanges).some(list=>list.length))entry.traitChanges=traitChanges;
     if(Object.values(keywordChanges).some(list=>list.length))entry.keywordChanges=keywordChanges;
     board[$("placeSide").value][$("placeZone").value].push(entry);
