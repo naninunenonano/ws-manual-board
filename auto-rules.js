@@ -3,6 +3,8 @@
 // The sample deck exercises the rules without assigning abilities to real cards.
 const autoRuleScenario="rules";
 const autoRuleTitle="共通ルール・仮カード";
+const practiceScenario="practice-cards";
+const practiceTitle="仮カード5種・効果確認";
 const ruleStep=(handler,params)=>({handler,params});
 const rulePower=(amount)=>ruleStep("modifyPower",{selection:"@source",amount});
 const ruleSoul=(amount)=>ruleStep("modifySoul",{selection:"@source",amount});
@@ -31,13 +33,60 @@ const ruleSampleCards={
   "013":{name:"ソウル2つの仮CX",triggers:["ソウル","ソウル"],stats:{level:null,cost:0,power:null,soul:null}}
 };
 
-function isAutoRules(){return match?.bot?.scenario===autoRuleScenario}
+function salvageTrigger(name,cardType){
+  const waiting={side:"self",zone:"waiting"}, hand={side:"self",zone:"hand"};
+  return ruleEffect("salvage-"+cardType,name,"on_trigger",[
+    ruleStep("selectCards",{from:waiting,as:"salvage",count:1,min:0,cardType}),
+    ruleStep("move",{from:waiting,to:hand,selection:"salvage"})
+  ],{type:"trigger"});
+}
+const practiceClimax={
+  type:"climax",stats:{level:null,cost:0,power:null,soul:null},
+  effects:[ruleEffect("cx-1001","パワー＋1000・ソウル＋1","while_in_cx",[
+    ruleStep("continuousCxBuff",{side:"self",power:1000,soul:1})
+  ],{type:"continuous"})]
+};
+const practiceCards={
+  "101":{name:"仮キャラ 3000",stats:{level:0,cost:0,power:3000,soul:1}},
+  "102":{name:"仮キャラ 応援",stats:{level:0,cost:0,power:1000,soul:1},assist:{power:500}},
+  "103":{name:"仮キャラ 集中",stats:{level:0,cost:0,power:1500,soul:1},effects:[
+    ruleEffect("draw-brainstorm","集中（1ストック・自身レスト）","main",[],{
+      type:"activated",brainstorm:{stock:1,reveal:5}
+    })
+  ]},
+  "104":{...practiceClimax,name:"仮CX カムバック",triggers:["カムバック"],effects:[
+    ...practiceClimax.effects,salvageTrigger("カムバック","character")
+  ]},
+  "105":{...practiceClimax,name:"仮CX ゲート",triggers:["ゲート"],effects:[
+    ...practiceClimax.effects,salvageTrigger("ゲート","climax")
+  ]}
+};
+
+function isAutoRules(scenario=match?.bot?.scenario){return scenario===autoRuleScenario||scenario===practiceScenario}
+function practiceDeck(deck){
+  // Single specimens for the effect test. The player deck remains independent.
+  const replaced=new Set(["007","008","009","012","013"]);
+  return {title:"仮カード5種・効果確認",cards:[
+    ...deck.cards.map(card=>({...card,num:card.num-Number(replaced.has(card.id.slice(-3)))})),
+    ...Object.entries(practiceCards).map(([number,card])=>({id:"BOT/W000-"+number,num:1,cx:card.type==="climax"}))
+  ]};
+}
+function preparePracticeCards(board){
+  function put(number,to){
+    const index=board.deck.findIndex(card=>card.id.endsWith("-"+number));
+    botMove(board,"deck",index,to);
+  }
+  put("101","front0");put("102","back0");put("103","back1");put("009","front1");
+  put("008","waiting");put("012","waiting");
+  // Top five have two CXs. After drawing two, the next two checks are Comeback and Gate.
+  for(const number of ["105","104","008","009","007","012","007","013","007"])put(number,"deck");
+}
 function autoRuleDefinition(card){
   return {name:"仮キャラ",color:"green",type:card.cx?"climax":"character",
-    stats:{level:0,cost:0,power:2500,soul:1},traits:[],keywords:[],triggers:[],
-    ...ruleSampleCards[card.id.slice(-3)]};
+    stats:{level:0,cost:0,power:2500,soul:1},traits:[],keywords:[],triggers:[],allTags:true,
+    ...(practiceCards[card.id.slice(-3)]??ruleSampleCards[card.id.slice(-3)])};
 }
-function prepareAutoRuleBoards(boards){
+function prepareAutoRuleBoards(boards,scenario){
   function put(p,number,to,count=1){
     const board=boards[p];
     for(let i=0;i<count;i++)botMove(board,"deck",board.deck.findIndex(c=>c.id.endsWith("-"+number)),to);
@@ -46,12 +95,16 @@ function prepareAutoRuleBoards(boards){
     put(p,"001","level");put(p,"006","stock",3);
     put(p,"004","hand");put(p,"003","hand");put(p,"005","deck");
   }
-  put(0,"002","hand",2);put(0,"012","hand");put(0,"001","front0");
+  if(scenario===practiceScenario)preparePracticeCards(boards[0]);
+  else{
+    put(0,"002","hand",2);put(0,"012","hand");put(0,"001","front0");
+    // CX placement draws the top card; the next card is a soul trigger.
+    put(0,"001","deck");
+  }
   put(1,"003","front1");put(1,"001","front0");
-  // CX placement draws the top card; the next card is a soul trigger.
-  put(0,"001","deck");
   for(const p of [0,1]){
-    const board=boards[p],head=board.deck.splice(p===0?-2:-1);
+    const board=boards[p];
+    const head=board.deck.splice(-(p===1?1:scenario===practiceScenario?9:2));
     const rest=board.deck.filter(c=>c.cx);
     board.deck=board.deck.filter(c=>!c.cx);
     rest.forEach((card,i)=>board.deck.splice(3+i*5,0,card));
@@ -76,8 +129,16 @@ function autoRuleAddTurnStat(card,stat,amount){
   card[bonus]=(card[bonus]??0)+amount;
 }
 function autoRuleBuff(p,card){
-  const board=botEffectBoard(p);
+  const live=players[p];
+  const front=[live.front0,live.front1,live.front2].findIndex(zone=>zone.some(c=>c.uid===card.uid));
   const totals={power:0,soul:0};
+  for(const [i,slot] of ["back0","back1"].entries()){
+    if(front!==i&&front!==i+1)continue;
+    const source=live[slot].at(-1);
+    if(source?.faceUp)totals.power+=botDefinition(source)?.assist?.power??0;
+  }
+  if(!live.cx.length)return totals;
+  const board=botEffectBoard(p);
   for(const cx of players[p].cx){
     for(const effect of botDefinition(cx)?.effects??[]){
       if(effect.type!=="continuous"||effect.timing!=="while_in_cx")continue;
@@ -302,4 +363,47 @@ function autoRuleBotStep(){
       finishEndTurn();
       break;
   }
+}
+
+function activateBrainstorm(p,source,{stock,reveal}){
+  const board=players[p];
+  if(ruleBusy||p!==match.turn.player||match.turn.phase!=="main"||
+    !botSlots.some(slot=>board[slot].some(card=>card.uid===source.uid)))return;
+  if(!source.faceUp||source.orientation!==0||board.stock.length<stock){
+    const reason=source.orientation!==0?"自身がスタンドしていません":"ストックが不足しています";
+    autoRuleLog("集中を使えません："+reason);
+    updateBoard();
+    return;
+  }
+  selected=null;
+  runRuleOperation(done=>{
+    autoRulePay(p,stock);
+    source.orientation=90;
+    const revealed=[];
+    function finishDraw(n){
+      if(!n){done();return}
+      botRevealTop(p,card=>{card.faceUp=true;board.hand.push(card)},found=>{
+        if(found)finishDraw(n-1);else done();
+      });
+    }
+    function confirm(){
+      const max=revealed.filter(card=>card.cx===true).length;
+      for(const card of revealed){card.faceUp=true;board.waiting.push(card)}
+      autoRuleLog("集中で"+revealed.length+"枚、CXが"+max+"枚（"+revealed.map(card=>botCardInfo(card).name).join("、")+"）");
+      resolveBoardRules(p,()=>{
+        if(!max){done();return}
+        const body=showResolution("集中・引く枚数を選ぶ（最大"+max+"枚）",revealed);
+        for(let n=0;n<=max;n++)deckButton(body,n===0?"引かない":n+"枚引く",()=>{
+          closeResolution();
+          autoRuleLog(n===0?"集中では引かない":"集中で"+n+"枚ドロー");
+          finishDraw(n);
+        });
+      });
+    }
+    function flip(){
+      if(revealed.length===reveal){confirm();return}
+      botRevealTop(p,card=>revealed.push(card),found=>{if(found)flip();else confirm()});
+    }
+    flip();
+  });
 }

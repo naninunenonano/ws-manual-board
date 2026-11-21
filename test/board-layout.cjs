@@ -241,6 +241,7 @@ async function main() {
     console.log(JSON.stringify(geometry));
     await checkBot(browser,url);
     await checkAutoRules(browser,url);
+    await checkPracticeCards(browser,url);
   } finally {
     if(browser)await browser.close();
     server.close();
@@ -391,6 +392,43 @@ async function checkAutoRules(browser,url){
   await page.locator("#botStep").tap();
   assert.equal(await page.locator("#dialog").isVisible(),false);
   assert.equal(await page.evaluate(()=>match.turn.phase),"draw");
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
+  assert.deepEqual(errors,[]);
+  await page.close();
+}
+
+async function checkPracticeCards(browser,url){
+  const page=await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
+  const errors=[];
+  page.on("pageerror",error=>errors.push(error.message));
+  await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
+  await page.goto(url);
+  const button=name=>page.getByRole("button",{name,exact:true});
+  const zone=name=>page.locator('#boards .zone[data-p="0"][data-z="'+name+'"]');
+  const tapZone=name=>zone(name).tap({position:{x:14,y:10}});
+  await page.locator("#botSetup summary").tap();
+  await page.locator("#botScenario").selectOption("practice-cards");
+  await page.locator("#startBotBattle").tap();
+  assert.equal(await zone("front0").locator(".bot-power").innerText(),"3500");
+  await tapZone("back1");
+  await button("集中（1ストック・自身レスト）").tap();
+  assert.match(await page.locator("#dialogTitle").innerText(),/最大2枚/);
+  await button("2枚引く").tap();
+  assert.equal(await zone("back1").getAttribute("data-orientation"),"90");
+  await page.locator("#nextPhase").tap();
+  await page.locator("#nextPhase").tap();
+  await tapZone("front0");
+  await page.locator("#autoAttack").tap();
+  await button("ダイレクトアタック").tap();
+  await button("仮キャラ").first().tap();
+  await button("選択を確定").tap();
+  assert.equal(await page.evaluate(()=>players[0].stock.at(-1).id),"BOT/W000-104");
+  await tapZone("front1");
+  await page.locator("#autoAttack").tap();
+  await button("サイドアタック").tap();
+  await button("仮CX").first().tap();
+  await button("選択を確定").tap();
+  assert.equal(await page.evaluate(()=>players[0].stock.at(-1).id),"BOT/W000-105");
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
   assert.deepEqual(errors,[]);
   await page.close();
