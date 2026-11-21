@@ -396,6 +396,80 @@
           "implementationStatus": "implemented"
         }
       ]
+    },
+    {
+      "cardNumber": "STS/W140-031",
+      "variants": [
+        "STS/W140-031",
+        "STS/W140-031R"
+      ],
+      "name": "黎明告げる凱旋歌",
+      "reading": "レイメイツゲルガイセンカ",
+      "product": "ブースターパック ステラソラ",
+      "type": "climax",
+      "color": "緑",
+      "stats": {
+        "level": null,
+        "cost": null,
+        "power": null,
+        "soul": null
+      },
+      "triggers": [
+        "トレジャー"
+      ],
+      "traits": [],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "triumphal-song-continuous",
+          "category": "CX永続",
+          "type": "continuous",
+          "timing": "while_in_cx",
+          "optional": false,
+          "description": "CX置場にある間、自分のすべてのキャラにパワー＋1000、ソウル＋1。",
+          "sourceText": "【永】 あなたのキャラすべてに、パワーを＋1000し、ソウルを＋1。",
+          "conditions": [],
+          "costs": [],
+          "steps": [
+            {
+              "handler": "modifyPower",
+              "params": {
+                "selection": "ownStageCharacters",
+                "amount": 1000
+              }
+            },
+            {
+              "handler": "modifySoul",
+              "params": {
+                "selection": "ownStageCharacters",
+                "amount": 1
+              }
+            }
+          ],
+          "implementationStatus": "unimplemented"
+        },
+        {
+          "id": "triumphal-song-treasure",
+          "category": "トレジャー",
+          "type": "trigger",
+          "timing": "on_trigger",
+          "optional": false,
+          "description": "トリガーしたこのCXを手札に戻し、山札の上から1枚をストックに置いてよい。",
+          "sourceText": "（トレジャー：このカードがトリガーした時、あなたはこのカードを手札に戻す。あなたは自分の山札の上から1枚を、ストック置場に置いてよい）",
+          "conditions": [],
+          "costs": [],
+          "steps": [
+            {
+              "handler": "treasureTrigger",
+              "params": {
+                "side": "self",
+                "triggerUid": "@triggered"
+              }
+            }
+          ],
+          "implementationStatus": "unimplemented"
+        }
+      ]
     }
   ]
 }
