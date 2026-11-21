@@ -105,9 +105,11 @@ async function main() {
     await $(b,"onlineMulliganReconnect").click();
     await $(b,"confirmMulligan").click();
     await Promise.all([$(a,"battleScreen").waitFor(),$(b,"battleScreen").waitFor()]);
+    const characterInHand=async page=>page.locator("#boards .player.active .hand .card")
+      .nth(await page.evaluate(()=>players[side].hand.findIndex(card=>card.cx===false)));
     const me=a.locator("#boards .player.active .hand .card").first();
     const zone=a.locator('#boards .zone[data-p="0"][data-z="front0"]');
-    await me.click();
+    await (await characterInHand(a)).tap();
     await a.locator("#boards .card.selected").waitFor();
     dropHostReply=true;
     await zone.click();
@@ -174,7 +176,7 @@ async function main() {
     const attacker=attackerSeat===0?a:b, defender=attacker===a?b:a;
     const attackZone=page=>page.locator('#boards .zone[data-p="'+attackerSeat+'"][data-z="front0"]');
     if(attacker===b){
-      await b.locator("#boards .player.active .hand .card").first().tap();
+      await (await characterInHand(b)).tap();
       await b.locator("#boards .card.selected").waitFor();
       await attackZone(b).tap();
       await a.waitForFunction(()=>players[1].front0.length===1);
