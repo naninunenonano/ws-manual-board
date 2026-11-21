@@ -58,3 +58,49 @@ test("Reis console success, failure, turn limit and memory-marker condition",()=
  const memoryFull=structuredClone(b);memoryFull.self.memory.push(card("m1"),card("m2"));
  assert.equal(engine.run(e,memoryFull,{...choices,usedThisTurn:0}).status,"condition-not-met");
 });
+
+test("guided on-play choices use the draft after costs and abort leaves the original board intact",()=>{
+ const e=data.cards[0].effects[0], b=engine.emptyBoard();
+ const c=(uid,extra={})=>({uid,cardNumber:"TEST/S001-001",...extra});
+ b.self.stock.push(c("stock"));
+ b.self.waiting.push(c("cost",{type:"character",traits:["巡遊者"]}),c("other",{type:"event",traits:["魔王"]}));
+ b.self.deck.push(c("search",{type:"character",level:1}),c("miss",{type:"character",level:2}));
+ const guide=engine.guide(e,b);
+ assert.equal(guide.next().value.kind,"optional");
+ assert.equal(guide.next(true).value.kind,"cost");
+ assert.deepEqual(guide.next().value.candidates.map(c=>c.uid),["cost"]);
+ assert.equal(guide.next(["cost"]).value.kind,"cost");
+ const search=guide.next().value;
+ assert.equal(search.min,0);
+ assert.deepEqual(search.candidates.map(c=>c.uid),["search"]);
+ guide.return();
+ assert.deepEqual(b.self.stock.map(c=>c.uid),["stock"]);
+ assert.deepEqual(b.self.waiting.map(c=>c.uid),["cost","other"]);
+ const noSearch=engine.guide(e,b);
+ noSearch.next();noSearch.next(true);noSearch.next();noSearch.next(["cost"]);noSearch.next();
+ const finished=noSearch.next([]).value;
+ assert.equal(finished.status,"success");
+ assert.equal(finished.state.self.hand.length,0);
+ assert.equal(finished.state.self.clock[0].uid,"cost");
+});
+
+test("guided console skips its source, reports returning a miss, and handles more than one top card",()=>{
+ const e=data.cards[0].effects[1],b=engine.emptyBoard();
+ const c=(uid,extra={})=>({uid,cardNumber:"TEST/S001-001",type:"character",level:0,...extra});
+ b.self.stage.push(c("source",{keywords:["回想"]}),c("dest",{keywords:["回想"]}));
+ b.self.deck.push(c("miss",{level:2}));
+ const guide=engine.guide(e,b,{sourceUid:"source"});
+ assert.deepEqual(guide.next().value.candidates.map(c=>c.uid),["dest"]);
+ assert.equal(guide.next(["dest"]).value.kind,"cost");
+ const reveal=guide.next().value;
+ assert.equal(reveal.kind,"reveal");
+ assert.deepEqual(reveal.returned,["miss"]);
+ assert.equal(guide.next().value.status,"success");
+ b.self.deck=[c("bottom"),c("miss1",{level:1}),c("hit"),c("miss2",{type:"event"})];
+ const multi={optional:false,steps:[{handler:"consoleTop",params:{side:"self",cardType:"character",maxLevel:0,count:3,to:{side:"self",zone:"waiting"},returnPosition:"bottom"}}]};
+ const actual=engine.run(multi,b);
+ assert.equal(actual.status,"success");
+ assert.deepEqual(actual.log[0].revealed,["miss2","hit","miss1"]);
+ assert.deepEqual(actual.state.self.deck.map(c=>c.uid),["miss1","miss2","bottom"]);
+ assert.deepEqual(actual.state.self.waiting.map(c=>c.uid),["hit"]);
+});

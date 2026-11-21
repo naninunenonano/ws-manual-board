@@ -157,7 +157,7 @@ const WSEffects = (() => {
       if (!Array.isArray(picks) || picks.length>(p.count) || picks.length<(p.min??p.count) || new Set(picks).size!==picks.length
           || !picks.every(id=>available.has(id))) fail("選択「"+p.as+"」の枚数・対象を確認してください","needs-choice");
       for(const uid of picks){
-        if(!matching(available.get(uid),{...p,excludeUid:p.excludeUid==="@source"?ctx.choices.sourceUid:p.excludeUid}))fail("選択「"+p.as+"」はカード条件に合いません","needs-choice");
+        if(!matching(available.get(uid),{...p,excludeUid:p.excludeUid==="@source"||p.excludeSource?ctx.choices.sourceUid:p.excludeUid}))fail("選択「"+p.as+"」はカード条件に合いません","needs-choice");
       }
       for(const uid of picks)for(const kind of ["traits","keywords"]){
         if(p[kind]&&!checkTags(available.get(uid),kind,p[kind]))fail("選択「"+p.as+"」は"+tagFields[kind][2]+"の条件に合いません","needs-choice");
@@ -183,12 +183,23 @@ const WSEffects = (() => {
   operation("consoleTop","コンソール系公開判定",p=>knownKey(sides,p.side)
     && (p.cardType===undefined||["character","event","climax"].includes(p.cardType))
     && (p.maxLevel===undefined||integer(p.maxLevel))
-    && (p.traits===undefined||validFilter(p.traits)),
-    p=>"山札上を公開し条件一致なら手札へ、違えば山札上に戻す",
-    (ctx,p)=>{const deck=pile(ctx,{side:p.side,zone:"deck"});if(!deck.length)fail("山札がありません");
-      const top=deck[deck.length-1];ctx.revealed=top.uid;
-      if(matching(top,p)){deck.pop();pile(ctx,{side:p.side,zone:"hand"}).push(top);return [top.uid];}
-      return [];},["side","cardType","maxLevel","traits"]);
+    && (p.traits===undefined||validFilter(p.traits))
+    && (p.count===undefined||count(p.count)&&p.count>0)
+    && (p.to===undefined||ref(p.to)&&!(p.to.side===p.side&&p.to.zone==="deck"))
+    && (p.returnPosition===undefined||end(p.returnPosition)),
+    p=>sides[p.side]+"の山札上"+(p.count??1)+"枚を公開し、条件一致なら"+
+      zoneLabel(p.to??{side:p.side,zone:"hand"})+"へ、違えば山札の"+(p.returnPosition==="bottom"?"下":"上")+"に戻す",
+    (ctx,p)=>{
+      const deck=pile(ctx,{side:p.side,zone:"deck"}),amount=p.count??1;
+      if(deck.length<amount)fail(sides[p.side]+"の山札が"+amount+"枚必要です");
+      const revealed=deck.slice(-amount).reverse(),moved=[],returned=[];
+      for(const card of revealed)(matching(card,p)?moved:returned).push(card);
+      deck.splice(-amount);
+      pile(ctx,p.to??{side:p.side,zone:"hand"}).push(...moved);
+      if(p.returnPosition==="bottom")deck.unshift(...returned.slice().reverse());
+      else deck.push(...returned.slice().reverse());
+      return {cards:moved.map(card=>card.uid),revealed:revealed.map(card=>card.uid),returned:returned.map(card=>card.uid)};
+    },["side","cardType","maxLevel","traits","count","to","returnPosition"]);
   operation("revealSelection","選択カード公開",p=>word(p.selection),
     p=>"選択カードを公開", (ctx,p)=>{const ids=ctx.selections.get(p.selection);
       if(!ids)fail("選択がありません");return [...ids];},["selection"]);
@@ -280,7 +291,19 @@ const WSEffects = (() => {
     return {issues,entries};
   }
 
-  function run(effect, board, choices = {}) {
+  function selectionRequest(context,entry) {
+    const {handler,params}=entry.step;
+    if(handler!=="selectCards"&&handler!=="searchDeck")return null;
+    const from=params.from??{side:params.side,zone:"deck"};
+    const filter={...params,excludeUid:params.excludeUid==="@source"||params.excludeSource?context.choices.sourceUid:params.excludeUid};
+    const candidates=pile(context,from).filter(card=>{
+      try{return matching(card,filter)}catch(error){if(error.status==="unconfirmed")return false;throw error}
+    });
+    return {kind:"select",label:zoneLabel(from),from,candidates,min:handler==="searchDeck"?0:params.min??params.count,
+      max:params.max??params.count,phase:entry.phase};
+  }
+
+  function* execute(effect, board, choices, guided) {
     const log=[];
     let working, at=null;
     const result=(status,message="")=>({status,state:working??null,log,message});
@@ -299,17 +322,41 @@ const WSEffects = (() => {
         if (entry.phase!=="conditions") break;
         const met=entry.implementation.run(context,entry.step.params);
         log.push({phase:entry.phase,handler:entry.step.handler,ok:met});
-        if (!met) return result("condition-not-met","発動条件を満たしていません");
+        if (!met) return result("condition-not-met",guided?entry.implementation.describe(entry.step.params)+"の条件を満たしていません":"発動条件を満たしていません");
       }
       at=null;
       if (effect.optional) {
+        if(guided)choices.activate=yield {kind:"optional"};
         if (typeof choices.activate!=="boolean") return result("needs-choice","効果を実行するか選んでください");
         if (!choices.activate) return result("skipped","任意効果を実行しませんでした");
       }
       for (const entry of entries.filter(entry=>entry.phase!=="conditions")) {
         at=entry;
-        const cards=entry.implementation.run(context,entry.step.params);
-        log.push({phase:entry.phase,handler:entry.step.handler,ok:true,cards});
+        const {handler,params}=entry.step;
+        if(guided){
+          const request=selectionRequest(context,entry);
+          if(request){
+            if(request.candidates.length<request.min)
+              fail(request.label+"に条件を満たすカードが"+request.min+"枚必要です","condition-not-met");
+            const picks=yield request;
+            if(!Array.isArray(picks)||!picks.every(uid=>request.candidates.some(card=>card.uid===uid)))
+              fail("有効なカードを選んでください","needs-choice");
+            Object.defineProperty(choices,params.as,{value:picks,configurable:true,writable:true,enumerable:true});
+          }else if(entry.phase==="costs"){
+            if(handler==="payStock"&&pile(context,{side:params.side,zone:"stock"}).length<params.count)
+              fail(entry.implementation.describe(params)+"ための枚数が足りません","condition-not-met");
+            yield {kind:"cost",text:entry.implementation.describe(params)};
+          }
+        }
+        const outcome=entry.implementation.run(context,params);
+        const details=Array.isArray(outcome)?{cards:outcome}:outcome;
+        if(handler==="revealTop"||handler==="revealSelection")details.revealed=details.cards;
+        log.push({phase:entry.phase,handler,ok:true,...details});
+        if(guided&&details.revealed?.length){
+          const cards=cardsIn(working);
+          yield {kind:"reveal",cards:details.revealed.map(uid=>cards.find(entry=>entry.card.uid===uid)?.card).filter(Boolean),
+            returned:details.returned??[]};
+        }
       }
       if(effect.limit?.perTurn){choices.usedThisTurn=(choices.usedThisTurn??0)+1;log.push({phase:"limit",handler:"perTurn",ok:true,usedThisTurn:choices.usedThisTurn});}
       return result("success");
@@ -317,6 +364,14 @@ const WSEffects = (() => {
       if (at)log.push({phase:at.phase,handler:at.step.handler,ok:false,message:error.message});
       return result(error.status??"failed",error.message);
     }
+  }
+
+  function run(effect,board,choices={}) {
+    return execute(effect,board,choices,false).next().value;
+  }
+
+  function guide(effect,board,choices={}) {
+    return execute(effect,board,{...choices},true);
   }
 
   function equal(a,b) {
@@ -331,7 +386,7 @@ const WSEffects = (() => {
     return actual.status===expected?.status && equal(actual.state,expected.state);
   }
 
-  return {zones,sides,emptyBoard,validateBoard,cardsIn,effectiveTags,matchTags,inspect,run,compare,
+  return {zones,sides,emptyBoard,validateBoard,cardsIn,effectiveTags,matchTags,inspect,run,guide,compare,
     describe:(entry)=>entry.implementation?.valid(entry.step.params)
       ? entry.implementation.describe(entry.step.params):String(entry.step?.handler??"未確認"),
     handlers:()=>[...operations,...conditions].map(([id,entry])=>({id,label:entry.label}))};

@@ -1,0 +1,18 @@
+.lab-form, .lab-choices { display: grid; gap: .65rem; }
+.lab-form { margin-top: .6rem; }
+.lab-form fieldset { min-width: 0; border: 1px solid #5a7493; border-radius: .45rem; }
+.lab-boards, .lab-cards { display: grid; gap: .5rem; }
+.lab-boards { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.lab-cards { grid-template-columns: repeat(auto-fit,minmax(min(100%,9rem),1fr)); margin-block: .4rem; }
+.lab-boards .lab-cards { grid-template-columns: 1fr; }
+.lab-boards details { border-top: 1px solid #465c78; padding-block: .3rem; }
+.lab-boards summary { min-height: 2.75rem; padding-block: .55rem; }
+.lab-card { text-align: start; overflow-wrap: anywhere; display: grid; gap: .15rem; }
+.lab-card[aria-pressed="true"] { border-color: #f6d47f; background: #51442d; }
+.lab-card small { color: #d7e3f3; }
+.lab-choices .lab-card { border-color: #ade0ff; }
+.lab-choices .lab-card[aria-pressed="true"] { border-color: #f6d47f; }
+#effectText { margin-inline: 0; padding-inline-start: .75rem; border-inline-start: 3px solid #5a7493; }
+#effectChoices > :not(:first-child), #resultChanges > :not(:first-child) { margin-top: .5rem; }
+#turnUsed, #operationDescription, #resultChanges { overflow-wrap: anywhere; }
+@media (max-width: 28rem) { .lab-boards .effect { padding: .5rem; } .lab-boards button { font-size: .875rem; } }
