@@ -483,7 +483,11 @@ function openActions(p,z){
    if(mode==="flip"||mode==="inspect"||mode==="reveal"){d.close();openDeckTemporary(p,mode,mode==="reveal"?1:n,direction.value==="bottom");return}
    d.close();
    if(mode==="draw")pullDeck(p,n,"hand");
-   if(mode==="move")pullDeck(p,n,dest.value,true,direction.value==="bottom");
+   if(mode==="move"){
+     const to=dest.value;
+     if(["front0","front1","front2","back0","back1","cx"].includes(to)&&n>1){message("この移動先は1枚ずつ指定してください");return}
+     pullDeck(p,n,to,true,direction.value==="bottom");
+   }
    if(mode==="brainstorm"){
      const revealed=[];
      pullDeck(p,n,"waiting",true,false,()=>{
