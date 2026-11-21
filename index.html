@@ -260,6 +260,7 @@ function playClimaxFromHand(p,index){
 function cardClick(p,z,index){
  if(p!==side)return;
  selected={p,z,index};render();renderTurnControls();
+ if(z==="hand"&&!canPlayClimax(p,z,index)){manualDestination(p,z,index);return}
  if(canPlayClimax(p,z,index)){
    const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
    d.classList.remove("zoom-mode");body.replaceChildren();
@@ -269,7 +270,7 @@ function cardClick(p,z,index){
    }else{
      deckButton(body,"クライマックス置場に置く",()=>{d.close();playClimaxFromHand(p,index)});
    }
-   deckButton(body,"移動先を手動で選ぶ",()=>{d.close();message("移動先のゾーンをタップしてください")});
+   deckButton(body,"移動先を手動で選ぶ",()=>{d.close();manualDestination(p,z,index)});
    d.showModal();return;
  }
  message(labels[z]+"のカードを選択しました。移動先をタップしてください");
