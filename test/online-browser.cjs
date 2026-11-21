@@ -30,7 +30,8 @@ async function main() {
     return result;
   }
   const asset=new Map([["/","index.html"],["/cloud-decks.js","cloud-decks.js"],["/decklog-import.js","decklog-import.js"],
-    ["/card-images.js","card-images.js"],["/online-match.js","online-match.js"],["/board-layout.css","board-layout.css"],["/match-state.js","match-state.js"]]);
+    ["/card-images.js","card-images.js"],["/online-match.js","online-match.js"],["/board-layout.css","board-layout.css"],["/match-state.js","match-state.js"],
+    ...["bot-match.js","card-catalog.js","effects/engine.js","card-data/load.js","card-data/catalog.json"].map(file=>["/"+file,file])]);
   const server=http.createServer((req,res)=>{
     const url=new URL(req.url,"http://localhost");
     const field=asset.get(url.pathname);
@@ -107,6 +108,8 @@ async function main() {
     await $(b,"onlineMulliganReconnect").click();
     await $(b,"confirmMulligan").click();
     await Promise.all([$(a,"battleScreen").waitFor(),$(b,"battleScreen").waitFor()]);
+    assert.equal(await $(a,"battleSide").isDisabled(),true);
+    assert.equal(await $(b,"battleSide").isDisabled(),true);
     const characterInHand=async page=>page.locator("#boards .player.active .hand .card")
       .nth(await page.evaluate(()=>players[side].hand.findIndex(card=>card.cx===false)));
     const me=a.locator("#boards .player.active .hand .card").first();

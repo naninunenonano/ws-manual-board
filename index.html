@@ -15,7 +15,8 @@
 #battleScreen .screen-actions,#battleScreen .toolbar,#battleScreen .controls{margin:4px 0;gap:4px}
 #battleScreen .screen-actions button,#battleScreen .toolbar button,#battleScreen .controls button,#battleScreen .toolbar select{font-size:11px;padding:5px 6px}
 #battleScreen .notice{min-height:0;margin:3px 0;font-size:11px}
-</style></head><body><header><h1>WS 手動盤面 <small>Ver.0.52</small></h1><a href="card-registration.html" style="color:#ade0ff">カード情報・効果登録</a></header>
+</style><style>.bot-power{position:absolute;z-index:4;top:2px;left:2px;padding:2px 4px;border-radius:4px;background:#091426;color:white;font-size:.68rem;pointer-events:none}</style>
+</head><body><header><h1>WS 手動盤面 <small>Ver.0.52</small></h1><a href="card-registration.html" style="color:#ade0ff">カード情報・効果登録</a></header>
 <main class="shell"><p id="storageWarning" role="status" hidden></p><section id="setupScreen"><h2>デッキ設定</h2><p class="muted">登録済みのデッキから、各プレイヤーが使うデッキを選択してください。同じデッキも使用できます。</p><div class="toolbar"><label>設定するプレイヤー <select id="side"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label></div><section class="player" id="importer"><h2>使用するデッキ</h2><div class="toolbar"><label>このプレイヤーが使うデッキ <select id="savedDeckSelect"></select></label><button id="loadSavedDeck">選択デッキを確認</button><button id="clearSavedDeck">選択デッキを削除</button></div><p class="muted" id="savedDeckStatus">保存デッキ：未確認</p>
 <p id="cloudDeckStatus" role="status">端末内保存を利用できます</p>
 <details id="cloudDeckControls"><summary>デッキのクラウド保存</summary>
@@ -24,6 +25,15 @@
 <div id="cloudDeckConflicts"></div>
 </details>
 <div class="toolbar"><button type="button" id="toggleDeckRegistration">新しいデッキを登録</button><label>デッキコード <input id="deckCode" value="" maxlength="12" placeholder="合言葉" style="width:125px;padding:9px"></label><button type="button" id="openDeckLog">Deck Logを開く</button></div><div id="registrationPanel" hidden><h3 id="deckRegistrationTitle">新規デッキ登録</h3><div class="toolbar"><button id="applyDeck" disabled>新しいデッキとして保存</button></div><div id="deckTransferStatus" role="status"></div><p class="muted">SafariでDeck Logのデッキページを開き、共有メニューの「WSデッキ転送」を実行してください。受信後、内容を確認して共通のデッキ一覧に保存できます。</p><details><summary>初回設定：Deck Log転送用ブックマークレット</summary><p class="muted">「転送コードをコピー」→Safariで任意のページをブックマーク→ブックマークを編集しURL欄を貼り付けたコードに置換。以後はDeck Logのデッキページでそのブックマークを押します。</p><button id="copyDeckTransfer">転送コードをコピー</button><textarea id="transferCode" readonly rows="3" style="width:100%;background:#101827;color:white" aria-label="転送用ブックマークレット"></textarea></details><details open><summary>カード番号と枚数を貼り付け（手動登録）</summary><p class="muted">1行に1種類。例：FRI/S100-001 × 4 または FRI/S100-001,4。合計50枚になるよう入力してください。</p><textarea id="deckText" rows="6" style="width:100%;background:#101827;color:white" placeholder="FRI/S100-001 × 4"></textarea><button id="parseDeckText">テキストから50枚を確認</button></details><details><summary>JSON貼り付け（従来方式）</summary><textarea id="deckJson" rows="4" style="width:100%;background:#101827;color:white" placeholder='{"list":[{"card_number":"...","num":4}]}'></textarea><button id="parseDeck">JSONを解析</button></details><div id="deckPreview" class="muted" aria-live="polite"></div></div></section><div class="screen-actions"><button id="startBattle">対戦開始</button></div>
+<details id="botSetup"><summary>Bot戦・確認パターン</summary>
+<div class="toolbar"><label>パターン <select id="botScenario">
+<option value="opening">通常の初手から</option>
+<option value="open">空いた正面でダイレクト確認</option>
+<option value="front">正面にキャラを置いて確認</option>
+<option value="firen">フィレン・凱旋歌を確認</option>
+</select></label><button id="startBotBattle" type="button">Bot戦を開始</button></div>
+<p class="muted">自分はプレイヤー1の登録デッキを使います。フィレンのパターンはデッキ内のカードを配置して開始します。</p>
+</details>
 <details id="onlineControls"><summary>オンライン対戦</summary>
 <p id="onlineStatus" role="status"></p>
 <div class="toolbar"><button id="onlineCreate" type="button">ルーム作成</button><button id="onlineReconnect" type="button">再接続</button></div>
@@ -40,7 +50,9 @@
 <div id="onlinePublicReveals" aria-live="polite" hidden></div>
 <p id="onlineDeckRequestStatus" role="status"></p>
 <div class="toolbar"><button id="onlineAcceptDeck" type="button" hidden>指定枚数を公開して操作</button><button id="onlineAnswerDeck" type="button" hidden>依頼を閉じる</button></div>
-</section><div class="toolbar"><button id="autoAttack" type="button" hidden>自動アタック</button><button id="attackExchange" type="button" hidden></button><span id="attackExchangeStatus" role="status"></span></div><div id="encorePanel" hidden><p id="encoreStatus" role="status"></p><div class="toolbar"><button id="encoreAction" type="button" hidden></button></div></div><div id="boards"></div><div id="playerActions" style="margin:8px 0"><div id="turnControls" style="border:1px solid #6581a5;border-radius:9px;padding:9px;margin:8px 0"><strong id="turnStatus"></strong><div class="toolbar"><button id="clockAction" hidden>選択した手札をクロックに置いて2枚ドロー</button><button id="clockSkip" hidden>クロックせずメインへ</button><button id="drawReminderResume" hidden>ドロー前確認に戻る</button><button id="nextPhase">次のフェイズへ</button></div></div><div class="toolbar"><label>操作する側 <select id="battleSide"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label><button id="viewDecks">自分のデッキ確認</button><button id="shuffle">山札シャッフル</button></div></div><p class="muted">カード画像は縦横比を維持して表示します。手札の🔍、盤面や一覧の「拡大」で公式画像を大きく確認できます。カード能力は手動で処理します。レベルアップはクロック下から7枚を対象とします。</p></section><section id="resultScreen" hidden><h2>対戦終了</h2><p id="battleResult" role="status"></p><button id="nextBattle">次の対戦へ</button></section></main>
+</section><div class="toolbar"><button id="autoAttack" type="button" hidden>自動アタック</button><button id="attackExchange" type="button" hidden></button><span id="attackExchangeStatus" role="status"></span></div><div id="encorePanel" hidden><p id="encoreStatus" role="status"></p><div class="toolbar"><button id="encoreAction" type="button" hidden></button></div></div><div id="botControls" class="toolbar" hidden><strong id="botModeName"></strong>
+<button id="botStep" type="button">Botの行動を進める</button><button id="botAbility" type="button" hidden>起動能力</button>
+<span id="botStatus" role="status"></span></div><div id="boards"></div><div id="playerActions" style="margin:8px 0"><div id="turnControls" style="border:1px solid #6581a5;border-radius:9px;padding:9px;margin:8px 0"><strong id="turnStatus"></strong><div class="toolbar"><button id="clockAction" hidden>選択した手札をクロックに置いて2枚ドロー</button><button id="clockSkip" hidden>クロックせずメインへ</button><button id="drawReminderResume" hidden>ドロー前確認に戻る</button><button id="nextPhase">次のフェイズへ</button></div></div><div class="toolbar"><label>操作する側 <select id="battleSide"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label><button id="viewDecks">自分のデッキ確認</button><button id="shuffle">山札シャッフル</button></div></div><p class="muted">カード画像は縦横比を維持して表示します。手札の🔍、盤面や一覧の「拡大」で公式画像を大きく確認できます。カード能力は手動で処理します。レベルアップはクロック下から7枚を対象とします。</p></section><section id="resultScreen" hidden><h2>対戦終了</h2><p id="battleResult" role="status"></p><button id="nextBattle">次の対戦へ</button></section></main>
 <dialog id="dialog"><h3 id="dialogTitle"></h3><div id="dialogBody"></div><div class="controls"><button id="close">閉じる</button></div></dialog>
 <script src="card-images.js?v=1"></script>
 <script>
@@ -49,6 +61,7 @@ const cardCatalog = Object.freeze({
   "SFN/S128-003": {name:"旅立ちのきっかけ ヒンメル",level:3,cost:2,power:9500,type:"キャラ",rarity:"RR"}
 });
 function addCardImage(parent,card,alt){
+  if(match?.bot&&card.id.startsWith("BOT/"))return false;
   const url=officialImageUrl(card.id);
   if(!url)return false;
   const img=document.createElement("img");img.src=url;img.alt=alt||card.id;img.loading="lazy";img.draggable=false;
@@ -56,7 +69,7 @@ function addCardImage(parent,card,alt){
   img.onerror=()=>{img.remove();if(!parent.textContent.trim())parent.textContent=cardLabel(card)};
   parent.append(img);return true;
 }
-function cardInfo(card){return cardCatalog[card.id]||null}
+function cardInfo(card){return match?.bot?botCardInfo(card):cardCatalog[card.id]||null}
 function cardLabel(card){const m=cardInfo(card);return m?m.name+" / Lv"+(m.level??"不明"):card.id+" / Lv不明"}
 function showCardDetail(card){
   const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
@@ -88,6 +101,7 @@ function message(text){
 }
 function updateBoard(){
   if (!ruleBusy) saveMatchProgress();
+  if(match?.bot&&!ruleBusy&&botCheckEnd())return;
   render();
   if(typeof renderTurnControls==="function" && isMatchActive())renderTurnControls();
   checkMandatoryLevel();
@@ -110,6 +124,7 @@ function releaseMarkers(p,card){
 }
 function manualTransfer(p,from,index,to,position="top"){
  const a=players[p][from],card=a?.[index];if(!card||!stageAvailable(p,to))return false;
+ const dispatch=match?.bot&&p===0&&from==="hand"&&isStageZone(to)&&!ruleBusy;
  a.splice(index,1);card.faceUp=!["deck","stock"].includes(to);
  if(isStageZone(from)&&!isStageZone(to)){
    card.orientation=0;
@@ -118,6 +133,7 @@ function manualTransfer(p,from,index,to,position="top"){
  if(["deck","stock"].includes(to)&&position==="bottom")players[p][to].unshift(card);
  else players[p][to].push(card);
  selected=null;updateBoard();
+ if(dispatch)runRuleOperation(done=>botDispatch(card,"from_hand_to_stage",done));
  if(pendingMarkerChoices.length&&!document.getElementById("dialog").open)showPendingMarkerChoices();
  return true;
 }
@@ -298,7 +314,16 @@ function renderZone(p, z, cards) {
   el.className = "zone" + (stage ? " stage" : "") + (cards.length ? " has-card" : "");
   el.dataset.p = p;
   el.dataset.z = z;
-  if (stage && cards.length) el.dataset.orientation = String(cards.at(-1).orientation);
+  if (stage && cards.length){
+    el.dataset.orientation = String(cards.at(-1).orientation);
+    if(match?.bot){
+      const stats=botStats(p,cards.at(-1));
+      if(stats.power!=null){
+        const badge=document.createElement("span");badge.className="bot-power";badge.textContent=String(stats.power);
+        badge.setAttribute("aria-label","パワー "+stats.power);el.append(badge);
+      }
+    }
+  }
   el.setAttribute("aria-label", labels[z] + " " + cards.length + "枚");
   if (cards.length) {
     if (z === "clock" || z === "level") appendZoneFan(el, cards, z, p);
@@ -315,7 +340,7 @@ function renderZone(p, z, cards) {
   }
   if (selected?.p === p && selected.z === z) el.classList.add("selected");
   if(stage||z==="waiting"||z==="memory"){
-    bindCardTaps(el,()=>zoneClick(p,z),()=>{if(cards.length){if(p===side)openList(p,z);else if(match?.online)openOnlinePublicList(p,z)}});
+    bindCardTaps(el,()=>zoneClick(p,z),()=>{if(cards.length){if(p===side)openList(p,z);else if(match?.online||match?.bot)openOnlinePublicList(p,z)}});
   }else el.onclick=()=>zoneClick(p,z);
   let actionContainer = el;
   if (z === "clock" && p === side && cards.length) {
@@ -405,7 +430,7 @@ function cardClick(p,z,index){
  }
  message(labels[z]+"のカードを選択しました。移動先をタップしてください");
 }
-function zoneClick(p,z){if(p!==side){if(match?.online)openOnlinePublicList(p,z);else message("相手のカードは操作できません");return}if(selected&&selected.p===p&&selected.z!==z){if(z==="deck"||z==="stock"){manualDestination(p,selected.z,selected.index);return}move(p,selected.z,selected.index,z);return}if(selected&&selected.p===p&&selected.z===z){selected=null;render();renderTurnControls();if(z==="waiting"||z==="memory")openList(p,z);return}const a=players[p][z];if(!a.length&&z!=="deck"){message(labels[z]+"は空です");return}if(z==="deck"){openActions(p,z);return}if(z==="stock"){openActions(p,z);return}if((isStageZone(z)||z==="waiting"||z==="memory")&&a.length){selected={p,z,index:a.length-1};render();renderTurnControls();message("カードを選択しました。移動先をタップ、またはダブルタップで一覧を開けます");return}openList(p,z)}
+function zoneClick(p,z){if(p!==side){if(match?.online||match?.bot)openOnlinePublicList(p,z);else message("相手のカードは操作できません");return}if(selected&&selected.p===p&&selected.z!==z){if(z==="deck"||z==="stock"){manualDestination(p,selected.z,selected.index);return}move(p,selected.z,selected.index,z);return}if(selected&&selected.p===p&&selected.z===z){selected=null;render();renderTurnControls();if(z==="waiting"||z==="memory")openList(p,z);return}const a=players[p][z];if(!a.length&&z!=="deck"){message(labels[z]+"は空です");return}if(z==="deck"){openActions(p,z);return}if(z==="stock"){openActions(p,z);return}if((isStageZone(z)||z==="waiting"||z==="memory")&&a.length){selected={p,z,index:a.length-1};render();renderTurnControls();message("カードを選択しました。移動先をタップ、またはダブルタップで一覧を開けます");return}openList(p,z)}
 
 // Deck commands: deck top is the final array element. Revealed/inspected cards stay
 // outside the waiting room until their destination is confirmed.
@@ -450,7 +475,8 @@ function resolveBoardRules(p,done){
      resolveBoardRules(p,done);
    });
  }
- if(canRefresh() && needsLevel()){
+ if(canRefresh() && needsLevel() && match?.bot&&p===1){refresh();
+ }else if(canRefresh() && needsLevel()){
    openRuleOrderChoice(
      refresh,
      ()=>openMandatoryLevel(p,refresh)
@@ -603,7 +629,7 @@ function closeResolution(){
 function canAutoAttack(p,z,card){
  return isMatchActive() && !ruleBusy && !match.attackExchange && (!match.online||onlineMatch.interactive()) &&
    match.turn?.phase==="attack" && match.turn.player===p && p===side &&
-   isStageZone(z) && card?.faceUp===true && card.cx!==true && card.orientation===0;
+   isStageZone(z) && (!match.bot||z.startsWith("front")) && card?.faceUp===true && card.cx!==true && card.orientation===0;
 }
 
 function startAutoAttack(p,z,index){
@@ -613,6 +639,7 @@ function startAutoAttack(p,z,index){
    message("トリガーチェックに使える山札や控え室がありません");
    return;
  }
+ if(match.bot){botHumanAttack(p,z,index);return}
  const pending=[];
  runRuleOperation(async done=>{
    const online=match.online;
@@ -973,6 +1000,11 @@ function openRuleOrderChoice(refreshFirst,levelFirst){
 function openMandatoryLevel(p,next){
  const board=players[p];
  if(!board || board.clock.length<7)return;
+ if(match?.bot&&p===1){
+   const [chosen,...waiting]=board.clock.splice(0,7);
+   board.level.push(chosen);board.waiting.push(...waiting);
+   next();return;
+ }
  setRuleModal(true);
  if(side!==p){
    side=p;
@@ -1091,7 +1123,8 @@ function endHandConfirmation(){
 }
 function finishEndTurn(){
  const t=match.turn;t.player=1-t.player;t.number++;t.phase="stand";
- if(!match.online)side=t.player;
+ if(match.bot)botEndTurn(1-t.player);
+ if(!match.online)side=match.bot?0:t.player;
  document.getElementById("battleSide").value=String(side);enterTurnPhase();
 }
 function enterTurnPhase(){
@@ -1112,7 +1145,7 @@ function setTurnPhase(next){
  enterTurnPhase();
 }
 function advanceTurn(){
- if(!isMatchActive()||ruleBusy||match.attackExchange||drawConfirmationPending||match.online&&match.turn.player!==side)return;
+ if(!isMatchActive()||ruleBusy||match.attackExchange||drawConfirmationPending||match.bot&&match.turn.player!==0||match.online&&match.turn.player!==side)return;
  ensureTurn();
  const t=match.turn;
  if(t.phase==="end"){
@@ -1180,7 +1213,7 @@ function encoreAction(action,data={},done=updateBoard){
        break;
      }
    }
-   side=match.encore?.actor??turn;
+   side=match.bot?0:match.encore?.actor??turn;
    document.getElementById("battleSide").value=String(side);
    selected=null;
  }
@@ -1188,7 +1221,7 @@ function encoreAction(action,data={},done=updateBoard){
 }
 
 function canOperateEncore(){
- return match?.turn?.phase==="encore" && !ruleBusy &&
+ return match?.turn?.phase==="encore" && !ruleBusy && (!match.bot||match.encore?.actor===0) &&
    (!match.online||match.encore?.actor===side&&onlineMatch.interactive());
 }
 
@@ -1206,7 +1239,7 @@ function renderEncore(){
  document.getElementById("encoreStatus").textContent=state.step==="complete"?titles.complete:
    role+"（プレイヤー"+(actor+1)+"） · "+titles[state.step]+
    (state.target?" · "+labels[state.target.zone]+(state.target.id?" "+state.target.id:""):"");
- if(match.online&&actor!==side||state.step==="complete")return;
+ if((match.online||match.bot)&&actor!==side||state.step==="complete")return;
  const candidates=encoreCandidates(actor);
  const picked=candidates.some(({zone,index})=>selected?.p===actor && selected.z===zone && selected.index===index);
  const actions={start:"開始時の効果を確認完了",choose:picked?"選択したキャラをアンコール処理":
@@ -1377,7 +1410,8 @@ function renderTurnControls(){
  document.getElementById("clockAction").disabled=side!==t.player || selected?.z!=="hand" || selected?.p!==side;
  renderAttackExchange();
  renderEncore();
- document.getElementById("nextPhase").disabled=ruleBusy||!!match.attackExchange||drawConfirmationPending||
+ if(match.bot)renderBotControls();
+ document.getElementById("nextPhase").disabled=ruleBusy||match.bot&&t.player!==0||!!match.attackExchange||drawConfirmationPending||
    t.phase==="encore"&&match.encore?.step!=="complete"||match.online===true&&(side!==t.player||!onlineMatch.interactive());
  document.getElementById("clockSkip").disabled=match.online===true&&side!==t.player;
  document.getElementById("drawReminderResume").hidden=!drawConfirmationPending;
@@ -1391,7 +1425,11 @@ document.getElementById("clockAction").onclick=()=>{clockAction();renderTurnCont
 document.getElementById("clockSkip").onclick=()=>{if(match?.turn?.phase==="clock"&&(!match.online||match.turn.player===side)){setTurnPhase("main");renderTurnControls()}};
 
 </script>
-<script src="match-state.js?v=0.52"></script>
+<script src="card-catalog.js?v=3"></script>
+<script src="effects/engine.js?v=4"></script>
+<script src="card-data/load.js?v=2"></script>
+<script src="match-state.js?v=0.53-bot"></script>
+<script src="bot-match.js?v=1"></script>
 <script src="cloud-decks.js?v=0.52"></script>
 <script src="online-match.js?v=0.52-encore"></script>
 <script src="decklog-import.js?v=0.52"></script>
