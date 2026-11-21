@@ -34,9 +34,11 @@ async function onlineTestDatabase() {
     `);
     const sql=fs.readFileSync(new URL("../supabase/052-online.sql","file://"+__filename),"utf8");
     const attackSql=fs.readFileSync(new URL("../supabase/053-attack-exchange.sql","file://"+__filename),"utf8");
+    const encoreSql=fs.readFileSync(new URL("../supabase/054-encore.sql","file://"+__filename),"utf8");
     for(let i=0;i<2;i++){
       await db.exec(sql);
       await db.exec(attackSql);
+      await db.exec(encoreSql);
     }
     return db;
   } catch(error) {
@@ -156,7 +158,49 @@ async function main() {
     assert.doesNotMatch(JSON.stringify(current.state),/"uid"|"registry"/);
     other=await exchange(opponent,"damage_done",room,current.revision,{board:other.own.board});
     assert.equal(other.state.attack_exchange,undefined);
-    current=await rpc(actor,"board",room,other.revision,{board:current.own.board,turn:{...turn,phase:"end"}});
+    const encore=(user,step,rev,data={})=>as(user,async()=>
+      (await db.query("select public.ws_encore($1,$2,$3,$4,$5) as result",
+        [step,room,rev,randomUUID(),data])).rows[0].result);
+    const actorBoard=current.own.board;
+    if(!actorBoard.front0.length)actorBoard.front0.push(actorBoard.hand.pop());
+    actorBoard.front0[0].orientation=180;
+    const reversed=actorBoard.front0[0];
+    current=await rpc(actor,"board",room,other.revision,{board:actorBoard});
+    await assert.rejects(encore(guest,"enter",current.revision),/ROOM_UNAVAILABLE/);
+    await assert.rejects(encore(opponent,"enter",current.revision),/INVALID_ENCORE/);
+    current=await encore(actor,"enter",current.revision);
+    assert.equal(current.state.turn.phase,"encore");
+    await assert.rejects(encore(actor,"select",current.revision,{uid:reversed.uid}),/INVALID_ENCORE/);
+    await assert.rejects(encore(opponent,"start",current.revision),/INVALID_ENCORE/);
+    current=await encore(actor,"start",current.revision);
+    assert.equal(current.state.encore.actor,1-turn.player);
+    assert.deepEqual(await encore(opponent,"start",current.revision-1),{error:"REVISION_CONFLICT"});
+    other=await encore(opponent,"start",current.revision);
+    current=await encore(actor,"select",other.revision,{uid:reversed.uid});
+    assert.deepEqual(current.state.encore.target,{zone:"front0",id:reversed.id});
+    assert.equal(current.own.encore.selected,reversed.uid);
+    other=await rpc(opponent,"read",room);
+    assert.equal(other.own.encore.selected,undefined);
+    assert.doesNotMatch(JSON.stringify(other.state),/"uid"|"registry"|"selected"/);
+    await assert.rejects(encore(actor,"resolve",current.revision,{method:"stock",board:actorBoard}),/INVALID_ENCORE/);
+    await assert.rejects(encore(actor,"done",current.revision),/INVALID_ENCORE/);
+    reversed.orientation=90;
+    const paid=actorBoard.hand.pop();
+    actorBoard.waiting.push(paid);
+    current=await encore(actor,"resolve",current.revision,{method:"hand",hand:paid.uid,board:actorBoard});
+    assert.equal(current.state.encore.step,"after");
+    assert.equal(current.state.boards[turn.player].front0[0].orientation,90);
+    assert.deepEqual(current.own.encore.done,[reversed.uid]);
+    await assert.rejects(encore(opponent,"next",current.revision),/INVALID_ENCORE/);
+    current=await encore(actor,"next",current.revision);
+    reversed.orientation=180;
+    current=await rpc(actor,"board",room,current.revision,{board:actorBoard});
+    await assert.rejects(encore(actor,"select",current.revision,{uid:reversed.uid}),/INVALID_ENCORE/);
+    current=await encore(actor,"done",current.revision);
+    other=await encore(opponent,"done",current.revision);
+    current=await encore(actor,"end",other.revision);
+    assert.equal(current.state.turn.phase,"end");
+    assert.equal(current.state.encore,undefined);
     other=await rpc(opponent,"read",room);
     const otherBoard=other.own.board;
     if(!otherBoard.front1.length)otherBoard.front1.push(otherBoard.hand.pop());

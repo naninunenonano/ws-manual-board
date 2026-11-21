@@ -689,3 +689,126 @@ test("counter discards only the selected hand card, pays stock and waits for man
   assert.equal(page.run("match.attackExchange"),null);
   assert.equal(page.run("players[1].clock.length"),0);
 });
+
+function startEncore(page){
+  page.run('side=0; match.turn={player:0,phase:"attack",number:1}; renderTurnControls()');
+  page.click("nextPhase");
+  assert.match(page.get("encoreStatus").textContent,/ターンプレイヤー.*開始時/);
+  assert.equal(page.get("nextPhase").disabled,true);
+  page.click("encoreAction");
+  assert.match(page.get("encoreStatus").textContent,/非ターンプレイヤー.*開始時/);
+  page.click("encoreAction");
+  assert.equal(page.run("match.encore.step"),"choose");
+  assert.equal(page.run("side"),0);
+}
+
+test("encore requires two start confirmations, pays three stock and waits for each card",()=>{
+  const page=ruleGame(8,0,1);
+  page.run(`{
+    const b=players[0];
+    for(const zone of ["front0","front1"]){
+      move(0,"hand",0,zone);
+      b[zone][0].orientation=180;
+    }
+    b.stock.push(...b.deck.splice(0,3));
+  }`);
+  startEncore(page);
+  const before=state(page);
+  page.click("encoreAction");
+  assert.equal(panel(page)[0].children.length,2);
+  panel(page)[0].children[1].onclick();
+  action(page,"3ストック");
+  assert.equal(state(page).front1[0].orientation,90);
+  assert.equal(state(page).front0[0].orientation,180);
+  assert.equal(state(page).stock.length,0);
+  assert.deepEqual(state(page).waiting.slice(-3).map(c=>c.uid),before.stock.map(c=>c.uid).reverse());
+  assert.equal(page.get("dialog").open,false);
+  assert.equal(page.get("encoreAction").textContent,"次のキャラへ");
+  page.run(`{
+    move(0,"hand",0,"back0");
+    players[0].back0[0].orientation=180;
+    players[0].front1[0].orientation=180;
+    updateBoard();
+  }`);
+  page.click("encoreAction");
+  assert.equal(page.get("dialog").open,false);
+  page.click("encoreAction");
+  assert.equal(panel(page)[0].children.length,2);
+  panel(page)[0].children[0].onclick();
+  assert.equal(panel(page).find(b=>b.textContent==="3ストック").disabled,true);
+  action(page,"アンコールしない");
+  assert.equal(state(page).front0.length,0);
+  assert.equal(state(page).waiting.at(-1).uid,before.front0[0].uid);
+});
+
+test("encore paid by hand requires explicit confirmation, and other costs allow manual board changes",()=>{
+  const page=ruleGame(8,0,1);
+  page.run(`{
+    for(const zone of ["front0","front1"]){
+      move(0,"hand",0,zone);
+      players[0][zone][0].orientation=180;
+    }
+  }`);
+  startEncore(page);
+  page.run('zoneClick(0,"front0")');
+  page.click("encoreAction");
+  action(page,"手札1枚を選ぶ");
+  const pay=panel(page).find(b=>b.textContent==="選んだ手札を控え室へ");
+  const hand=state(page).hand[1].uid;
+  assert.equal(pay.disabled,true);
+  panel(page)[0].children[1].onclick();
+  assert.equal(pay.disabled,false);
+  pay.onclick();
+  assert.equal(state(page).waiting.at(-1).uid,hand);
+  assert.equal(state(page).front0[0].orientation,90);
+  page.click("encoreAction");
+  page.run('zoneClick(0,"front1")');
+  page.click("encoreAction");
+  action(page,"その他");
+  assert.equal(page.get("dialog").open,false);
+  assert.equal(page.run("match.encore.step"),"other");
+  page.run('move(0,"hand",0,"waiting")');
+  page.click("encoreAction");
+  action(page,"支払い済みとしてレスト");
+  assert.equal(state(page).front1[0].orientation,90);
+  assert.equal(page.run("match.encore.step"),"after");
+});
+
+test("clock encore refreshes and both players finish before end; newly reversed card gets a turn",()=>{
+  const page=ruleGame(1,0,4);
+  page.run(`{
+    move(0,"hand",0,"front0");
+    players[0].front0[0].orientation=180;
+  }`);
+  const clock=state(page).deck.at(-1).uid;
+  startEncore(page);
+  page.run('chooseEncoreCard(0,"front0",0)');
+  action(page,"山札の上から1枚をクロック");
+  assert.equal(state(page).clock[0].uid,clock);
+  assert.equal(state(page).clock.length,2);
+  assert.equal(state(page).deck.length,3);
+  assert.equal(state(page).front0[0].orientation,90);
+  page.click("encoreAction");
+  page.click("encoreAction");
+  assert.equal(page.run("side"),1);
+  page.run(`{
+    move(1,"hand",0,"back0");
+    players[1].back0[0].orientation=180;
+  }`);
+  page.run('chooseEncoreCard(1,"back0",0)');
+  action(page,"アンコールしない");
+  page.click("encoreAction");
+  page.click("encoreAction");
+  assert.equal(page.run("match.encore.step"),"complete");
+  page.run('move(0,"hand",0,"back0"); players[0].back0[0].orientation=180');
+  page.click("nextPhase");
+  assert.equal(page.run("match.encore.step"),"choose");
+  page.run('chooseEncoreCard(0,"back0",0)');
+  action(page,"アンコールしない");
+  page.click("encoreAction");
+  page.click("encoreAction");
+  page.click("encoreAction");
+  page.click("nextPhase");
+  assert.equal(page.run("match.turn.phase"),"end");
+  assert.equal(page.run("match.encore"),undefined);
+});
