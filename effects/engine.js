@@ -231,6 +231,14 @@ const WSEffects = (() => {
     p=>knownKey(sides,p.side)&&word(p.name)&&(p.cardNumbers===undefined||(Array.isArray(p.cardNumbers)&&p.cardNumbers.length>0&&p.cardNumbers.every(word))),
     p=>"CX置場に「"+p.name+"」がある",
     (ctx,p)=>pile(ctx,{side:p.side,zone:"cx"}).some(c=>p.cardNumbers?p.cardNumbers.includes(c.cardNumber):c.name===p.name),["side","name","cardNumbers"]);
+  operation("treasureTrigger","トレジャー処理",p=>knownKey(sides,p.side)&&word(p.triggerUid),
+    p=>"トレジャーを手札に戻し、任意で山札の上をストックに置く",
+    (ctx,p)=>{const waiting=pile(ctx,{side:p.side,zone:"waiting"});const idx=waiting.findIndex(c=>c.uid===p.triggerUid);
+      if(idx<0)fail("トリガーしたCXが控え室にありません");
+      const [card]=waiting.splice(idx,1);pile(ctx,{side:p.side,zone:"hand"}).push(card);
+      if(ctx.choices.treasureStock===true)return {cards:[card.uid],stock:takeFromTop(ctx,p.side,"deck","stock",1)};
+      if(ctx.choices.treasureStock!==false)fail("ストックに置くか選んでください","needs-choice");
+      return {cards:[card.uid],stock:[]};},["side","triggerUid"]);
   register(conditions,"memoryMarkerCount","思い出・マーカー合計",
     p=>knownKey(sides,p.side)&&count(p.max),
     p=>"思い出とマーカーの合計が"+p.max+"枚以下",
@@ -398,6 +406,18 @@ const WSEffects = (() => {
     return execute(effect,board,{...choices},true);
   }
 
+  // Continuous CX modifiers are calculated, never written into printed card stats.
+  function continuousModifiers(board,side="self") {
+    validateBoard(board);
+    if(!knownKey(sides,side))fail("プレイヤーを確認してください","invalid");
+    const active=board[side].cx.filter(c=>["STS/W140-031","STS/W140-031R"].includes(c.cardNumber)).length;
+    return board[side].stage.filter(c=>c.type==="character").map(card=>({
+      uid:card.uid,powerBonus:active*1000,soulBonus:active,
+      power:integer(card.power)?card.power+active*1000:null,
+      soul:integer(card.soul)?card.soul+active:null
+    }));
+  }
+
   function equal(a,b) {
     if (a===b)return true;
     if (Array.isArray(a)||Array.isArray(b)) return Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((value,i)=>equal(value,b[i]));
@@ -410,7 +430,7 @@ const WSEffects = (() => {
     return actual.status===expected?.status && equal(actual.state,expected.state);
   }
 
-  return {zones,sides,emptyBoard,validateBoard,cardsIn,effectiveTags,matchTags,inspect,run,guide,compare,
+  return {zones,sides,emptyBoard,validateBoard,cardsIn,effectiveTags,matchTags,inspect,run,guide,compare,continuousModifiers,
     describe:(entry)=>entry.implementation?.valid(entry.step.params)
       ? entry.implementation.describe(entry.step.params):String(entry.step?.handler??"未確認"),
     handlers:()=>[...operations,...conditions].map(([id,entry])=>({id,label:entry.label}))};
