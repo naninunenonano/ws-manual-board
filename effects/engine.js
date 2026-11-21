@@ -164,6 +164,17 @@ const WSEffects = (() => {
       ctx.selections.set(p.as,[...picks]);
       return [...picks];
     },["from","as","count","min","traits","keywords","cardType","maxLevel","excludeUid"]);
+  operation("searchDeck","山札検索",p=>knownKey(sides,p.side)&&word(p.as)&&count(p.max)&&
+    (p.cardType===undefined||["character","event","climax"].includes(p.cardType))&&
+    (p.maxLevel===undefined||integer(p.maxLevel)),
+    p=>"山札から条件に合うカードを最大"+p.max+"枚選ぶ",
+    (ctx,p)=>{const picks=ctx.choices[p.as];if(!Array.isArray(picks)||picks.length>p.max||new Set(picks).size!==picks.length)
+      fail("山札検索の選択を指定してください","needs-choice");
+      const available=new Map(pile(ctx,{side:p.side,zone:"deck"}).map(c=>[c.uid,c]));
+      if(!picks.every(uid=>available.has(uid)&&matching(available.get(uid),p)))
+        fail("山札検索の対象が条件に合いません","needs-choice");
+      ctx.selections.set(p.as,[...picks]);return [...picks];},
+    ["side","as","max","cardType","maxLevel"]);
   operation("revealTop","山札上公開",p=>knownKey(sides,p.side),
     p=>sides[p.side]+"の山札上1枚を公開",
     (ctx,p)=>{const deck=pile(ctx,{side:p.side,zone:"deck"});if(!deck.length)fail("山札がありません");
