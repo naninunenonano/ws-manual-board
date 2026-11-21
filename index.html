@@ -223,7 +223,7 @@ function makeZoneCardButton(card,p,z,index){
   if(hidden){const back=document.createElement("div");back.className="card-back";b.append(back)}
   else if(!addCardImage(b,card,card.id)){const span=document.createElement("span");span.textContent=card.id;b.append(span)}
   const text=document.createElement("span");text.textContent=hidden?"裏向き":card.id;b.append(text);
-  b.onclick=()=>{document.getElementById("dialog").close();if(z==="waiting"||z==="memory"||isStageZone(z)){manualDestination(p,z,index);return}selected={p,z,index};render();message("移動先のゾーンをタップしてください")};const zoom=document.createElement("span");zoom.textContent="拡大";zoom.style.cssText="text-decoration:underline;font-size:11px";zoom.onclick=e=>{e.stopPropagation();document.getElementById("dialog").close();showCardDetail(card)};b.append(zoom);
+  b.onclick=()=>{document.getElementById("dialog").close();if(z==="waiting"||z==="memory"||z==="stock"||isStageZone(z)){manualDestination(p,z,index);return}selected={p,z,index};render();message("移動先のゾーンをタップしてください")};const zoom=document.createElement("span");zoom.textContent="拡大";zoom.style.cssText="text-decoration:underline;font-size:11px";zoom.onclick=e=>{e.stopPropagation();document.getElementById("dialog").close();showCardDetail(card)};b.append(zoom);
   return b;
 }
 function render(){const root=document.getElementById("boards"),actions=document.getElementById("playerActions");root.replaceChildren();for(const p of [1,0]){const pl=players[p],section=document.createElement("section");section.className="player"+(p===side?" active":"");section.dataset.player=String(p);section.innerHTML='<h2>プレイヤー'+(p+1)+' <span>山札 '+pl.deck.length+' / ストック '+pl.stock.length+' / クロック '+pl.clock.length+'</span></h2>';const board=document.createElement("div");
@@ -466,6 +466,7 @@ function openActions(p,z){
  const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");d.classList.remove("zoom-mode");body.replaceChildren();
  document.getElementById("dialogTitle").textContent=labels[z]+" ("+players[p][z].length+"枚)";
  if(z==="stock"){
+   deckButton(body,"ストックのカードを選択して移動",()=>{d.close();openList(p,"stock")});
    const sel=deckSelect(players[p].stock.length);body.append(sel);
    deckButton(body,"指定枚数を支払う",()=>{takeTop(p,"stock","waiting",Number(sel.value));d.close()});d.showModal();return;
  }
