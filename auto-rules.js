@@ -7,6 +7,8 @@ const practiceScenario="practice-cards";
 const practiceTitle="仮カード5種・効果確認";
 const levelOneScenario="practice-level-one";
 const levelOneTitle="仮カード・Lv1効果確認";
+const levelTwoScenario="practice-level-two";
+const levelTwoTitle="仮カード・Lv2応援確認";
 const practiceTrait="巡遊者";
 const ruleStep=(handler,params)=>({handler,params});
 const rulePower=(amount)=>ruleStep("modifyPower",{selection:"@source",amount});
@@ -63,19 +65,27 @@ const practiceCards={
   "105":{...practiceClimax,name:"仮CX ゲート",color:"blue",triggers:["ゲート"],effects:[
     ...practiceClimax.effects,salvageTrigger("ゲート","climax")
   ]},
-  "106":{name:"仮キャラ カムバック連動",color:"red",stats:{level:1,cost:0,power:5000,soul:1},
+  "106":{name:"仮キャラ カムバック連動",color:"red",triggers:[],stats:{level:1,cost:0,power:5000,soul:1},
     lookOnAttack:{cxId:"BOT/W000-104",max:4,trait:practiceTrait}},
-  "107":{name:"仮キャラ ダブルトリガー",color:"blue",stats:{level:1,cost:0,power:4000,soul:1},
-    otherTraitBuff:{trait:practiceTrait,count:2,power:1000},extraTriggerCost:1}
+  "107":{name:"仮キャラ ダブルトリガー",color:"blue",triggers:[],stats:{level:1,cost:0,power:4000,soul:1},
+    otherTraitBuff:{trait:practiceTrait,count:2,power:1000},extraTriggerCost:1},
+  "108":{name:"仮キャラ レベル応援",color:"red",stats:{level:2,cost:1,power:5000,soul:1},
+    triggers:["ソウル"],assist:{powerPerLevel:500}}
 };
 
-function isAutoRules(scenario=match?.bot?.scenario){return [autoRuleScenario,practiceScenario,levelOneScenario].includes(scenario)}
+const practiceTitles={
+  [practiceScenario]:practiceTitle,[levelOneScenario]:levelOneTitle,[levelTwoScenario]:levelTwoTitle
+};
+function isAutoRules(scenario=match?.bot?.scenario){
+  return scenario===autoRuleScenario||Object.hasOwn(practiceTitles,scenario);
+}
 function practiceDeck(deck,scenario){
   // Single specimens for the effect test. The player deck remains independent.
   const replaced=new Set(["007","008","009","012","013"]);
-  if(scenario===levelOneScenario){replaced.add("010");replaced.add("011")}
+  if(scenario===levelOneScenario||scenario===levelTwoScenario){replaced.add("010");replaced.add("011")}
+  if(scenario===levelTwoScenario)replaced.add("006");
   const entries=Object.entries(practiceCards).slice(0,replaced.size);
-  return {title:scenario===levelOneScenario?levelOneTitle:practiceTitle,cards:[
+  return {title:practiceTitles[scenario],cards:[
     ...deck.cards.map(card=>({...card,num:card.num-Number(replaced.has(card.id.slice(-3)))})),
     ...entries.map(([number,card])=>({id:"BOT/W000-"+number,num:1,cx:card.type==="climax"}))
   ]};
@@ -110,6 +120,9 @@ function prepareAutoRuleBoards(boards,scenario){
     put(0,"101","level");put(0,"102","clock");put(0,"103","back0");put(0,"009","back1");
     for(const n of ["104","106","107"])put(0,n,"hand");
     for(const n of ["105","005","008","007","012","007"])put(0,n,"deck");
+  }else if(scenario===levelTwoScenario){
+    put(0,"101","level");put(0,"108","hand");
+    put(0,"001","front0");put(0,"106","front1");
   }else{
     put(0,"002","hand",2);put(0,"012","hand");put(0,"001","front0");
     // CX placement draws the top card; the next card is a soul trigger.
@@ -146,10 +159,12 @@ function autoRuleBuff(p,card){
   const live=players[p];
   const front=[live.front0,live.front1,live.front2].findIndex(zone=>zone.some(c=>c.uid===card.uid));
   const totals={power:0,soul:0};
+  const level=front<0?0:Math.max(0,botEffectCard(card).level??0);
   for(const [i,slot] of ["back0","back1"].entries()){
     if(front!==i&&front!==i+1)continue;
     const source=live[slot].at(-1);
-    if(source?.faceUp)totals.power+=botDefinition(source)?.assist?.power??0;
+    const assist=source?.faceUp?botDefinition(source)?.assist:null;
+    if(assist)totals.power+=(assist.power??0)+(assist.powerPerLevel??0)*level;
   }
   const traitBuff=botDefinition(card)?.otherTraitBuff;
   if(traitBuff&&botSlots.some(slot=>live[slot].some(c=>c.uid===card.uid))){
