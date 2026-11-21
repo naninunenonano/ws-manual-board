@@ -983,7 +983,7 @@ test("自動ルール：CX、アタック時能力、トリガー、カウンタ
   assert.deepEqual(ruleCounts(snap),[50,50]);
   page.run('advanceTurn()');
   assert.equal(snapshot(page).encore.step,"choose");
-  page.run('chooseEncoreCard(0,"front1",0)');
+  page.run('zoneClick(0,"front1")');
   ruleButton(page,"アンコールしない");
   assert.equal(snapshot(page).players[0].front1.length,0);
   page.run('advanceTurn();advanceTurn()');

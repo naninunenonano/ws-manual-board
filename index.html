@@ -434,7 +434,10 @@ function cardClick(p,z,index){
  }
  message(labels[z]+"のカードを選択しました。移動先をタップしてください");
 }
-function zoneClick(p,z){if(p!==side){if(match?.online||match?.bot)openOnlinePublicList(p,z);else message("相手のカードは操作できません");return}if(selected&&selected.p===p&&selected.z!==z){if(z==="deck"||z==="stock"){manualDestination(p,selected.z,selected.index);return}move(p,selected.z,selected.index,z);return}if(selected&&selected.p===p&&selected.z===z){selected=null;render();renderTurnControls();if(z==="waiting"||z==="memory")openList(p,z);return}const a=players[p][z];if(!a.length&&z!=="deck"){message(labels[z]+"は空です");return}if(z==="deck"){openActions(p,z);return}if(z==="stock"){openActions(p,z);return}if((isStageZone(z)||z==="waiting"||z==="memory")&&a.length){selected={p,z,index:a.length-1};render();renderTurnControls();if(isAutoRules()&&isStageZone(z)&&botDefinitionForAbilities(a.at(-1)).length){openBotAbility();return}message("カードを選択しました。移動先をタップ、またはダブルタップで一覧を開けます");return}openList(p,z)}
+function zoneClick(p,z){if(p!==side){if(match?.online||match?.bot)openOnlinePublicList(p,z);else message("相手のカードは操作できません");return}if(selected&&selected.p===p&&selected.z!==z){if(z==="deck"||z==="stock"){manualDestination(p,selected.z,selected.index);return}move(p,selected.z,selected.index,z);return}if(selected&&selected.p===p&&selected.z===z){selected=null;render();renderTurnControls();if(z==="waiting"||z==="memory")openList(p,z);return}const a=players[p][z];if(!a.length&&z!=="deck"){message(labels[z]+"は空です");return}if(z==="deck"){openActions(p,z);return}if(z==="stock"){openActions(p,z);return}if((isStageZone(z)||z==="waiting"||z==="memory")&&a.length){selected={p,z,index:a.length-1};render();renderTurnControls();if(isAutoRules()&&isStageZone(z)){
+  if(canOperateEncore()&&match.encore.step==="choose"&&a.at(-1).orientation===180){chooseEncoreCard(p,z,a.length-1);return}
+  if(botDefinitionForAbilities(a.at(-1)).length){openBotAbility();return}
+}message("カードを選択しました。移動先をタップ、またはダブルタップで一覧を開けます");return}openList(p,z)}
 
 // Deck commands: deck top is the final array element. Revealed/inspected cards stay
 // outside the waiting room until their destination is confirmed.

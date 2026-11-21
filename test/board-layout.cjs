@@ -383,7 +383,6 @@ async function checkAutoRules(browser,url){
   assert.equal(await center.getAttribute("data-orientation"),"180");
   await page.locator("#nextPhase").tap();
   await center.tap({position:{x:14,y:10}});
-  await page.locator("#encoreAction").tap();
   await button("アンコールしない").tap();
   await page.locator("#nextPhase").tap();
   await page.locator("#nextPhase").tap();
