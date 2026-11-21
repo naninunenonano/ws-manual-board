@@ -80,7 +80,7 @@ let pendingMarkerChoices=[];
 function manualTransfer(p,from,index,to,position="top"){
  const a=players[p][from],card=a?.[index];if(!card)return;
  a.splice(index,1);card.faceUp=!["deck","stock"].includes(to);
- if(isStageZone(from)&&to!==from){
+ if(isStageZone(from)&&!isStageZone(to)){
    card.orientation=0;
    for(const m of card.markers||[]){players[p].waiting.push(m.card);pendingMarkerChoices.push({p,card:m.card})}
    card.markers=[];
@@ -137,7 +137,7 @@ function manualDestination(p,from,index){
  });
  d.showModal();
 }
-function move(p,from,index,to){if(p!==side){message("操作するプレイヤーを切り替えてください");return}if(!players[p][from][index])return;const card=players[p][from].splice(index,1)[0];if(isStageZone(from)&&to!==from){card.orientation=0;if(card.markers?.length){for(const m of card.markers)players[p].waiting.push(m.card);card.markers=[]}}card.faceUp=!["deck","stock"].includes(to);players[p][to].push(card);selected=null;updateBoard();message(labels[from]+" → "+labels[to])}
+function move(p,from,index,to){if(p!==side){message("操作するプレイヤーを切り替えてください");return}manualTransfer(p,from,index,to)}
 function takeTop(p,from,to,n=1){const a=players[p][from],b=players[p][to];const k=Math.min(n,a.length);for(let i=0;i<k;i++){const c=a.pop();c.faceUp=!["deck","stock"].includes(to);b.push(c)}if(k)updateBoard();return k}
 const sidewaysZones = new Set(["stock", "memory", "cx", "level"]);
 const unnamedZones = new Set(["stock", "memory", "deck", "waiting"]);
@@ -252,7 +252,7 @@ function cardClick(p,z,index){
  }
  message(labels[z]+"のカードを選択しました。移動先をタップしてください");
 }
-function zoneClick(p,z){if(p!==side){message("相手のカードは操作できません");return}if(selected&&selected.p===p&&selected.z!==z){move(p,selected.z,selected.index,z);return}const a=players[p][z];if(!a.length&&z!=="deck"){message(labels[z]+"は空です");return}if(z==="deck"){openActions(p,z);return}if(z==="stock"){openActions(p,z);return}openList(p,z)}
+function zoneClick(p,z){if(p!==side){message("相手のカードは操作できません");return}if(selected&&selected.p===p&&selected.z!==z){if(z==="deck"||z==="stock"){manualDestination(p,selected.z,selected.index);return}move(p,selected.z,selected.index,z);return}const a=players[p][z];if(!a.length&&z!=="deck"){message(labels[z]+"は空です");return}if(z==="deck"){openActions(p,z);return}if(z==="stock"){openActions(p,z);return}openList(p,z)}
 
 // Deck commands: deck top is the final array element. Revealed/inspected cards stay
 // outside the waiting room until their destination is confirmed.
