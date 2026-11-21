@@ -146,7 +146,8 @@ const WSEffects = (() => {
     && (p.min===undefined||count(p.min)&&p.min<=p.count)
     && (p.cardType===undefined||["character","event","climax"].includes(p.cardType))
     && (p.maxLevel===undefined||integer(p.maxLevel))
-    && (p.excludeUid===undefined||word(p.excludeUid)),
+    && (p.excludeUid===undefined||word(p.excludeUid))
+    && (p.excludeSource===undefined||typeof p.excludeSource==="boolean"),
     p=>zoneLabel(p.from)+"から"+p.count+"枚を選ぶ（"+p.as+"）"+
       ["traits","keywords"].filter(kind=>p[kind]).map(kind=>" ／ "+tagFields[kind][2]+" "+filterLabel(p[kind])).join(""),
     (ctx,p)=>{
@@ -163,7 +164,7 @@ const WSEffects = (() => {
       }
       ctx.selections.set(p.as,[...picks]);
       return [...picks];
-    },["from","as","count","min","traits","keywords","cardType","maxLevel","excludeUid"]);
+    },["from","as","count","min","traits","keywords","cardType","maxLevel","excludeUid","excludeSource"]);
   operation("searchDeck","山札検索",p=>knownKey(sides,p.side)&&word(p.as)&&count(p.max)&&
     (p.cardType===undefined||["character","event","climax"].includes(p.cardType))&&
     (p.maxLevel===undefined||integer(p.maxLevel)),
@@ -267,6 +268,9 @@ const WSEffects = (() => {
       else if (!implementation.valid(step.params))issues.push({status:"invalid",message:at+" の "+step.handler+" のパラメータが不正です"});
       else if (phase==="target" && step.handler!=="selectCards")issues.push({status:"unsupported",message:at+" の対象指定方式は未実装です"});
       else if (step.handler==="selectCards"){
+        if(selections.has(step.params.as))issues.push({status:"invalid",message:at+" の選択IDが重複しています"});
+        selections.add(step.params.as);
+      }else if(step.handler==="searchDeck"){
         if(selections.has(step.params.as))issues.push({status:"invalid",message:at+" の選択IDが重複しています"});
         selections.add(step.params.as);
       }else if (step.params.selection && !selections.has(step.params.selection)){
