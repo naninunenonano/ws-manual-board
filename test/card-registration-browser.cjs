@@ -174,6 +174,42 @@ async function checkProducts(browser,url) {
   console.log("Catalog: product generation and filter, explicit variants, original source, keyword test state and pending effect passed");
 }
 
+async function checkSoloBoard(browser,url) {
+  const page=await browser.newPage(devices["iPhone 13"]);
+  const $=id=>page.locator("#"+id);
+  await page.goto(url+"/card-effect-test.html?mode=solo&card=STS%2FW140-001");
+  const hand=page.locator('[data-key="self.hand"]');
+  const stage=page.locator('[data-key="self.stage"]');
+  assert.equal(await $("testEffect").isVisible(),false);
+  assert.equal(await $("runEffectTest").isVisible(),false);
+  await hand.getByRole("button",{name:/黎明の刻 レイス/}).tap();
+  await hand.getByRole("button",{name:"舞台に出す",exact:true}).tap();
+  await $("operationDescription").getByText(/手札から登場して誘発.*控えオカケン/).waitFor();
+  await page.getByRole("button",{name:"能力を使用する",exact:true}).tap();
+  await page.getByRole("button",{name:"コストを支払う",exact:true}).tap();
+  await $("effectChoices").getByRole("button",{name:/巡遊者のキャラ/}).tap();
+  await page.getByRole("button",{name:"選択を確定",exact:true}).tap();
+  await page.getByRole("button",{name:"コストを支払う",exact:true}).tap();
+  await page.getByRole("button",{name:"選ばずに続ける",exact:true}).tap();
+  await $("resultVerification").getByText(/4 \/ 4件/).waitFor();
+  assert.equal(await hand.locator(".lab-card").count(),0);
+  assert.equal(await stage.getByRole("button",{name:/黎明の刻 レイス/}).count(),1);
+  await stage.getByRole("button",{name:/黎明の刻 レイス/}).tap();
+  await stage.getByRole("button",{name:/起動能力を使う.*コンソール系/}).tap();
+  await $("operationDescription").getByText(/舞台から起動.*コンソール系/).waitFor();
+  await $("effectChoices").getByRole("button",{name:/回想を持つキャラ/}).tap();
+  await page.getByRole("button",{name:"選択を確定",exact:true}).tap();
+  await page.getByRole("button",{name:"コストを支払う",exact:true}).tap();
+  await page.getByRole("button",{name:"処理を続ける",exact:true}).tap();
+  await $("resultVerification").getByText(/3 \/ 3件/).waitFor();
+  assert.equal(await stage.getByRole("button",{name:/起動能力を使う.*使用済み/}).isDisabled(),true);
+  await $("nextTurn").tap();
+  assert.equal(await stage.getByRole("button",{name:/起動能力を使う/}).isEnabled(),true);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.close();
+  console.log("Solo board: hand-to-stage trigger and tap-to-activate passed on the same Wraith copy");
+}
+
 async function main() {
   const server = http.createServer((request,response)=>{
     const path = new URL(request.url,"http://localhost").pathname.slice(1);
@@ -188,6 +224,7 @@ async function main() {
     const url="http://127.0.0.1:"+server.address().port;
     await checkEffects(browser,url);
     await checkProducts(browser,url);
+    await checkSoloBoard(browser,url);
     const page = await browser.newPage({...devices["iPhone 13"],acceptDownloads:true});
     const consoleErrors = [];
     page.on("pageerror",error=>consoleErrors.push(error.message));
