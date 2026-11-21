@@ -1,238 +1,479 @@
 "use strict";
 
 (() => {
-  const $=id=>document.getElementById(id);
-  const node=(tag,text)=>{const item=document.createElement(tag);item.textContent=text;return item;};
-  const numeric=text=>text.trim()===""?null:Number(text);
-  const putOptions=(select,options)=>select.replaceChildren(...Object.entries(options).map(([v,label])=>new Option(label,v)));
-  const nextBoard=()=>WSEffects.emptyBoard();
-  const statusLabels={success:"解決",invalid:"定義エラー",unsupported:"未実装",failed:"途中停止",
-    unconfirmed:"未確認",skipped:"任意効果を辞退","needs-choice":"選択が必要","condition-not-met":"条件未達"};
-  const phaseLabels={conditions:"条件",costs:"支払い",target:"対象",steps:"処理"};
-  let board=nextBoard(),catalog,card,scenario,serial=0;
-  let choices={},expectations=[];
-  for(const id of ["placeSide","expectSide"])putOptions($(id),WSEffects.sides);
-  for(const id of ["placeZone","expectZone"])putOptions($(id),WSEffects.zones);
+  const $ = id => document.getElementById(id);
+  const {sides,zones} = WSEffects;
+  const displayZones = {...zones,markers:"マーカー"};
+  const typeNames = {character:"キャラ",event:"イベント",climax:"CX"};
+  const phaseNames = {conditions:"条件",costs:"支払い",target:"対象",steps:"処理",limit:"使用回数"};
+  const results = {success:"解決",invalid:"定義エラー",unsupported:"未実装",failed:"途中停止",
+    unconfirmed:"未確認",skipped:"任意効果を辞退","needs-choice":"再選択が必要","condition-not-met":"使用できません"};
+  let catalog, card, sample;
+  let board = WSEffects.emptyBoard(), turn = 1, used = new Map(), serial = 0, selected = null;
+  let undo = null, lastStart = null, session = null;
+
+  function node(tag,text=""){
+    const el=document.createElement(tag);
+    el.textContent=text;
+    return el;
+  }
+  function button(text,action){
+    const el=node("button",text);
+    el.type="button";
+    el.onclick=action;
+    return el;
+  }
+  function options(el,entries){
+    el.replaceChildren(...entries.map(([value,label])=>new Option(label,value)));
+  }
+  const makeOptions=(el,items)=>options(el,Object.entries(items));
+  const effect=()=>card?.effects?.find(item=>item.id===$("testEffect").value);
+  const name=entry=>entry.name??entry.cardNumber;
+  const tags=id=>[...new Set($(id).value.split(/[,、]/).map(item=>item.trim()).filter(Boolean))];
+  const numeric=id=>$(id).value.trim()===""?null:Number($(id).value);
+  const label=(side,zone)=>sides[side]+"の"+displayZones[zone];
+  const copy=structuredClone;
+  const snapshot=()=>({board:copy(board),turn,used:new Map(used)});
+  function restore(state){
+    ({board,turn,used}=copy(state));
+    selected=null;
+    undo=null;
+    render();
+  }
+  function allCards(state){
+    return WSEffects.cardsIn(state).flatMap(entry=>[entry,...(entry.card.markers??[])
+      .map(card=>({card,side:entry.side,zone:"markers",host:entry.card}))]);
+  }
 
   function clearResults(){
-    for(const id of ["effectResult","beforeBoard","afterBoard"])$(id).textContent="";
-    for(const id of ["effectLog","compareResults"])$(id).replaceChildren();
+    for(const id of ["effectResult","beforeBoard","afterBoard","resultChanges","compareResults","effectLog"])$(id).replaceChildren();
+  }
+
+  function cardButton(entry,action,pressed=false){
+    const el=button("",action);
+    el.className="lab-card";
+    el.setAttribute("aria-pressed",String(pressed));
+    el.append(node("strong",name(entry)));
+    const details=[entry.name&&entry.cardNumber,typeNames[entry.type],entry.level!=null?"Lv "+entry.level:"",
+      entry.cost!=null?"コスト "+entry.cost:"",entry.power!=null?"パワー "+entry.power:"",entry.soul!=null?"ソウル "+entry.soul:"",
+      entry.triggers?.length?"トリガー "+entry.triggers.join("、"):""].filter(Boolean);
+    if(details.length) el.append(node("small",details.join(" ／ ")));
+    for(const [key,title] of [["traits","特徴"],["keywords","キーワード能力"]]){
+      const values=WSEffects.effectiveTags(entry,key);
+      if(values?.length) el.append(node("small",title+" "+values.join("、")));
+    }
+    return el;
   }
 
   function renderBoard(){
-    const listing=$("boardEditor");
-    const groups=[];
-    for(const [side,sideLabel] of Object.entries(WSEffects.sides)){
-      const panel=document.createElement("div");
-      panel.className="effect";
-      panel.append(node("h3",sideLabel));
-      for(const [zone,label] of Object.entries(WSEffects.zones)){
-        const pile=board[side][zone];
-        const details=document.createElement("details");
-        details.append(node("summary",label+" （"+pile.length+"枚）"));
-        const list=document.createElement("ul");
-        for(const entry of pile){
-          const row=node("li",entry.cardNumber+" ／ "+entry.uid+
-            " ／ パワー "+(entry.power??"未確認")+" ／ ソウル "+(entry.soul??"未確認")+" ");
-          const remove=node("button","取り除く");
-          remove.type="button";
-          remove.onclick=()=>{pile.splice(pile.indexOf(entry),1);renderBoard();renderChoices();clearResults();};
-          for(const [kind,label] of [["traits","特徴"],["keywords","キーワード能力"]]){
-            const effective=WSEffects.effectiveTags(entry,kind);
-            row.append(node("div",label+" "+(effective?.join("、") || (effective?"なし":"未確認"))));
-          }
-          row.append(remove);list.append(row);
+    const el=$("boardEditor"),open=new Set([...el.querySelectorAll("details[open]")].map(d=>d.dataset.key));
+    el.replaceChildren();
+    for(const [side,sideName] of Object.entries(sides)){
+      const section=node("section");section.className="effect";
+      section.append(node("h3",sideName));
+      for(const [zone,title] of Object.entries(displayZones)){
+        const entries=zone==="markers"?allCards(board).filter(x=>x.side===side&&x.zone===zone).reverse():
+          board[side][zone].slice().reverse().map(card=>({card}));
+        const details=node("details");details.dataset.key=side+"."+zone;
+        details.open=open.has(details.dataset.key);
+        details.append(node("summary",title+" （"+entries.length+"枚）"));
+        const cards=node("div");cards.className="lab-cards";
+        const hide=session&&(["deck","stock"].includes(zone)||side==="opponent"&&zone==="hand");
+        if(hide)cards.append(node("p","非公開"));
+        else for(const entry of entries){
+          const pick=cardButton(entry.card,()=>{selected=entry.card.uid;renderBoard();renderEditor()},selected===entry.card.uid);
+          pick.disabled=!!session;
+          if(entry.host)pick.append(node("small","持ち主 "+name(entry.host)));
+          cards.append(pick);
         }
-        details.append(list);panel.append(details);
+        details.append(cards);
+        section.append(details);
       }
-      groups.push(panel);
+      el.append(section);
     }
-    listing.replaceChildren(...groups);
   }
 
-  function effect(){return card?.effects?.find(effect=>effect.id===$("testEffect").value);}
-  function renderChoices(){
-    const current=effect(),panel=$("effectChoices");
-    panel.replaceChildren();
-    if(!current){panel.append(node("p","効果を選択してください。"));return;}
-    if(current.optional){
-      const label=node("label","任意効果");
-      const select=document.createElement("select");
-      putOptions(select,{"":"選択してください",yes:"実行する",no:"実行しない"});
-      select.value=typeof choices.activate==="boolean"?(choices.activate?"yes":"no"):"";
-      select.onchange=()=>{
-        if(select.value)choices.activate=select.value==="yes";
-        else delete choices.activate;
-        clearResults();
-      };
-      label.append(select);panel.append(label);
+  function refreshDestination(prefix){
+    const isMarker=$(prefix+"Zone").value==="markers",side=$(prefix+"Side").value;
+    const el=$(prefix+"MarkerHost"),current=el.value;
+    const entries=board[side].stage.filter(card=>prefix!=="edit"||card.uid!==selected);
+    options(el,entries.map((entry,i)=>[entry.uid,name(entry)+"（舞台 "+(i+1)+"）"]));
+    if(entries.some(entry=>entry.uid===current))el.value=current;
+    $(prefix+"MarkerLabel").hidden=!isMarker;
+  }
+  function destination(prefix){
+    const side=$(prefix+"Side").value,zone=$(prefix+"Zone").value;
+    if(zone!=="markers")return {side,zone,pile:board[side][zone]};
+    const host=board[side].stage.find(entry=>entry.uid===$(prefix+"MarkerHost").value);
+    if(!host)return null;
+    return {side,zone,host,pile:host.markers};
+  }
+  function editEntry(){
+    return allCards(board).find(entry=>entry.card.uid===selected);
+  }
+  function renderEditor(){
+    const entry=editEntry();
+    $("editCard").hidden=!entry||!!session;
+    if(entry){
+      $("editCardName").textContent=name(entry.card)+" ／ "+label(entry.side,entry.zone);
+      refreshDestination("edit");
     }
-    const entries=WSFormalCards.review(current).entries.filter(entry=>["selectCards","searchDeck"].includes(entry.step?.handler)
-      && entry.implementation?.valid(entry.step.params));
-    for(const {step:{params}} of entries){
-      const from=params.from??{side:params.side,zone:"deck"};
-      const maximum=params.count??params.max;
-      const label=node("label",params.as+" ／ "+WSEffects.sides[from.side]+"の"+WSEffects.zones[from.zone]+"から最大"+maximum+"枚");
-      const select=document.createElement("select");
-      select.multiple=true;
-      for(const {side,zone,card} of WSEffects.cardsIn(board)){
-        if(side!==from.side||zone!==from.zone)continue;
-        const option=new Option(card.uid+" ／ "+card.cardNumber+" ／ "+WSEffects.sides[side]+"・"+WSEffects.zones[zone],card.uid);
-        option.selected=(Object.hasOwn(choices,params.as)?choices[params.as]:[]).includes(card.uid);
-        select.append(option);
-      }
-      select.onchange=()=>{Object.defineProperty(choices,params.as,{value:[...select.selectedOptions].map(o=>o.value),writable:true,enumerable:true,configurable:true});clearResults();};
-      label.append(select);panel.append(label);
-    }
-    if(current.limit?.perTurn){const label=node("label","このターンの使用回数");const input=document.createElement("input");input.type="number";input.min="0";input.value=choices.usedThisTurn??0;input.onchange=()=>{choices.usedThisTurn=Number(input.value);clearResults();};label.append(input);panel.append(label);}
-    if(current.id==="memory-recollection-top-reveal"){const label=node("label","能力を使用するキャラの個体ID");const input=document.createElement("input");input.value=choices.sourceUid??"";input.onchange=()=>{choices.sourceUid=input.value;clearResults();};label.append(input);panel.append(label);}
-    if(!panel.childElementCount)panel.append(node("p","事前に指定する選択はありません。"));
   }
 
-  function showCard(entry,selectedId){
-    card=entry;
-    const dropdown=$("testEffect");
-    dropdown.replaceChildren(...(entry.effects??[]).map(effect=>new Option(effect.id,effect.id)));
-    if(selectedId&&[...dropdown.options].some(o=>o.value===selectedId))dropdown.value=selectedId;
-    dropdown.disabled=!dropdown.options.length;
-    $("testCardStatus").textContent=entry.cardNumber+" ／ "+(entry.name??"名称未確認")+
-      (scenario?" ／ 架空のテスト例":entry.effects==null?" ／ 効果未確認":"");
-    readEffect();
+  function usageKey(uid,ability=effect()){return JSON.stringify([card.cardNumber,ability.id,uid]);}
+  function render(){
+    $("turnNumber").textContent=turn+"ターン目";
+    const ability=effect();
+    const usage=ability?.limit?.perTurn?WSEffects.cardsIn(board).filter(entry=>entry.side==="self"&&matches(entry.card)):
+      [];
+    const spent=usage.filter(entry=>(used.get(usageKey(entry.card.uid))??0)>=ability.limit.perTurn).length;
+    $("turnUsed").textContent=ability?.limit?.perTurn?"ターン"+ability.limit.perTurn+"回 ／ 使用済み "+spent+"枚":"";
+    $("undoBoard").disabled=!undo||!!session;
+    for(const id of ["nextTurn","resetEffectTest","loadPractice","loadSample","testEffect","testCard","testProduct"])$(id).disabled=!!session||(id==="testEffect"&&!ability);
+    $("placeCard").querySelectorAll("input,select,button").forEach(el=>el.disabled=!!session);
+    $("cancelEffect").hidden=!session;
+    $("restoreStart").hidden=!lastStart||!!session;
+    $("repeatTest").hidden=!lastStart||!!session;
+    $("runEffectTest").disabled=!ability||!!session;
+    document.querySelector("#testFind button").disabled=!!session;
+    refreshDestination("place");
+    renderBoard();
+    renderEditor();
   }
+  for(const prefix of ["place","edit"]){
+    makeOptions($(prefix+"Side"),sides);
+    makeOptions($(prefix+"Zone"),displayZones);
+    $(prefix+"Side").onchange=$(prefix+"Zone").onchange=()=>refreshDestination(prefix);
+  }
+
+  function isOnPlay(ability){return ability?.timing==="from_hand_to_stage"}
+  function matches(entry){
+    return !!card&&(entry.cardNumber===card.cardNumber||CardCatalog.cardNumbers(card).includes(entry.cardNumber));
+  }
+  function changeBoard(next){
+    undo=snapshot();
+    next();
+    render();
+  }
+
+  function formalCard(entry,number=entry.cardNumber){
+    return {uid:"test-"+(++serial),cardNumber:number,name:entry.name??null,type:entry.type??null,
+      ...Object.fromEntries(["level","cost","power","soul"].map(key=>[key,entry.stats?.[key]??null])),
+      traits:entry.traits??null,keywords:entry.keywords??null,triggers:entry.triggers??null};
+  }
+  function temporaryCard(fields){
+    return {uid:"test-"+(++serial),cardNumber:"仮カード",type:"character",level:0,traits:[],keywords:[],triggers:[],...fields};
+  }
+  $("placeNumber").onchange=()=>$("mockFields").hidden=$("placeNumber").value!=="mock";
+  $("placeCard").onsubmit=event=>{
+    event.preventDefault();
+    if(session)return;
+    const dest=destination("place"),amount=Number($("placeCount").value);
+    const fields=Object.fromEntries(["level","cost","power","soul"].map(key=>[key,numeric("mock"+key[0].toUpperCase()+key.slice(1))]));
+    const value=$("placeNumber").value,isMock=value==="mock";
+    const formal=catalog&&WSFormalCards.find(catalog,value);
+    if(!dest||!Number.isInteger(amount)||amount<1||amount>50||!isMock&&!formal||
+       isMock&&Object.values(fields).some(n=>n!==null&&!Number.isSafeInteger(n))){
+      $("boardStatus").textContent="カード、配置先、枚数と数値を確認してください。";return;
+    }
+    const changes={traitChanges:{added:tags("traitsAdded"),removed:tags("traitsRemoved")},
+      keywordChanges:{added:tags("keywordsAdded"),disabled:tags("keywordsDisabled")}};
+    changeBoard(()=>{
+      const pile=dest.host?(dest.host.markers??=[]):dest.pile;
+      for(let i=0;i<amount;i++){
+        const entry=isMock?temporaryCard({name:$("mockName").value.trim()||"仮カード",type:$("mockType").value,
+          ...fields,traits:tags("mockTraits"),keywords:tags("mockKeywords"),triggers:tags("mockTriggers")}):formalCard(formal,value);
+        for(const [key,list] of Object.entries(changes))if(Object.values(list).some(values=>values.length))entry[key]=list;
+        pile.push(entry);
+      }
+    });
+    $("boardStatus").textContent=label(dest.side,dest.zone)+"に"+amount+"枚配置しました。";
+    const position=$("boardEditor").querySelector('[data-key="'+dest.side+"."+dest.zone+'"]');
+    if(position)position.open=true;
+  };
+  function moveEntry(entry,dest,position){
+    const source=entry.host?.markers??board[entry.side][entry.zone];
+    source.splice(source.indexOf(entry.card),1);
+    const target=dest.host?(dest.host.markers??=[]):dest.pile;
+    if(position==="bottom")target.unshift(entry.card);
+    else target.push(entry.card);
+  }
+  $("editCard").onsubmit=event=>{
+    event.preventDefault();
+    const entry=editEntry(),dest=destination("edit");
+    if(session||!entry||!dest)return;
+    if(dest.host&&entry.card.markers?.length){
+      $("boardStatus").textContent="先に付いているマーカーを移動してください。";return;
+    }
+    const before=snapshot();
+    changeBoard(()=>moveEntry(entry,dest,$("editPosition").value));
+    $("boardStatus").textContent=name(entry.card)+"を"+label(dest.side,dest.zone)+"に移動しました。";
+    if(dest.side==="self"&&dest.zone==="stage"&&(entry.side!==dest.side||entry.zone!==dest.zone)&&isOnPlay(effect())&&matches(entry.card)){
+      if(entry.side==="self"&&entry.zone==="hand")begin(entry.card.uid,before,true);
+      else $("effectResult").textContent="手札以外からの登場なので、この能力は誘発しません。";
+    }
+  };
+  $("removeCard").onclick=()=>{
+    const entry=editEntry();
+    if(!entry||session)return;
+    changeBoard(()=>{
+      const pile=entry.host?.markers??board[entry.side][entry.zone];
+      pile.splice(pile.indexOf(entry.card),1);
+      selected=null;
+    });
+    $("boardStatus").textContent=name(entry.card)+"を削除しました。";
+  };
+  $("undoBoard").onclick=()=>{
+    if(!undo||session)return;
+    restore(undo);lastStart=null;clearResults();render();
+  };
+  $("resetEffectTest").onclick=()=>{
+    if(session)return;
+    board=WSEffects.emptyBoard();turn=1;used.clear();selected=null;undo=null;lastStart=null;clearResults();render();
+    $("boardStatus").textContent="盤面をリセットしました。";
+  };
+  $("nextTurn").onclick=()=>{
+    if(session)return;
+    turn++;used.clear();undo=null;clearResults();render();
+  };
 
   function readEffect(){
-    const current=effect();
-    const review=current?WSFormalCards.review(current):null;
-    $("testEffectStatus").textContent=review
-      ? WSFormalCards.labels[review.status]+(review.issues.length?" ／ "+review.issues.map(i=>i.message).join(" ／ "):"")
-      : "選択できる効果はありません。";
-    $("runEffectTest").disabled=!current;
-    $("manualExpect").hidden=!!scenario && scenario.effectId===current?.id;
-    $("sampleInfo").hidden=!$("manualExpect").hidden;
-    renderChoices();clearResults();
+    if(session)return;
+    lastStart=null;
+    const ability=effect(),review=ability&&WSFormalCards.review(ability);
+    $("testEffectStatus").textContent=review?WSFormalCards.labels[review.status]+(review.issues.length?" ／ "+review.issues.map(i=>i.message).join(" ／ "):""):"選択できる能力はありません。";
+    $("effectText").hidden=!ability;
+    $("effectText").textContent=ability?.sourceText??ability?.description??"";
+    $("operationDescription").textContent=!ability?"":isOnPlay(ability)?"テスト対象のカードを手札から舞台に登場させると、能力の確認に進みます。":"テスト開始から、使用するカードと必要な対象を選択できます。";
+    $("effectChoices").replaceChildren();
+    clearResults();render();
   }
-
-  function openFormal(selectedId){
-    const entry=WSFormalCards.find(catalog,$("testNumber").value);
-    if(!entry){$("testCardStatus").textContent="指定のカード番号は正式データにありません。";return;}
-    scenario=null;choices={};showCard(entry,selectedId);
+  function showCard(entry,abilityId){
+    card=entry;
+    options($("testEffect"),(entry.effects??[]).map((item,i)=>[item.id,(i+1)+"．"+(item.category??item.description??item.id)]));
+    if(entry.effects?.some(item=>item.id===abilityId))$("testEffect").value=abilityId;
+    $("testCardStatus").textContent=entry.cardNumber+" ／ "+(entry.name??"名称未確認")+(sample?" ／ 架空のテスト例":"");
+    $("loadPractice").hidden=entry.cardNumber!=="STS/W140-001";
+    readEffect();
   }
-
-  $("testFind").onsubmit=event=>{event.preventDefault();if(catalog)openFormal();};
-  $("testEffect").onchange=()=>{choices={};readEffect();};
+  function productCards(){
+    const value=$("testProduct").value;
+    return value==="all"?catalog.cards:catalog.cards.filter(entry=>(entry.product??"")===value);
+  }
+  function renderProduct(entry,ability){
+    const cards=productCards();
+    options($("testCard"),cards.map(item=>[item.cardNumber,(item.name??item.cardNumber)+(item.name?" ／ "+item.cardNumber:"")]));
+    if(entry)$("testCard").value=entry.cardNumber;
+    const pick=entry??cards[0];
+    sample=null;
+    if(pick)showCard(pick,ability);
+    else {card=null;options($("testEffect"),[]);readEffect()}
+  }
+  $("testProduct").onchange=()=>renderProduct();
+  $("testCard").onchange=()=>renderProduct(WSFormalCards.find(catalog,$("testCard").value));
+  $("testEffect").onchange=readEffect;
+  function openNumber(number,ability){
+    const entry=WSFormalCards.find(catalog,number);
+    if(!entry){$("testCardStatus").textContent="指定のカード番号は正式データにありません。";return}
+    $("testProduct").value=entry.product??"all";
+    renderProduct(entry,ability);
+  }
+  $("testFind").onsubmit=event=>{event.preventDefault();if(catalog&&!session)openNumber($("testNumber").value)};
+  $("loadPractice").onclick=()=>{
+    if(session||!card)return;
+    changeBoard(()=>{
+      board=WSEffects.emptyBoard();used.clear();turn=1;selected=null;
+      board.self.hand.push(formalCard(card));
+      board.self.stage.push(formalCard(card),temporaryCard({name:"回想を持つキャラ",keywords:["回想"]}));
+      board.self.stock.push(temporaryCard({name:"支払い用ストック"}));
+      board.self.waiting.push(temporaryCard({name:"巡遊者のキャラ",traits:["巡遊者"]}));
+      board.self.deck.push(temporaryCard({name:"レベル1のキャラ",level:1}),temporaryCard({name:"レベル0のキャラ"}));
+    });
+    $("boardStatus").textContent="両方の能力を試せる盤面を配置しました。";
+    clearResults();
+  };
   $("loadSample").onclick=async()=>{
-    try {
+    try{
       const response=await fetch("test/card-effects/example.json");
       if(!response.ok)throw Error("テスト例を読み込めません（HTTP "+response.status+"）");
       const data=await response.json();
-      scenario=data.cases[0];
-      board=structuredClone(scenario.before);choices=structuredClone(scenario.choices);
-      $("testNumber").value="";
-      renderBoard();showCard(data.card,scenario.effectId);
-    } catch(error){$("testCardStatus").textContent=error.message;}
+      sample=data.cases[0];
+      board=copy(sample.before);turn=1;used.clear();selected=null;undo=null;
+      showCard(data.card,sample.effectId);
+    }catch(error){$("testCardStatus").textContent=error.message}
   };
 
-  $("placeCard").onsubmit=event=>{
-    event.preventDefault();
-    const cardNumber=CardCatalog.normalizeNumber($("placeNumber").value);
-    const found=catalog&&WSFormalCards.find(catalog,cardNumber);
-    const power=numeric($("placePower").value)??found?.stats?.power??null;
-    const soul=numeric($("placeSoul").value)??found?.stats?.soul??null;
-    const ids=new Set(WSEffects.cardsIn(board).map(({card})=>card.uid));
-    let uid=$("placeUid").value.trim();
-    if(!uid){do{uid="test-"+(++serial)}while(ids.has(uid));}
-    if(!CardCatalog.validNumber(cardNumber)||ids.has(uid)||[power,soul].some(n=>n!==null&&!Number.isSafeInteger(n))){
-      $("boardStatus").textContent="カード番号、重複していない個体ID、数値を確認してください。";return;
+  function chooseCards(request,commit){
+    const panel=$("effectChoices"),area=node("div");area.className="lab-cards";
+    const chosen=new Set(),widgets=[];
+    panel.replaceChildren(node("p",request.text??request.label+"から"+(request.min===request.max?request.max+"枚":"最大"+request.max+"枚")+"を選んでください。"),area);
+    const accept=button(request.confirm??"選択を確定",()=>commit([...chosen]));
+    accept.className="primary";
+    if(request.min===0)panel.append(button("選ばずに続ける",()=>commit([])));
+    panel.append(accept);
+    const sync=()=>{
+      accept.disabled=chosen.size<Math.max(1,request.min);
+      for(const [card,el] of widgets)el.setAttribute("aria-pressed",String(chosen.has(card.uid)));
+    };
+    for(const candidate of request.candidates){
+      const el=cardButton(candidate,()=>{
+        if(chosen.has(candidate.uid))chosen.delete(candidate.uid);
+        else {
+          if(request.max===1)chosen.clear();
+          if(chosen.size<request.max)chosen.add(candidate.uid);
+        }
+        sync();
+      });
+      widgets.push([candidate,el]);area.append(el);
     }
-    const tags=id=>$(id).value.split(/[,、]/).map(tag=>tag.trim()).filter(Boolean);
-    const traitChanges={added:tags("traitsAdded"),removed:tags("traitsRemoved")};
-    const keywordChanges={added:tags("keywordsAdded"),disabled:tags("keywordsDisabled")};
-    const entry={uid,cardNumber,power,soul,type:found?.type??null,level:found?.stats?.level??null,traits:found?.traits??null,keywords:found?.keywords??null};
-    if(Object.values(traitChanges).some(list=>list.length))entry.traitChanges=traitChanges;
-    if(Object.values(keywordChanges).some(list=>list.length))entry.keywordChanges=keywordChanges;
-    board[$("placeSide").value][$("placeZone").value].push(entry);
-    $("boardStatus").textContent=uid+" を追加しました。";
-    $("placeUid").value="";
-    renderBoard();renderChoices();clearResults();
-  };
-
-  $("expectKind").onchange=()=>{$("expectUidLabel").hidden=!["power","soul"].includes($("expectKind").value);};
-  function renderExpected(){
-    $("expectations").replaceChildren(...expectations.map((item,i)=>{
-      const line=node("li",item.label+" ");
-      const remove=node("button","削除");remove.onclick=()=>{expectations.splice(i,1);renderExpected();clearResults();};
-      line.append(remove);return line;
-    }));
-  }
-  $("addExpectation").onsubmit=event=>{
-    event.preventDefault();
-    const side=$("expectSide").value,zone=$("expectZone").value;
-    const kind=$("expectKind").value,raw=$("expectValue").value.trim(),uid=$("expectUid").value.trim();
-    const value=kind==="order"?(raw?raw.split(/\s+/):[]):numeric(raw);
-    if((kind!=="order"&&!Number.isSafeInteger(value))||(kind==="count"&&value<0)||(["power","soul"].includes(kind)&&!uid)){
-      $("expectError").textContent="期待値と個体IDを確認してください。";return;
-    }
-    const label=WSEffects.sides[side]+"・"+WSEffects.zones[zone]+" ／ "+$("expectKind").selectedOptions[0].textContent+" "+uid+" = "+raw;
-    expectations.push({side,zone,kind,uid,value,label});
-    $("expectError").textContent="";renderExpected();clearResults();
-  };
-
-  function compareManual(actual){
-    const allowed=["success","skipped","condition-not-met"].includes(actual.status);
-    if(!allowed)return {message:"効果を検証できません",lines:[]};
-    if(!expectations.length)return {message:"未判定（比較条件を追加してください）",lines:[]};
-    const lines=expectations.map(item=>{
-      const pile=actual.state[item.side][item.zone];
-      const observed=item.kind==="count"?pile.length:item.kind==="order"?pile.map(card=>card.uid)
-        :pile.find(card=>card.uid===item.uid)?.[item.kind];
-      return {label:item.label+" ／ 実際 "+(Array.isArray(observed)?observed.join(" "):observed??"未確認"),
-        pass:JSON.stringify(observed)===JSON.stringify(item.value)};
-    });
-    const matchStatus=$("expectedStatus").value===actual.status;
-    lines.unshift({label:"結果ステータス",pass:matchStatus});
-    return {message:lines.every(item=>item.pass)?"一致":"不一致",lines};
+    if(!widgets.length)area.append(node("p","選べるカードはありません。"));
+    sync();
   }
 
-  $("runEffectTest").onclick=()=>{
-    const current=effect();
-    const review=WSFormalCards.review(current);
+  function focusOperation(){$("choiceHeading").focus()}
+  function begin(uid,start=snapshot(),entered=false){
+    const ability=effect(),review=WSFormalCards.review(ability);
     if(review.status!=="ready"){
-      clearResults();
+      session=null;render();
       $("effectResult").textContent=WSFormalCards.labels[review.status]+" ／ 実行前に停止しました";
-      $("effectLog").replaceChildren(...review.issues.map(issue=>node("li",issue.message)));
       return;
     }
-    const before=structuredClone(board);
-    const replay=scenario&&scenario.effectId===current.id
-      ? WSEffectCases.execute(card,{...scenario,before,choices},WSEffects):null;
-    const actual=replay?.actual??WSEffects.run(current,before,choices);
-    const comparison=replay
-      ? {message:replay.pass?"一致":"不一致",lines:[{label:"盤面全体と結果ステータス",pass:replay.pass}]}
-      : compareManual(actual);
-    $("effectResult").textContent=statusLabels[actual.status]+" ／ "+comparison.message+(actual.message?" ／ "+actual.message:"");
-    $("compareResults").replaceChildren(...comparison.lines.map(item=>node("li",(item.pass?"一致　":"不一致　")+item.label)));
+    clearResults();
+    lastStart={state:start,uid,entered};
+    session={iterator:WSEffects.guide(ability,board,{sourceUid:uid,usedThisTurn:used.get(usageKey(uid))??0}),
+      before:copy(board),uid,ability};
+    render();
+    focusOperation();
+    advance();
+  }
+  function advance(answer){
+    const panel=$("effectChoices");
+    const next=session.iterator.next(answer);
+    panel.replaceChildren();
+    if(next.done){
+      const resolved=session;
+      session=null;
+      if(next.value.status==="success"){
+        board=next.value.state;
+        if(resolved.ability.limit?.perTurn){
+          const key=usageKey(resolved.uid,resolved.ability);
+          used.set(key,(used.get(key)??0)+1);
+        }
+        undo=null;
+      }
+      showResult(resolved.before,next.value);render();return;
+    }
+    const step=next.value;
+    focusOperation();
+    if(step.kind==="select"){chooseCards(step,advance);return}
+    if(step.kind==="optional"){
+      panel.append(node("p","この能力を使いますか？"),button("能力を使用する",()=>advance(true)),button("能力を使用しない",()=>advance(false)));
+      return;
+    }
+    if(step.kind==="reveal"){
+      const list=node("ul");
+      for(const entry of step.cards)list.append(node("li",name(entry)+(step.returned.includes(entry.uid)?" ／ 山札に戻す":"")));
+      panel.append(node("h3","公開カードを確認"),list,button("処理を続ける",()=>advance()));
+      return;
+    }
+    panel.append(node("p",step.text),button("コストを支払う",()=>advance()));
+  }
+  function enterFromHand(uid){
+    const entry=WSEffects.cardsIn(board).find(item=>item.card.uid===uid&&item.side==="self"&&item.zone==="hand");
+    if(!entry)return;
+    const before=snapshot();
+    moveEntry(entry,{side:"self",zone:"stage",pile:board.self.stage},"top");
+    begin(uid,before,true);
+  }
+  $("runEffectTest").onclick=()=>{
+    const ability=effect();
+    if(!ability||session)return;
+    if(WSFormalCards.review(ability).status!=="ready"){begin(null);return}
+    if(sample||ability.timing==="manual"||!isOnPlay(ability)&&ability.type!=="activated"){begin(null);return}
+    const entering=isOnPlay(ability),zone=entering?"hand":"stage";
+    const candidates=board.self[zone].filter(matches);
+    if(!candidates.length){
+      $("effectChoices").replaceChildren(node("p","自分の"+zones[zone]+"にテスト対象のカードを配置してください。"));return;
+    }
+    if(candidates.length===1){if(entering)enterFromHand(candidates[0].uid);else begin(candidates[0].uid);return}
+    session={};render();focusOperation();
+    chooseCards({text:entering?"手札から舞台に出すカードを選んでください。":"能力を使う舞台のカードを選んでください。",
+      candidates,min:1,max:1,confirm:entering?"舞台に登場させる":"このカードの能力を使う"},
+      ([uid])=>{if(entering)enterFromHand(uid);else begin(uid)});
+  };
+  $("cancelEffect").onclick=()=>{
+    session?.iterator?.return();
+    session=null;
+    $("effectChoices").replaceChildren();
+    clearResults();
+    $("effectResult").textContent="テストを中止しました。途中のコストや効果は盤面に反映していません。";
+    render();
+  };
+  $("restoreStart").onclick=()=>{
+    if(!lastStart||session)return;
+    restore(lastStart.state);
+    clearResults();
+  };
+  $("repeatTest").onclick=()=>{
+    if(!lastStart||session)return;
+    const previous=lastStart;
+    restore(previous.state);
+    if(previous.entered)enterFromHand(previous.uid);
+    else begin(previous.uid);
+  };
+
+  function showResult(before,actual){
+    const after=actual.status==="success"?actual.state:board;
+    const reference=new Map([...allCards(before),...allCards(after)].map(item=>[item.card.uid,item]));
+    const previous=new Map(allCards(before).map(item=>[item.card.uid,item]));
+    const moves=allCards(after).flatMap(item=>{
+      const old=previous.get(item.card.uid);
+      if(!old||old.side===item.side&&old.zone===item.zone&&old.host?.uid===item.host?.uid)return [];
+      return [name(item.card)+"（"+label(old.side,old.zone)+" → "+label(item.side,item.zone)+"）"];
+    });
+    const names=ids=>ids.map(uid=>reference.get(uid)?.card).filter(Boolean).map(name);
+    const log=actual.status==="success"?actual.log:[];
+    const costs=log.filter(entry=>entry.phase==="costs"&&!["selectCards","searchDeck"].includes(entry.handler)).flatMap(entry=>entry.cards??[]);
+    const reveals=log.flatMap(entry=>entry.revealed??[]);
+    const returned=log.flatMap(entry=>entry.returned??[]);
+    const newHand=allCards(after).filter(item=>item.zone==="hand"&&previous.get(item.card.uid)?.zone!=="hand").map(item=>name(item.card));
+    const panel=$("resultChanges");
+    panel.replaceChildren();
+    const groups=[["移動したカード",moves],["支払ったコスト",names(costs)],["公開したカード",names(reveals)],
+      ["手札に加えたカード",newHand],["山札に戻したカード",names(returned)]];
+    for(const [title,items] of groups){
+      if(!items.length)continue;
+      const list=node("ul");list.append(...items.map(text=>node("li",text)));
+      panel.append(node("h3",title),list);
+    }
+    for(const [side,title] of Object.entries(sides)){
+      const counts=node("p",Object.entries(displayZones).map(([zone,zName])=>{
+        const size=state=>zone==="markers"?allCards(state).filter(item=>item.side===side&&item.zone===zone).length:state[side][zone].length;
+        const prior=size(before),now=size(after);
+        return zName+" "+(prior===now?now:prior+"→"+now);
+      }).join(" ／ "));
+      panel.append(node("h3",title+"の領域枚数"),counts);
+    }
+    $("effectResult").textContent=(results[actual.status]??actual.status)+(actual.message?" ／ "+actual.message:"");
     $("beforeBoard").textContent=JSON.stringify(before,null,2);
-    $("afterBoard").textContent=JSON.stringify(actual.state,null,2);
-    $("effectLog").replaceChildren(...actual.log.map(entry=>node("li",phaseLabels[entry.phase]+" ／ "+entry.handler+
-      " ／ "+(entry.ok?"完了":"停止")+(entry.cards?.length?" ／ "+entry.cards.join("、"):"")+(entry.message?" ／ "+entry.message:""))));
-  };
+    $("afterBoard").textContent=JSON.stringify(after,null,2);
+    $("effectLog").replaceChildren(...actual.log.map(entry=>node("li",
+      phaseNames[entry.phase]+" ／ "+entry.handler+" ／ "+(entry.ok?"完了":"停止")+
+      (entry.cards?.length?" ／ "+entry.cards.join("、"):""))));
+    if(sample&&effect().id===sample.effectId)$("compareResults").append(node("li",
+      WSEffects.compare(actual,sample.expected)?"盤面全体と結果が一致しました。":"テスト例の期待結果とは異なります。"));
+  }
 
-  $("resetEffectTest").onclick=()=>{
-    board=nextBoard();choices={};scenario=null;expectations=[];
-    card=null;$("testNumber").value="";$("testEffect").replaceChildren();$("testEffect").disabled=true;
-    $("testCardStatus").textContent="テスト状態をリセットしました。";
-    $("placeCard").reset();
-    $("boardStatus").textContent="";$("expectError").textContent="";
-    renderExpected();renderBoard();readEffect();
-  };
-
-  renderBoard();readEffect();
+  render();
   WSFormalCards.load().then(data=>{
     catalog=data;
-    $("testNumbers").replaceChildren(...data.cards.flatMap(card=>CardCatalog.cardNumbers(card).map(number=>new Option(card.name??"",number))));
-    $("testOpen").disabled=false;
+    options($("testProduct"),[["all","すべて"],...CardCatalog.products(data.cards).map(product=>[product,product])]);
+    const numbers=data.cards.flatMap(entry=>CardCatalog.cardNumbers(entry).map(number=>[number,entry.name??number]));
+    options($("testNumbers"),numbers);
+    options($("placeNumber"),[...numbers.map(([number,title])=>[number,title===number?number:title+" ／ "+number]),["mock","仮カードを作る"]]);
+    $("placeNumber").onchange();
     const params=new URLSearchParams(location.search);
-    if(params.has("card")){$("testNumber").value=params.get("card");openFormal(params.get("effect"));}
-    else $("testCardStatus").textContent=data.cards.length?"カード番号を選んでください。":"架空カードのテスト例を利用できます。正式カードはまだ登録されていません。";
-  }).catch(error=>{$("testCardStatus").textContent=error.message;});
+    if(params.has("card"))openNumber(params.get("card"),params.get("effect"));
+    else renderProduct();
+  }).catch(error=>{$("testCardStatus").textContent=error.message});
 })();

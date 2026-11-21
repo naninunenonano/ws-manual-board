@@ -10,7 +10,7 @@ const files = new Map([
   ["card-catalog.js","application/javascript"],["card-catalog-view.js","application/javascript"],
   ["card-data/load.js","application/javascript"],["card-data/catalog.json","application/json"],
   ["effects/engine.js","application/javascript"],["effects/cases.js","application/javascript"],
-  ["card-effect-test.html","text/html"],["card-effect-test.js","application/javascript"],
+  ["card-effect-test.html","text/html"],["card-effect-test.css","text/css"],["card-effect-test.js","application/javascript"],
   ["test/card-effects/example.json","application/json"]
 ]);
 
@@ -38,30 +38,24 @@ async function checkEffects(browser,url) {
   await $("formalResults").getByText(/futureAction は未実装/).waitFor();
   await $("formalResults").getByRole("link",{name:"この効果をテスト"}).first().click();
   await $("testEffectStatus").getByText("テスト実行可能",{exact:true}).waitFor();
-  await $("placeNumber").fill("TEST/S001-003");
-  await $("placeUid").fill("drawn");
+  await page.getByText("カードを配置",{exact:true}).click();
+  await $("placeNumber").selectOption("TEST/S001-003");
   await page.getByRole("button",{name:"領域の上に追加"}).click();
-  await $("expectZone").selectOption("hand");
-  await $("expectValue").fill("1");
-  await page.getByRole("button",{name:"比較条件を追加"}).click();
   await $("runEffectTest").click();
-  assert.equal(await $("effectResult").innerText(),"解決 ／ 一致");
-  assert.equal(JSON.parse(await $("afterBoard").textContent()).self.hand[0].uid,"drawn");
-  assert.equal(JSON.parse(await $("beforeBoard").textContent()).self.deck[0].uid,"drawn");
+  assert.equal(await $("effectResult").innerText(),"解決");
+  assert.equal(JSON.parse(await $("afterBoard").textContent()).self.hand[0].cardNumber,"TEST/S001-003");
+  assert.equal(JSON.parse(await $("beforeBoard").textContent()).self.deck[0].cardNumber,"TEST/S001-003");
   await $("testEffect").selectOption("future");
   await $("runEffectTest").click();
   assert.match(await $("effectResult").innerText(),/未実装.*実行前に停止/);
+  await page.getByText("開発者向け情報",{exact:true}).click();
   await $("loadSample").click();
   await $("testCardStatus").getByText(/架空のテスト例/).waitFor();
   await $("runEffectTest").click();
-  assert.equal(await $("effectResult").innerText(),"解決 ／ 一致");
-  assert.match(await $("effectLog").innerText(),/支払い ／ payStock/);
-  assert.equal(JSON.parse(await $("afterBoard").textContent()).self.stage[1].power,1500);
-  await $("effectChoices").getByLabel("任意効果").selectOption("no");
-  await $("runEffectTest").click();
-  assert.match(await $("effectResult").innerText(),/任意効果を辞退 ／ 不一致/);
+  await page.getByRole("button",{name:"能力を使用しない",exact:true}).click();
+  assert.match(await $("effectResult").innerText(),/任意効果を辞退/);
   await $("resetEffectTest").click();
-  assert.equal(await $("runEffectTest").isDisabled(),true);
+  assert.equal(await $("runEffectTest").isDisabled(),false);
   assert.equal(await page.evaluate(()=>localStorage.length),0);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   assert.deepEqual(errors,[]);
@@ -96,19 +90,82 @@ async function checkProducts(browser,url) {
   await $("formalResults").getByText("STS/W140-001S、STS/W140-001SP",{exact:true}).waitFor();
   await $("formalResults").getByText("巡遊者、恩恵意志",{exact:true}).waitFor();
   assert.deepEqual(await $("formalResults").locator(".effect-original").allTextContents(),wraith.effects.map(effect=>effect.sourceText));
-  assert.equal(await $("formalResults").getByText(/テスト実行可能/).count(),0);
-  assert.equal(await $("formalResults").getByText(/未実装あり/).count(),3);
+  assert.equal(await $("formalResults").getByText(/テスト実行可能/).count(),3);
+  assert.equal(await $("formalResults").getByText(/未実装あり/).count(),0);
   await page.goto(url+"/card-effect-test.html?card=STS%2FW140-001SP");
   await $("testCardStatus").getByText(/STS\/W140-001 ／/).waitFor();
-  await $("placeNumber").fill("STS/W140-001SP");
+  await page.getByText("カードを配置",{exact:true}).click();
+  await $("placeNumber").selectOption("STS/W140-001SP");
   await $("placeCard").locator("details summary").click();
   await $("keywordsAdded").fill("回想");
   await page.getByRole("button",{name:"領域の上に追加"}).click();
-  await $("boardEditor").getByText("山札 （1枚）",{exact:true}).click();
   await $("boardEditor").getByText("キーワード能力 回想",{exact:true}).waitFor();
+  await $("loadPractice").click();
+  const waiting=page.locator('#boardEditor details[data-key="self.waiting"]');
+  const hand=page.locator('#boardEditor details[data-key="self.hand"]');
+  await hand.locator("summary").click();
+  await hand.getByRole("button",{name:/STS\/W140-001/}).click();
+  await $("editZone").selectOption("waiting");
+  await page.getByRole("button",{name:"選択したカードを移動",exact:true}).click();
+  await waiting.locator("summary").click();
+  await waiting.getByRole("button",{name:/STS\/W140-001/}).click();
+  await $("editZone").selectOption("stage");
+  await page.getByRole("button",{name:"選択したカードを移動",exact:true}).click();
+  assert.match(await $("effectResult").innerText(),/手札以外.*誘発しません/);
+  await $("undoBoard").click();
+  await waiting.getByRole("button",{name:/STS\/W140-001/}).waitFor();
+  await $("loadPractice").click();
+
   await $("runEffectTest").click();
-  assert.match(await $("effectResult").innerText(),/未実装.*実行前に停止/);
+  await page.getByRole("button",{name:"能力を使用する",exact:true}).click();
+  await page.getByRole("button",{name:"コストを支払う",exact:true}).click();
+  await $("effectChoices").getByRole("button",{name:/巡遊者のキャラ/}).click();
+  await page.getByRole("button",{name:"選択を確定",exact:true}).click();
+  await page.getByRole("button",{name:"コストを支払う",exact:true}).click();
+  await $("cancelEffect").click();
+  const self=page.locator("#boardEditor section").first();
+  await self.getByText("ストック （1枚）",{exact:true}).waitFor();
+  await self.getByText("クロック （0枚）",{exact:true}).waitFor();
+  await $("repeatTest").click();
+  await page.getByRole("button",{name:"能力を使用する",exact:true}).click();
+  await page.getByRole("button",{name:"コストを支払う",exact:true}).click();
+  await $("effectChoices").getByRole("button",{name:/巡遊者のキャラ/}).click();
+  await page.getByRole("button",{name:"選択を確定",exact:true}).click();
+  await page.getByRole("button",{name:"コストを支払う",exact:true}).click();
+  await $("effectChoices").getByRole("button",{name:/レベル0のキャラ/}).click();
+  await page.getByRole("button",{name:"選択を確定",exact:true}).click();
+  await $("effectChoices").getByText("公開カードを確認",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"処理を続ける",exact:true}).click();
+  await $("resultChanges").getByText("公開したカード",{exact:true}).waitFor();
+  await self.getByText("クロック （1枚）",{exact:true}).waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+
+  await $("testEffect").selectOption("memory-recollection-top-reveal");
+  await $("loadPractice").click();
+  await $("runEffectTest").click();
+  assert.equal(await $("effectChoices").locator(".lab-card").count(),1);
+  await $("effectChoices").getByRole("button",{name:/回想を持つキャラ/}).click();
+  await page.getByRole("button",{name:"選択を確定",exact:true}).click();
+  await page.getByRole("button",{name:"コストを支払う",exact:true}).click();
+  await page.getByRole("button",{name:"処理を続ける",exact:true}).click();
+  await $("turnUsed").getByText(/使用済み 1枚/).waitFor();
+  await $("runEffectTest").click();
+  assert.match(await $("effectResult").innerText(),/使用回数上限/);
+  await $("nextTurn").click();
+  assert.match(await $("turnUsed").innerText(),/使用済み 0枚/);
+
+  await $("loadPractice").click();
+  await $("placeNumber").selectOption("mock");
+  await $("mockName").fill("盤面確認用マーカー");
+  await $("placeZone").selectOption("markers");
+  await $("placeCount").fill("2");
+  await page.getByRole("button",{name:"領域の上に追加"}).click();
+  await self.getByText("マーカー （2枚）",{exact:true}).waitFor();
+  await $("runEffectTest").click();
+  assert.match(await $("effectResult").innerText(),/思い出とマーカー.*満たしていません/);
+  await $("undoBoard").click();
+  await self.getByText("マーカー （0枚）",{exact:true}).waitFor();
+  assert.doesNotMatch(await $("boardEditor").innerText(),/test-\d+/);
   await page.close();
   console.log("Catalog: product generation and filter, explicit variants, original source, keyword test state and pending effect passed");
 }
