@@ -13,11 +13,12 @@ if(typeof WSFormalCards!=="undefined")WSFormalCards.load().then(data=>{
 }).catch(()=>{});
 
 function botDefinition(card){
-  if(card.id.startsWith("BOT/")){
+  if(card?.id.startsWith("BOT/")){
+    if(isAutoRules())return autoRuleDefinition(card);
     return {name:card.cx?"BotのCX":"Botの練習キャラ",type:card.cx?"climax":"character",
       stats:{level:0,cost:0,power:2500,soul:1},traits:[],keywords:[]};
   }
-  if(botCatalog)return WSFormalCards.find(botCatalog,card.id);
+  if(botCatalog&&card)return WSFormalCards.find(botCatalog,card.id);
   return null;
 }
 function botCardInfo(card){
@@ -64,11 +65,15 @@ function prepareBotScenario(board){
 function startBotMatch(deck,scenario){
   if(!isDeckSetup())return;
   if(onlineMatch?.active()){message("オンラインルームを退出してから開始してください");return}
+  const rules=scenario===autoRuleScenario;
+  if(rules)deck={...botDeck,title:"共通ルール確認用デッキ"};
   if(!deck){message("プレイヤー1の使用デッキを選択してください");return}
-  if(!Object.hasOwn(botScenarioNames,scenario))return;
-  const boards=[buildMatchBoard(deck,0),buildMatchBoard(botDeck,1)];
+  if(!rules&&!Object.hasOwn(botScenarioNames,scenario))return;
+  const opponentDeck=rules?deck:botDeck;
+  const boards=[buildMatchBoard(deck,0),buildMatchBoard(opponentDeck,1)];
   const [own,opponent]=boards;
-  if(scenario==="firen"){
+  if(rules){prepareAutoRuleBoards(boards);}
+  else if(scenario==="firen"){
     if(!botCatalog){message("カードデータの読み込みをお待ちください");return}
     if(!prepareBotScenario(own)){
       message("フィレン2枚、凱旋歌2枚と、フィレン以外の登録済み《巡遊者》か《魔王》のキャラ2枚が必要です");
@@ -78,33 +83,36 @@ function startBotMatch(deck,scenario){
     shuffle(own.deck);
     for(let i=0;i<5;i++)botMove(own,"deck",own.deck.length-1,"hand");
   }
-  // Five level-zero practice characters form the bot's starting hand.
-  for(let i=0;i<5;i++)botMove(opponent,"deck",0,"hand");
-  if(scenario==="front"||scenario==="firen")botMove(opponent,"hand",0,"front0");
-  else if(scenario==="open")botMove(opponent,"hand",0,"front1");
-  if(scenario==="opening")shuffle(opponent.deck);
-  else{
-    const climaxes=opponent.deck.filter(card=>card.cx);
-    opponent.deck=opponent.deck.filter(card=>!card.cx);
-    climaxes.forEach((card,i)=>opponent.deck.splice(i*5,0,card));
-  }
-  if(scenario!=="opening"){
-    const first=opponent.deck.findIndex(c=>c.cx===(scenario==="front"));
-    botMove(opponent,"deck",first,"deck");
+  if(!rules){
+    // Five level-zero practice characters form the bot's starting hand.
+    for(let i=0;i<5;i++)botMove(opponent,"deck",0,"hand");
+    if(scenario==="front"||scenario==="firen")botMove(opponent,"hand",0,"front0");
+    else if(scenario==="open")botMove(opponent,"hand",0,"front1");
+    if(scenario==="opening")shuffle(opponent.deck);
+    else{
+      const climaxes=opponent.deck.filter(card=>card.cx);
+      opponent.deck=opponent.deck.filter(card=>!card.cx);
+      climaxes.forEach((card,i)=>opponent.deck.splice(i*5,0,card));
+    }
+    if(scenario!=="opening"){
+      const first=opponent.deck.findIndex(c=>c.cx===(scenario==="front"));
+      botMove(opponent,"deck",first,"deck");
+    }
   }
   const opening=scenario==="opening";
   const snapshot={version:1,phase:opening?"mulligan":"active",screen:opening?"mulligan":"battle",
-    side:0,firstPlayer:0,mulliganPlayer:0,openingHandDealt:true,decks:[deck,botDeck],players:boards,result:null,
-    turn:{player:0,number:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{}}};
+    side:0,firstPlayer:0,mulliganPlayer:0,openingHandDealt:true,decks:[deck,opponentDeck],players:boards,result:null,
+    turn:{player:0,number:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:["手札の仮キャラをタップしてプレイ"]}:{})}};
   if(!writeMatch(snapshot))return;
   match=snapshot;players=boards;side=0;selected=null;mulliganSelection=new Set();
   showMatchScreen();
+  if(!rules)botMessage("");
   message("Bot戦を開始しました");
 }
 
 function botEffectCard(card){
   const def=botDefinition(card);
-  return {uid:card.uid,cardNumber:card.id,type:def?.type??(card.cx?"climax":null),
+  return {uid:card.uid,cardNumber:card.id,name:def?.name??null,type:def?.type??(card.cx?"climax":null),
     level:card.botLevel??def?.stats?.level??null,power:card.botPower??def?.stats?.power??null,
     soul:card.botSoul??def?.stats?.soul??null,turnLevelBonus:card.turnLevelBonus??0,
     traits:def?.traits??null,keywords:def?.keywords??null,markers:card.markers??[]};
@@ -120,8 +128,8 @@ function botEffectBoard(p){
   }
   return result;
 }
-function botApplyEffect(state,destinations){
-  const board=players[0];
+function botApplyEffect(state,destinations,p){
+  const board=players[p];
   const all=new Map(zones.flatMap(zone=>board[zone].map(card=>[card.uid,{card,zone}])));
   const slots=new Map();
   for(const entry of state.self.stage){
@@ -142,6 +150,10 @@ function botApplyEffect(state,destinations){
       const old=all.get(entry.uid);
       if(!old)return false;
       const card={...old.card,botPower:entry.power,botSoul:entry.soul,botLevel:entry.level,turnLevelBonus:entry.turnLevelBonus};
+      if(isAutoRules()){
+        card.turnPowerBonus=(card.turnPowerBonus??0)+(entry.power??0)-(autoRuleStat(old.card,"power")??0);
+        card.turnSoulBonus=(card.turnSoulBonus??0)+(entry.soul??0)-(autoRuleStat(old.card,"soul")??0);
+      }
       if(zone!=="stage"&&isStageZone(old.zone)){
         card.orientation=0;
         markers.push(...(card.markers??[]).map(marker=>({...marker.card,faceUp:true})));
@@ -160,7 +172,11 @@ function botStats(p,card){
   const original=botEffectCard(card);
   let {power,soul}=original;
   const own=players[p];
-  if(own.cx.length&&botCatalog){
+  if(isAutoRules()&&own.cx.length){
+    const bonus=autoRuleBuff(p,card);
+    if(power!=null)power+=bonus.power;
+    if(soul!=null)soul+=bonus.soul;
+  }else if(own.cx.length&&botCatalog){
     const bonus=WSEffects.continuousModifiers(botEffectBoard(p)).find(entry=>entry.uid===card.uid);
     if(bonus){power=bonus.power;soul=bonus.soul;}
   }
@@ -178,31 +194,32 @@ function botStats(p,card){
   return {power,soul};
 }
 
-function botDispatch(card,timing,done){
+function botDispatch(card,timing,done,p=0){
   const effects=botDefinition(card)?.effects?.filter(item=>item.timing===timing&&item.type==="auto")??[];
   function next(i){
     if(i===effects.length){done?.();return}
-    botGuide(card,effects[i],()=>next(i+1));
+    botGuide(card,effects[i],()=>next(i+1),p);
   }
   next(0);
 }
-function botGuide(card,ability,done){
+function botGuide(card,ability,done,p=0){
   const key=card.uid+":"+ability.id;
-  const iterator=WSEffects.guide(ability,botEffectBoard(0),{
+  const iterator=WSEffects.guide(ability,botEffectBoard(p),{
     sourceUid:card.uid,usedThisTurn:match.bot.uses[key]??0
   });
   function finish(result,destinations=new Map()){
-    const success=result.status==="success"&&botApplyEffect(result.state,destinations);
+    const success=result.status==="success"&&botApplyEffect(result.state,destinations,p);
     if(success&&ability.limit?.perTurn)match.bot.uses[key]=(match.bot.uses[key]??0)+1;
     const text=success?"解決しました":result.status==="success"?"舞台の空き枠がありません":result.message;
-    botMessage((ability.category??ability.id)+" · "+text);
+    if(!isAutoRules())botMessage((ability.category??ability.id)+" · "+text);
+    else if(result.status!=="condition-not-met")autoRuleLog((ability.category??ability.id)+" · "+text);
     done?.(success);
   }
   function chooseStage(result){
     if(result.status!=="success"){finish(result);return}
     const retained=new Set(result.state.self.stage.map(card=>card.uid));
-    const available=botSlots.filter(slot=>!players[0][slot].some(card=>retained.has(card.uid)));
-    const staged=new Set(botSlots.flatMap(slot=>players[0][slot].map(card=>card.uid)));
+    const available=botSlots.filter(slot=>!players[p][slot].some(card=>retained.has(card.uid)));
+    const staged=new Set(botSlots.flatMap(slot=>players[p][slot].map(card=>card.uid)));
     const entering=result.state.self.stage.filter(card=>!staged.has(card.uid));
     if(entering.length>available.length){finish(result);return}
     const destinations=new Map();
@@ -280,6 +297,14 @@ function botEndTurn(p){
     }
   }
   while(players[p].cx.length)botMove(players[p],"cx",0,"waiting");
+  if(isAutoRules()){
+    match.bot.attacked=false;
+    for(const board of players)for(const zone of zones)for(const card of board[zone]){
+      if(card.turnPowerBonus)card.botPower-=card.turnPowerBonus;
+      if(card.turnSoulBonus)card.botSoul-=card.turnSoulBonus;
+      delete card.turnPowerBonus;delete card.turnSoulBonus;
+    }
+  }
   match.bot.uses={};
 }
 
@@ -295,6 +320,12 @@ function botDamage(target,amount,done){
   function finish(cancel){
     const destination=cancel?"waiting":"clock";
     const result=cancel?"CXでダメージをキャンセル":"ダメージ "+revealed.length+"枚";
+    if(isAutoRules()){
+      autoRuleLog(result+(revealed.length?"（"+revealed.map(c=>botCardInfo(c).name).join("、")+"）":""));
+      revealed.forEach(card=>{card.faceUp=true;board[destination].push(card)});
+      resolveBoardRules(target,done);
+      return;
+    }
     botMessage(result);
     if(!revealed.length){resolveBoardRules(target,done);return}
     const body=showResolution(result,revealed);
@@ -314,8 +345,8 @@ function botDamage(target,amount,done){
   }
   next();
 }
-function botBattle(p,zone,attackUid,defenceUid){
-  const attacker=players[p][zone].at(-1),defender=players[1-p][zone].at(-1);
+function botBattle(p,zone,attackUid,defenceUid,opposite=zone){
+  const attacker=players[p][zone].at(-1),defender=players[1-p][opposite].at(-1);
   if(!attacker||!defender||attacker.uid!==attackUid||defender.uid!==defenceUid)return;
   const attack=botStats(p,attacker).power,defence=botStats(1-p,defender).power;
   if(attack==null||defence==null){
@@ -324,6 +355,7 @@ function botBattle(p,zone,attackUid,defenceUid){
   }
   if(attack<=defence)attacker.orientation=180;
   if(defence<=attack)defender.orientation=180;
+  if(isAutoRules())autoRuleLog("バトル "+attack+" 対 "+defence+(attack===defence?"（両方リバース）":attack<defence?"（攻撃側リバース）":"（防御側リバース）"));
 }
 
 function botHumanAttack(p,zone,index){
@@ -354,26 +386,31 @@ function botHumanAttack(p,zone,index){
       let trigger;
       botRevealTop(p,card=>{trigger=card},found=>{
         if(!found){damage();return}
-        const effect=botDefinition(trigger)?.effects?.find(item=>item.type==="trigger"&&item.timing==="on_trigger");
-        if(effect){
-          trigger.faceUp=true;board.waiting.push(trigger);
-          botGuide(trigger,effect,success=>{
-            if(!success){
-              const index=board.waiting.findIndex(card=>card.uid===trigger.uid);
-              if(index>=0)botMove(board,"waiting",index,"stock");
-            }
-            resolveBoardRules(p,damage);
-          });
-          return;
-        }
-        const body=showResolution("トリガーチェック",[trigger]);
-        deckButton(body,"ストックに置く",()=>{
-          closeResolution();trigger.faceUp=false;board.stock.push(trigger);damage();
-        });
+        botTriggerEffect(p,trigger,damage);
       });
     }
     botDispatch(board[zone][index],"on_attack",afterEffects);
   });
+}
+
+function botTriggerEffect(p,trigger,done){
+  const board=players[p];
+  const effect=botDefinition(trigger)?.effects?.find(item=>item.type==="trigger"&&item.timing==="on_trigger");
+  if(effect){
+    trigger.faceUp=true;board.waiting.push(trigger);
+    botGuide(trigger,effect,success=>{
+      if(!success){
+        const index=board.waiting.findIndex(card=>card.uid===trigger.uid);
+        if(index>=0)botMove(board,"waiting",index,"stock");
+      }
+      resolveBoardRules(p,done);
+    },p);
+    return;
+  }
+  function stock(){trigger.faceUp=false;board.stock.push(trigger);done()}
+  if(isAutoRules()){stock();return}
+  const body=showResolution("トリガーチェック",[trigger]);
+  deckButton(body,"ストックに置く",()=>{closeResolution();stock()});
 }
 
 function botAttack(zone){
@@ -397,11 +434,12 @@ function botCanStep(){
 }
 function renderBotControls(){
   document.getElementById("botControls").hidden=false;
-  document.getElementById("botModeName").textContent="Bot戦 · "+botScenarioNames[match.bot.scenario];
+  document.getElementById("botModeName").textContent="Bot戦 · "+(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]);
   const button=document.getElementById("botStep");
   button.disabled=!botCanStep();
   const phase=match.turn.phase;
-  const steps={stand:"Botのドロー",draw:"Botがキャラを出す",main:"Botのアタックへ",
+  if(isAutoRules()&&match.bot.log)botMessage(match.bot.log.join(" ／ "));
+  const steps={stand:"Botのドロー",draw:isAutoRules()?"Botのクロックへ":"Botがキャラを出す",clock:"Botのメインへ",climax:"Botのアタックへ",main:isAutoRules()?"Botがキャラを出す":"Botのアタックへ",
     attack:"Botのアタックを進める",encore:"Botのアンコールを進める",end:"自分のターンへ"};
   button.textContent=button.disabled?"Botの行動を進める":steps[phase];
   const card=selected?.p===0&&isStageZone(selected.z)?players[0][selected.z][selected.index]:null;
@@ -415,6 +453,7 @@ function botDefinitionForAbilities(card){
 
 function runBotTurnStep(){
   if(!botCanStep())return;
+  if(isAutoRules()){autoRuleBotStep();return}
   const board=players[1],turn=match.turn;
   switch(turn.phase){
     case "stand":
@@ -455,7 +494,7 @@ function runBotTurnStep(){
   }
 }
 document.getElementById("botStep").onclick=runBotTurnStep;
-document.getElementById("botAbility").onclick=()=>{
+function openBotAbility(){
   const card=selected?.p===0&&isStageZone(selected.z)?players[0][selected.z][selected.index]:null;
   const abilities=botDefinitionForAbilities(card);
   if(!abilities.length)return;
@@ -465,4 +504,5 @@ document.getElementById("botAbility").onclick=()=>{
     closeResolution();
     runRuleOperation(done=>botGuide(card,ability,done));
   });
-};
+}
+document.getElementById("botAbility").onclick=openBotAbility;

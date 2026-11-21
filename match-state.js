@@ -135,7 +135,10 @@ function showMatchScreen() {
     matchElement("firstPlayerResult").textContent = "先攻：プレイヤー" + (first + 1) +
       " ／ 後攻：プレイヤー" + (2 - first);
     render();
-    if (match.turn.phase==="draw" && match.turn.drawPending && (!match.bot||match.turn.player===0) && (!match.online || match.turn.player===side)) beforeDrawConfirmation();
+    if (match.turn.phase==="draw" && match.turn.drawPending) {
+      if(isAutoRules())autoRuleDraw(match.turn.player);
+      else if((!match.bot||match.turn.player===0)&&(!match.online||match.turn.player===side))beforeDrawConfirmation();
+    }
     renderTurnControls();
     checkMandatoryLevel();
   } else if (match?.phase === "ended") {

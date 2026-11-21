@@ -27,12 +27,13 @@
 <div class="toolbar"><button type="button" id="toggleDeckRegistration">新しいデッキを登録</button><label>デッキコード <input id="deckCode" value="" maxlength="12" placeholder="合言葉" style="width:125px;padding:9px"></label><button type="button" id="openDeckLog">Deck Logを開く</button></div><div id="registrationPanel" hidden><h3 id="deckRegistrationTitle">新規デッキ登録</h3><div class="toolbar"><button id="applyDeck" disabled>新しいデッキとして保存</button></div><div id="deckTransferStatus" role="status"></div><p class="muted">SafariでDeck Logのデッキページを開き、共有メニューの「WSデッキ転送」を実行してください。受信後、内容を確認して共通のデッキ一覧に保存できます。</p><details><summary>初回設定：Deck Log転送用ブックマークレット</summary><p class="muted">「転送コードをコピー」→Safariで任意のページをブックマーク→ブックマークを編集しURL欄を貼り付けたコードに置換。以後はDeck Logのデッキページでそのブックマークを押します。</p><button id="copyDeckTransfer">転送コードをコピー</button><textarea id="transferCode" readonly rows="3" style="width:100%;background:#101827;color:white" aria-label="転送用ブックマークレット"></textarea></details><details open><summary>カード番号と枚数を貼り付け（手動登録）</summary><p class="muted">1行に1種類。例：FRI/S100-001 × 4 または FRI/S100-001,4。合計50枚になるよう入力してください。</p><textarea id="deckText" rows="6" style="width:100%;background:#101827;color:white" placeholder="FRI/S100-001 × 4"></textarea><button id="parseDeckText">テキストから50枚を確認</button></details><details><summary>JSON貼り付け（従来方式）</summary><textarea id="deckJson" rows="4" style="width:100%;background:#101827;color:white" placeholder='{"list":[{"card_number":"...","num":4}]}'></textarea><button id="parseDeck">JSONを解析</button></details><div id="deckPreview" class="muted" aria-live="polite"></div></div></section><div class="screen-actions"><button id="startBattle">対戦開始</button></div>
 <details id="botSetup"><summary>Bot戦・確認パターン</summary>
 <div class="toolbar"><label>パターン <select id="botScenario">
-<option value="opening">通常の初手から</option>
+<option value="rules">共通ルール・仮カード</option>
+<option value="opening" selected>通常の初手から</option>
 <option value="open">空いた正面でダイレクト確認</option>
 <option value="front">正面にキャラを置いて確認</option>
 <option value="firen">フィレン・凱旋歌を確認</option>
 </select></label><button id="startBotBattle" type="button">Bot戦を開始</button></div>
-<p class="muted">自分はプレイヤー1の登録デッキを使います。フィレンのパターンはデッキ内のカードを配置して開始します。</p>
+<p class="muted">共通ルールは専用の仮デッキで開始します。それ以外はプレイヤー1の登録デッキを使います。</p>
 </details>
 <details id="onlineControls"><summary>オンライン対戦</summary>
 <p id="onlineStatus" role="status"></p>
@@ -123,7 +124,9 @@ function releaseMarkers(p,card){
  card.markers=[];
 }
 function manualTransfer(p,from,index,to,position="top"){
- const a=players[p][from],card=a?.[index];if(!card||!stageAvailable(p,to))return false;
+ const a=players[p][from],card=a?.[index];
+ if(isAutoRules()&&card&&from==="hand"&&(isStageZone(to)||to==="cx"))return autoRulePlace(p,card.uid,to);
+ if(!card||!stageAvailable(p,to))return false;
  const dispatch=match?.bot&&p===0&&from==="hand"&&isStageZone(to)&&!ruleBusy;
  a.splice(index,1);card.faceUp=!["deck","stock"].includes(to);
  if(isStageZone(from)&&!isStageZone(to)){
@@ -250,7 +253,7 @@ function appendZonePreview(zone, card, z, p) {
   if (z === "deck" || z === "stock" || (!card.faceUp && p !== side)) {
     preview.classList.add("card-back");
   } else if (!addCardImage(preview, card, card.id)) {
-    preview.textContent = card.id;
+    preview.textContent = isAutoRules()?botCardInfo(card)?.name??card.id:card.id;
   }
   zone.append(preview);
 }
@@ -416,6 +419,7 @@ function cardClick(p,z,index){
  if(p!==side)return;
  selected=selected?.p===p&&selected.z===z&&selected.index===index?null:{p,z,index};render();renderTurnControls();
  if(!selected){message("選択を解除しました");return}
+ if(isAutoRules()&&z==="hand"&&autoRuleHandMenu(p,index))return;
  if(canPlayClimax(p,z,index)){
    const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
    d.classList.remove("zoom-mode");body.replaceChildren();
@@ -430,7 +434,10 @@ function cardClick(p,z,index){
  }
  message(labels[z]+"のカードを選択しました。移動先をタップしてください");
 }
-function zoneClick(p,z){if(p!==side){if(match?.online||match?.bot)openOnlinePublicList(p,z);else message("相手のカードは操作できません");return}if(selected&&selected.p===p&&selected.z!==z){if(z==="deck"||z==="stock"){manualDestination(p,selected.z,selected.index);return}move(p,selected.z,selected.index,z);return}if(selected&&selected.p===p&&selected.z===z){selected=null;render();renderTurnControls();if(z==="waiting"||z==="memory")openList(p,z);return}const a=players[p][z];if(!a.length&&z!=="deck"){message(labels[z]+"は空です");return}if(z==="deck"){openActions(p,z);return}if(z==="stock"){openActions(p,z);return}if((isStageZone(z)||z==="waiting"||z==="memory")&&a.length){selected={p,z,index:a.length-1};render();renderTurnControls();message("カードを選択しました。移動先をタップ、またはダブルタップで一覧を開けます");return}openList(p,z)}
+function zoneClick(p,z){if(p!==side){if(match?.online||match?.bot)openOnlinePublicList(p,z);else message("相手のカードは操作できません");return}if(selected&&selected.p===p&&selected.z!==z){if(z==="deck"||z==="stock"){manualDestination(p,selected.z,selected.index);return}move(p,selected.z,selected.index,z);return}if(selected&&selected.p===p&&selected.z===z){selected=null;render();renderTurnControls();if(z==="waiting"||z==="memory")openList(p,z);return}const a=players[p][z];if(!a.length&&z!=="deck"){message(labels[z]+"は空です");return}if(z==="deck"){openActions(p,z);return}if(z==="stock"){openActions(p,z);return}if((isStageZone(z)||z==="waiting"||z==="memory")&&a.length){selected={p,z,index:a.length-1};render();renderTurnControls();if(isAutoRules()&&isStageZone(z)){
+  if(canOperateEncore()&&match.encore.step==="choose"&&a.at(-1).orientation===180){chooseEncoreCard(p,z,a.length-1);return}
+  if(botDefinitionForAbilities(a.at(-1)).length){openBotAbility();return}
+}message("カードを選択しました。移動先をタップ、またはダブルタップで一覧を開けます");return}openList(p,z)}
 
 // Deck commands: deck top is the final array element. Revealed/inspected cards stay
 // outside the waiting room until their destination is confirmed.
@@ -610,7 +617,7 @@ function showResolution(title,cards){
      addCardImage(item,card,card.id);
      if(item.firstElementChild)item.firstElementChild.style.cssText="width:100%;aspect-ratio:0.71;object-fit:contain";
      const label=document.createElement("span");
-     label.textContent=(index+1)+"．"+card.id;
+     label.textContent=(index+1)+"．"+(isAutoRules()?botCardInfo(card)?.name??card.id:card.id);
      item.append(label);
      list.append(item);
    }
@@ -629,7 +636,7 @@ function closeResolution(){
 function canAutoAttack(p,z,card){
  return isMatchActive() && !ruleBusy && !match.attackExchange && (!match.online||onlineMatch.interactive()) &&
    match.turn?.phase==="attack" && match.turn.player===p && p===side &&
-   isStageZone(z) && (!match.bot||z.startsWith("front")) && card?.faceUp===true && card.cx!==true && card.orientation===0;
+   isStageZone(z) && (!isAutoRules()||autoRuleAttackAllowed(p,z,card)) && (!match.bot||z.startsWith("front")) && card?.faceUp===true && card.cx!==true && card.orientation===0;
 }
 
 function startAutoAttack(p,z,index){
@@ -639,6 +646,7 @@ function startAutoAttack(p,z,index){
    message("トリガーチェックに使える山札や控え室がありません");
    return;
  }
+ if(isAutoRules()){autoRuleAskAttack(p,z,index);return}
  if(match.bot){botHumanAttack(p,z,index);return}
  const pending=[];
  runRuleOperation(async done=>{
@@ -1131,8 +1139,9 @@ function enterTurnPhase(){
  const t=match.turn;
  if(t.phase==="stand"&&(!match.online||t.player===side)){
    for(const z of ["front0","front1","front2","back0","back1"])
-     for(const c of players[t.player][z])if(c.orientation===90)c.orientation=0;
+     for(const c of players[t.player][z])if(isAutoRules()||c.orientation===90)c.orientation=0;
  }else if(t.phase==="draw"){
+   if(isAutoRules()){selected=null;autoRuleDraw(t.player);return}
    match.turn.drawPending=true;
    beforeDrawConfirmation();
  }
@@ -1149,7 +1158,7 @@ function advanceTurn(){
  ensureTurn();
  const t=match.turn;
  if(t.phase==="end"){
-   endHandConfirmation();
+   if(isAutoRules())autoRuleBeforeTurnEnd();else endHandConfirmation();
  }else if(t.phase==="attack"){
    if(!match.online||onlineMatch.interactive())encoreAction("enter");
  }else if(t.phase==="encore"){
@@ -1173,6 +1182,7 @@ function encoreAction(action,data={},done=updateBoard){
        match.turn.phase="encore";
        match.encore={actor:turn,step:"start"};
        match.encorePrivate=[{done:[]},{done:[]}];
+       if(isAutoRules()){selected=null;autoRuleEnterEncore(turn);return}
        break;
      case "start":
        if(encore.actor===turn)encore.actor=other;
@@ -1195,7 +1205,9 @@ function encoreAction(action,data={},done=updateBoard){
      case "resolve": {
        const mine=match.encorePrivate[encore.actor];
        mine.done.push(mine.selected);
-       encore.step="after";
+       if(isAutoRules()){
+         delete mine.selected;autoRuleAdvanceEncore();
+       }else encore.step="after";
        break;
      }
      case "done":
@@ -1209,6 +1221,7 @@ function encoreAction(action,data={},done=updateBoard){
          match.turn.phase="end";
          delete match.encore;
          delete match.encorePrivate;
+         if(isAutoRules()){selected=null;autoRuleEndPhase(turn);return}
        }
        break;
      }
@@ -1318,10 +1331,12 @@ function openEncoreCosts(custom=false){
    deckButton(body,"支払い済みとしてレスト",()=>resolveEncore("other"));
  }else{
    deckButton(body,"3ストック",()=>resolveEncore("stock")).disabled=board.stock.length<3;
-   deckButton(body,"手札1枚を選ぶ",openEncoreHand).disabled=!board.hand.length;
-   deckButton(body,"山札の上から1枚をクロック",()=>resolveEncore("clock"))
-     .disabled=!board.deck.length&&board.waiting.length<2;
-   deckButton(body,"その他",()=>{closeResolution();encoreAction("other")});
+   if(!isAutoRules()){
+     deckButton(body,"手札1枚を選ぶ",openEncoreHand).disabled=!board.hand.length;
+     deckButton(body,"山札の上から1枚をクロック",()=>resolveEncore("clock"))
+       .disabled=!board.deck.length&&board.waiting.length<2;
+     deckButton(body,"その他",()=>{closeResolution();encoreAction("other")});
+   }
    deckButton(body,"アンコールしない",()=>resolveEncore("decline"));
  }
  deckButton(body,"キャラ選択へ戻る",cancel);
@@ -1426,10 +1441,11 @@ document.getElementById("clockSkip").onclick=()=>{if(match?.turn?.phase==="clock
 
 </script>
 <script src="card-catalog.js?v=3"></script>
-<script src="effects/engine.js?v=4"></script>
+<script src="effects/engine.js?v=5"></script>
 <script src="card-data/load.js?v=2"></script>
-<script src="match-state.js?v=0.53-bot"></script>
-<script src="bot-match.js?v=1"></script>
+<script src="match-state.js?v=0.53-rules"></script>
+<script src="auto-rules.js?v=1"></script>
+<script src="bot-match.js?v=2"></script>
 <script src="cloud-decks.js?v=0.52"></script>
 <script src="online-match.js?v=0.52-encore"></script>
 <script src="decklog-import.js?v=0.52"></script>
