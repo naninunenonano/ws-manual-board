@@ -33,13 +33,14 @@ const decks = [
     ]
   },
 ]
-  .map(({code,title,rows}) => ({code,title,list:rows.map(([card_number,num])=>({card_number,num}))}));
+  .map(({code,title,rows}) => ({code,title,list:rows.map(([card_number,num],index)=>({card_number,num,cx:index>=rows.length-2}))}));
 const [frieren, idol] = decks;
 const fragment = deck => "#decklog=" + encodeURIComponent(JSON.stringify(deck));
 const key = p => "ws-manual-deck-v1-p" + p;
 
 function launch(hash = "", storage = new Map(), replaceState = null, randomValue = 100) {
   const handlers = new Map();
+  const settle = () => new Promise(resolve=>setImmediate(resolve));
   let randomCalls = 0;
   let allowConfirmation = true;
   const element = () => ({
@@ -68,7 +69,7 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
   vm.runInContext(matchScript,context);
   vm.runInContext(importScript,context);
   return {
-    get:id=>elements.get(id), location, storage,
+    get:id=>elements.get(id), location, storage, settle,
     navigate(nextHash){ location.hash = nextHash; handlers.get("hashchange")?.(); },
     apply(p){ elements.get("side").onchange({target:{value:p}}); elements.get("applyDeck").onclick(); },
     click:id=>elements.get(id).onclick(),
@@ -94,13 +95,15 @@ function checkPreview(page,deck) {
 }
 const expected = deck => Object.fromEntries(deck.list.map(row=>[row.card_number,row.num]));
 
-test("initial transfer, same-tab transfer with a saved deck, and restored decks", () => {
+test("initial transfer, same-tab transfer with a saved deck, and restored decks", async () => {
   const page = launch(fragment(frieren));
+  await page.settle();
   checkPreview(page,frieren);
   assert.equal(page.location.hash,"");
   page.apply(0);
   assert.deepEqual(page.counts(0),expected(frieren));
   page.navigate(fragment(idol));
+  await page.settle();
   checkPreview(page,idol);
   assert.match(page.get("savedDeckStatus").textContent,/勇者一行/);
   assert.deepEqual(page.counts(0),expected(frieren));
@@ -111,13 +114,14 @@ test("initial transfer, same-tab transfer with a saved deck, and restored decks"
   assert.deepEqual(reopened.counts(1),expected(idol));
 });
 
-test("legacy saved data and numeric-string quantities are accepted", () => {
+test("legacy saved data and numeric-string quantities are accepted", async () => {
   const storage = new Map([[key(0),JSON.stringify({title:frieren.title,cards:frieren.list.map(row=>({id:row.card_number,num:row.num}))})]]);
   const page = launch(fragment({...idol,list:idol.list.map(row=>({...row,num:String(row.num)}))}),storage);
+  await page.settle();
   checkPreview(page,idol);
   page.apply(1);
   page.click("startBattle");
-  assert.deepEqual(snapshot(page).decks[0].cards, frieren.list.map(row=>({id:row.card_number,num:row.num})));
+  assert.deepEqual(snapshot(page).decks[0].cards, frieren.list.map(row=>({id:row.card_number,num:row.num,cx:null})));
 });
 
 test("malformed or invalid transfers clear the previous preview and explain the error", () => {
@@ -136,8 +140,9 @@ test("malformed or invalid transfers clear the previous preview and explain the 
   }
 });
 
-test("a browser history error does not block receiving a deck", () => {
+test("a browser history error does not block receiving a deck", async () => {
   const page = launch(fragment(frieren),new Map(),()=>{throw Error("history unavailable");});
+  await page.settle();
   checkPreview(page,frieren);
 });
 
@@ -157,6 +162,7 @@ test("start deals five once, then reload restores every zone, order, flags and p
   page.run('move(0,"hand",0,"front0"); move(0,"hand",0,"stock"); move(0,"hand",0,"cx")');
   page.click("draw");
   page.click("shuffle");
+  page.run("players[side].deck.slice(-7).forEach(card=>card.cx=false)");
   for(let i=0;i<7;i++) page.click("damage");
   page.click("level");
   page.get("dialogBody").children[2].onclick();
@@ -177,19 +183,18 @@ test("start deals five once, then reload restores every zone, order, flags and p
   assert.deepEqual(snapshot(reopened),before);
 });
 
-test("deck inspection is read-only and a new transfer cannot leave or replace an active match", () => {
+test("deck inspection is read-only and a new transfer cannot leave or replace an active match", async () => {
   const page = launch("",deckStorage());
   startBattle(page);
   page.click("draw");
   const before = snapshot(page);
   page.click("viewDecks");
   assert.equal(page.get("dialog").open,true);
-  const [title,rows,otherTitle,otherRows] = page.get("dialogBody").children;
+  const [title,rows,otherTitle] = page.get("dialogBody").children;
   assert.match(title.textContent,/勇者一行｜合計50枚/);
-  assert.match(otherTitle.textContent,/Hey！カロリークイーン｜合計50枚/);
+  assert.equal(otherTitle,undefined);
   assert.equal(rows.children.length,16);
-  assert.equal(otherRows.children.length,21);
-  assert.ok(rows.children.some(row=>row.textContent==="SFN/S128-003｜旅立ちのきっかけ ヒンメル × 4"));
+  assert.ok(rows.children.some(row=>row.children[0].alt==="旅立ちのきっかけ ヒンメル" && row.children[1].textContent===" ×4"));
   assert.equal(page.get("backToSetup"),undefined);
   page.click("close");
   assert.equal(page.get("dialog").open,false);
@@ -203,6 +208,7 @@ test("deck inspection is read-only and a new transfer cannot leave or replace an
   assert.deepEqual(page.counts(0),expected(frieren));
   page.click("leaveBattle");
   page.click("nextBattle");
+  await page.settle();
   assert.match(page.get("deckPreview").children[0].textContent,/次の対戦用/);
 });
 
@@ -265,4 +271,135 @@ test("corrupt snapshots recover to setup and saved deck registration remains ava
   unregistered.click("startBattle");
   assert.match(unregistered.get("setupNotice").textContent,/プレイヤー1のデッキを登録/);
   assert.equal(unregistered.randomCalls(),0);
+});
+
+function ruleGame(deck,clock,waiting,cx=false){
+  const page=launch("",deckStorage());
+  startBattle(page);
+  page.run(`{
+    const b=players[0], cards=[...b.deck,...b.hand];
+    side=0;
+    b.deck=cards.splice(0,${deck});
+    b.clock=cards.splice(0,${clock});
+    b.waiting=cards.splice(0,${waiting});
+    b.hand=cards;
+    for(const card of b.deck)card.cx=false;
+    if(b.deck.length)b.deck.at(-1).cx=${cx};
+    saveMatchProgress();
+  }`);
+  return page;
+}
+const state=page=>JSON.parse(page.run("JSON.stringify(players[0])"));
+const panel=page=>page.get("dialogBody").children;
+const chooseLevel=page=>{
+  assert.match(page.get("dialogTitle").textContent,/強制レベルアップ/);
+  panel(page)[1].onclick();
+};
+
+test("refresh only moves one point to clock",()=>{
+  const page=ruleGame(0,0,4);
+  page.click("refresh");
+  assert.deepEqual([state(page).deck.length,state(page).clock.length,state(page).waiting.length],[3,1,0]);
+});
+
+test("level-up only, with eight clock cards",()=>{
+  const page=ruleGame(3,8,1);
+  const latest=state(page).clock.at(-1).uid;
+  page.click("level");
+  chooseLevel(page);
+  assert.deepEqual(state(page).clock.map(c=>c.uid),[latest]);
+  assert.equal(state(page).waiting.length,7);
+  assert.equal(state(page).level.length,1);
+});
+
+for(const refreshFirst of [true,false]){
+  test("simultaneous rules: "+(refreshFirst?"refresh first":"level first"),()=>{
+    const page=ruleGame(1,6,3);
+    const before=state(page);
+    page.run('pullDeck(0,1,"clock")');
+    assert.match(page.get("dialogTitle").textContent,/順番を選択/);
+    assert.equal(state(page).deck.length,0);
+    page.click("close");
+    page.click("level");
+    assert.equal(page.get("dialog").open,true);
+    panel(page)[refreshFirst?0:1].onclick();
+    assert.equal(state(page).deck.length,refreshFirst?3:0);
+    assert.equal(state(page).clock.length,7);
+    chooseLevel(page);
+    const board=state(page);
+    assert.equal(board.level.length,1);
+    assert.equal(board.deck.length,refreshFirst?2:8);
+    assert.equal(board.waiting.length,refreshFirst?6:0);
+    if(refreshFirst)assert.ok(before.waiting.some(c=>c.uid===board.clock[0].uid));
+    else assert.ok(board.deck.concat(board.clock).some(c=>c.uid===before.clock[1].uid));
+  });
+}
+
+for(const cancelled of [false,true]){
+  test("damage refresh keeps revealed cards outside the refresh pool; CX="+cancelled,()=>{
+    const page=ruleGame(1,0,4,cancelled);
+    const first=state(page).deck[0].uid;
+    page.run("runDamage(0,2)");
+    const board=state(page);
+    assert.equal(board.deck.length,cancelled?3:2);
+    assert.equal(board.clock.length,cancelled?1:3);
+    assert.equal(board.waiting.length,cancelled?1:0);
+    assert.ok((cancelled?board.waiting:board.clock).some(c=>c.uid===first));
+    assert.ok(!board.deck.some(c=>c.uid===first));
+  });
+}
+
+test("the point is applied before its own level-up; a one-card refresh settles",()=>{
+  const single=ruleGame(0,0,1);
+  single.click("refresh");
+  assert.equal(state(single).deck.length,0);
+  assert.equal(state(single).clock.length,1);
+  assert.equal(single.run("ruleBusy"),false);
+  const chained=ruleGame(0,6,1);
+  chained.click("refresh");
+  assert.equal(state(chained).clock.length,7);
+  chooseLevel(chained);
+  assert.equal(state(chained).deck.length,5);
+  assert.equal(state(chained).clock.length,1);
+  assert.equal(chained.run("ruleBusy"),false);
+});
+
+test("multiple level-ups precede the point without duplicate choice dialogs",()=>{
+  const page=ruleGame(0,15,4);
+  page.click("level");
+  panel(page)[0].onclick();
+  chooseLevel(page);
+  assert.equal(state(page).clock.length,8);
+  chooseLevel(page);
+  assert.equal(state(page).clock.length,2);
+  assert.equal(state(page).deck.length,3);
+  assert.equal(state(page).level.length,2);
+});
+
+test("temporary deck checks and bottom movement use the same resolution",()=>{
+  const page=ruleGame(1,6,3);
+  page.run('openDeckTemporary(0,"inspect",1,true)');
+  assert.equal(state(page).deck.length,0);
+  assert.equal(snapshot(page).players[0].deck.length,1);
+  panel(page).at(-2).value="original";
+  panel(page).at(-1).onclick();
+  assert.equal(state(page).deck.length,1);
+  page.run('pullDeck(0,1,"clock",true,true)');
+  assert.match(page.get("dialogTitle").textContent,/順番を選択/);
+  panel(page)[1].onclick();
+  chooseLevel(page);
+  assert.equal(state(page).deck.length,8);
+});
+
+test("draw and brainstorm-style multi-card move resume after refresh",()=>{
+  const draw=ruleGame(1,0,4);
+  const before=state(draw);
+  draw.run('pullDeck(0,2,"hand")');
+  assert.equal(state(draw).hand.length,before.hand.length+2);
+  assert.equal(state(draw).clock.length,1);
+  const mill=ruleGame(1,0,3);
+  mill.run('pullDeck(0,2,"waiting")');
+  assert.equal(state(mill).deck.length,2);
+  assert.equal(state(mill).clock.length,1);
+  assert.equal(state(mill).waiting.length,1);
 });
