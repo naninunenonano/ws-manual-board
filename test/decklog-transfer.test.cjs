@@ -48,7 +48,7 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
     value:"", isConnected:true, textContent:"", children:[], style:{setProperty(){}}, dataset:{}, classList:{add(){},remove(){}},
     append(...children){ this.children.push(...children); }, prepend(...children){ this.children.unshift(...children); },
     replaceChildren(...children){ this.children = children; },
-    setAttribute(){}, insertBefore(){}, addEventListener(){}, scrollIntoView(){}, querySelector(){ return null; },
+    setAttribute(){}, insertBefore(){}, after(){}, addEventListener(){}, scrollIntoView(){}, querySelector(){ return null; },
     showModal(){ this.open = true; }, close(){ this.open = false; }
   });
   const elements = new Map(Array.from(html.matchAll(/ id="([^"]+)"/g), ([,id]) => [id,element()]));
@@ -833,7 +833,7 @@ test("Bot scenarios accept interchangeable player decks and keep the selected se
   assert.equal(page.get("battleSide").disabled,true);
   const resumed=launch("",page.storage);
   assert.deepEqual(snapshot(resumed),snapshot(page));
-  resumed.run('finishMatch("leave")');
+  resumed.run('finishMatch("left")');
   resumed.click("nextBattle");
   const library=JSON.parse(page.storage.get(libraryKey));
   resumed.select(0,library.find(item=>item.deck.title===idol.title).id);

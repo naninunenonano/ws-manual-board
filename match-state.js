@@ -319,7 +319,9 @@ function initializeMatch(readDeck, refreshSetup) {
     mulliganSelection = new Set();
     players = [];
     selected = null;
-    matchElement("boards").replaceChildren();
+    const boards=matchElement("boards");
+    boards.after(matchElement("playerActions"));
+    boards.replaceChildren();
     matchElement("setupNotice").textContent = "";
     matchElement("notice").textContent = "カードをタップして移動先を選択。ドラッグでも移動できます。";
     showMatchScreen();

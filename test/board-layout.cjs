@@ -278,8 +278,9 @@ async function checkBot(browser,url){
   };
   const reset=async()=>{
     page.once("dialog",dialog=>dialog.accept());
-    await page.evaluate(()=>{finishMatch("leave")});
+    await page.locator("#leaveBattle").tap();
     await page.locator("#nextBattle").tap();
+    assert.equal(await page.locator("#playerActions").count(),1);
   };
   await start("opening");
   assert.equal(await state(()=>match.phase),"mulligan");
