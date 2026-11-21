@@ -486,3 +486,62 @@ test("draw confirmation survives reload and draws exactly once",()=>{
   assert.equal(state(again).hand.length,6);
   assert.equal(again.get("nextPhase").disabled,false);
 });
+
+test("an individual clock card keeps the remaining order across every manual destination and reload",()=>{
+  for(const [zone,position] of [
+    ["hand","top"],["deck","top"],["deck","bottom"],["waiting","top"],
+    ["stock","top"],["stock","bottom"],["memory","top"],["front1","top"],
+    ["level","top"],["cx","top"],["marker","top"]
+  ]){
+    const page=launch("",deckStorage());
+    startBattle(page);
+    page.run('manualTransfer(0,"hand",0,"front0"); takeTop(0,"deck","clock",3);');
+    const before=state(page);
+    const chosen=before.clock[1];
+    page.run('manualDestination(0,"clock",1)');
+    assert.equal(page.get("dialog").open,true);
+    const [destination,where,target,face]=panel(page);
+    destination.value=zone;where.value=position;target.value="front0";face.value="up";
+    panel(page).at(-1).onclick();
+    const after=state(page);
+    assert.deepEqual(after.clock,[before.clock[0],before.clock[2]],zone);
+    const moved=zone==="marker"?after.front0[0].markers[0].card
+      :position==="bottom"?after[zone][0]:after[zone].at(-1);
+    assert.equal(moved.uid,chosen.uid,zone);
+    assert.equal(after.clock.some(card=>card.uid===chosen.uid),false,zone);
+    assert.deepEqual(snapshot(page).players[0],after,zone);
+    assert.deepEqual(state(launch("",page.storage)),after,zone);
+  }
+});
+
+test("clock cancellation, blocked destinations and stale selection preserve the board",()=>{
+  const page=launch("",deckStorage());
+  startBattle(page);
+  page.run('manualTransfer(0,"hand",0,"front0"); takeTop(0,"deck","clock",1);');
+  const before=state(page);
+  const saved=snapshot(page);
+  page.run('manualDestination(0,"clock",0)');
+  panel(page)[0].value="front0";
+  panel(page).at(-1).onclick();
+  assert.match(panel(page).at(-2).textContent,/埋まっています/);
+  assert.deepEqual(state(page),before);
+  panel(page)[0].value="marker";
+  panel(page)[2].value="front1";
+  panel(page).at(-1).onclick();
+  assert.match(panel(page).at(-2).textContent,/マーカーの配置先/);
+  assert.deepEqual(state(page),before);
+  page.get("close").onclick();
+  assert.deepEqual(snapshot(page),saved);
+
+  page.run('manualDestination(0,"clock",0); players[0].clock[0]={...players[0].clock[0]};');
+  panel(page)[0].value="hand";
+  panel(page).at(-1).onclick();
+  assert.match(panel(page).at(-2).textContent,/選び直して/);
+  assert.deepEqual(state(page),before);
+  page.get("close").onclick();
+  page.run('manualDestination(0,"clock",0)');
+  panel(page)[0].value="waiting";
+  panel(page).at(-1).onclick();
+  assert.equal(state(page).clock.length,0);
+  assert.equal(state(page).waiting.at(-1).uid,before.clock[0].uid);
+});

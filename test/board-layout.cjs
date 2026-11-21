@@ -186,6 +186,34 @@ async function main() {
     await front.dblclick();
     await page.getByRole("button",{name:"縦向き",exact:true}).click();
     assert.equal(await front.getAttribute("data-orientation"),"0");
+    const clockZone = lowerMat.locator('[data-z="clock"]');
+    const firstClock = clockZone.locator('[data-clock-index="0"]');
+    const secondClock = clockZone.locator('[data-clock-index="1"]');
+    const beforeClock = await page.evaluate(()=>players[side].clock.map(card=>card.uid));
+    await firstClock.tap({position:{x:5,y:20}});
+    assert.equal(await firstClock.getAttribute("aria-pressed"),"true");
+    await secondClock.tap({position:{x:5,y:20}});
+    assert.equal(await firstClock.getAttribute("aria-pressed"),"false");
+    assert.equal(await secondClock.getAttribute("aria-pressed"),"true");
+    await secondClock.tap({position:{x:5,y:20}});
+    assert.equal(await secondClock.getAttribute("aria-pressed"),"false");
+    await clockZone.getByRole("button",{name:"一覧",exact:true}).tap();
+    await page.locator("#dialogBody").getByRole("button",{name:/クロック 3枚目 /}).tap();
+    await clockZone.locator('[data-clock-index="2"][aria-pressed="true"]').waitFor();
+    await clockZone.getByRole("button",{name:"移動先",exact:true}).tap();
+    const destination = page.locator("#dialogBody select").first();
+    await destination.selectOption("front0");
+    await page.getByRole("button",{name:"移動する",exact:true}).tap();
+    await page.locator("#dialogBody").getByText(/移動先が埋まっています/).waitFor();
+    await page.locator("#close").tap();
+    assert.deepEqual(await page.evaluate(()=>players[side].clock.map(card=>card.uid)),beforeClock);
+    await clockZone.getByRole("button",{name:"移動先",exact:true}).tap();
+    await destination.selectOption("hand");
+    await page.getByRole("button",{name:"移動する",exact:true}).tap();
+    await page.reload();
+    assert.deepEqual(await page.evaluate(()=>players[side].clock.map(card=>card.uid)),beforeClock.filter((_,i)=>i!==2));
+    assert.equal(await page.evaluate(()=>players[side].hand.at(-1).uid),beforeClock[2]);
+
     await page.evaluate(()=>{
       const board=players[side];
       board.clock.push(...board.deck.splice(0,7-board.clock.length));
@@ -193,6 +221,12 @@ async function main() {
       updateBoard();
     });
     await page.getByRole("button",{name:"レベルアップ → リフレッシュ → リフレッシュポイント",exact:true}).click();
+    const compulsory = page.locator("#dialogTitle");
+    assert.match(await compulsory.innerText(),/強制レベルアップ/);
+    assert.equal(await page.locator("#close").isVisible(),false);
+    await page.keyboard.press("Escape");
+    assert.match(await compulsory.innerText(),/強制レベルアップ/);
+    assert.equal(await page.locator("#dialog").isVisible(),true);
     await page.locator("#dialogBody .modal-card").first().click();
     await page.locator("#dialog").waitFor({state:"hidden"});
     const forced=await page.evaluate(()=>({

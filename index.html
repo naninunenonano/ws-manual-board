@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.52</title>
-<link rel="stylesheet" href="board-layout.css?v=0.52">
+<link rel="stylesheet" href="board-layout.css?v=0.52-clock">
 <style>
 :root{font-family:system-ui,-apple-system,sans-serif;color:#edf1f8;background:#101827}*{box-sizing:border-box}body{margin:0}header{padding:12px 14px;background:#1a2840;display:flex;justify-content:space-between;align-items:center;gap:8px}h1{font-size:17px;margin:0}button,select{background:#263e61;color:white;border:1px solid #6581a5;border-radius:8px;padding:9px;font:inherit}button:disabled{opacity:.4}.shell{max-width:680px;margin:auto;padding:10px}.player{border:1px solid #49617e;border-radius:14px;margin:8px 0;padding:9px;background:#18243a}.player.active{border-color:#83b8ff}.player h2{font-size:14px;margin:0 0 8px;display:flex;justify-content:space-between}.modalcards .modal-card{display:flex;flex-direction:column;align-items:center;gap:4px;width:90px;min-height:128px;padding:5px;font-size:10px;overflow-wrap:anywhere}.modal-card img{height:100px;max-width:74px;object-fit:contain}.modal-card .card-back{height:100px;width:70px;background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px)}.zone.selected{outline:3px solid #f4cf73}.zone.empty{visibility:hidden}.stage{background:#30435e}.hand{display:flex;overflow-x:auto;gap:5px;padding:8px 0;min-height:80px}.card{flex:0 0 46px;height:66px;border:1px solid #9db3cc;border-radius:5px;background:#e4eaf1;color:#19273d;font-size:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:grab;user-select:none}.card.back{background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px);color:#fff}.card.selected{outline:3px solid #f4cf73}.card img{width:100%;height:100%;object-fit:contain;border-radius:4px;-webkit-touch-callout:none;-webkit-user-select:none}.card .cardlabel{font-size:9px;overflow-wrap:anywhere;padding:2px}.carddetail{display:grid;grid-template-columns:1fr;gap:7px;font-size:13px}.carddetail img{display:block;width:100%;max-width:100%;max-height:none;object-fit:contain;height:auto;-webkit-touch-callout:none;-webkit-user-select:none}.carddetail{max-width:100%}.carddetail .zoom-actions{display:flex;gap:8px;flex-wrap:wrap}.modalcards .modal-card img{object-fit:contain}#dialog{max-height:94dvh;overflow:auto}#dialog.zoom-mode{width:min(96vw,720px)}#dialog.zoom-mode .carddetail img{max-height:none}#dialog.zoom-mode{padding:8px}#dialog.zoom-mode #dialogTitle{font-size:14px;margin:2px 0 8px}.zone-zoom{border:0;background:#35557b;padding:2px 4px;font-size:10px;line-height:1.2;border-radius:4px;margin-top:2px}.card-zoom{position:absolute;right:0;bottom:0;background:#183453e8;border:0;border-radius:4px;padding:1px 3px;font-size:12px;line-height:1.4;color:white}.card{position:relative}.carddetail strong{color:#e7f0ff}.controls{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.controls button{font-size:12px}.notice{font-size:12px;color:#d3dfed;min-height:35px}.toolbar{display:flex;gap:5px;align-items:center;flex-wrap:wrap}.toolbar label{font-size:12px}dialog{background:#1a2840;color:white;border:1px solid #7191ba;border-radius:12px;max-width:95vw;width:420px}dialog::backdrop{background:#0009}.modalcards{display:flex;flex-wrap:wrap;gap:5px;max-height:50vh;overflow:auto}.muted{opacity:.7;font-size:11px}.count{font-size:11px;color:#bbd2f4}
 .card img.landscape-card{transform:rotate(90deg) scale(1.4)}
@@ -164,11 +164,14 @@ function openStageMarkers(p,z){
  deckButton(body,"閉じる",()=>d.close());d.showModal();
 }
 function manualDestination(p,from,index,markerOwner){
+ const clockCard=from==="clock"?players[p].clock[index]:null;
+ if(from==="clock" && (!clockCard || p!==side || ruleBusy))return;
  const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
  d.classList.remove("zoom-mode");body.replaceChildren();
  document.getElementById("dialogTitle").textContent="移動先を選択";
  const sel=document.createElement("select"),pos=document.createElement("select"),target=document.createElement("select"),face=document.createElement("select");
  for(const z of ["deck","waiting","stock","hand","memory","clock","level","cx","front0","front1","front2","back0","back1","marker"]){
+  if(from==="clock" && z==="clock")continue;
   const o=document.createElement("option");o.value=z;o.textContent=labels[z]||"マーカー";sel.append(o);
  }
  for(const [v,label] of [["top","上"],["bottom","下"]]){
@@ -178,8 +181,17 @@ function manualDestination(p,from,index,markerOwner){
  for(const [v,label] of [["down","裏向き"],["up","表向き"]]){const o=document.createElement("option");o.value=v;o.textContent=label;face.append(o)}
  sel.onchange=()=>{pos.hidden=!["deck","stock"].includes(sel.value);target.hidden=face.hidden=sel.value!=="marker"};sel.onchange();
  body.append(sel,pos,target,face);
+ const feedback=clockCard?document.createElement("p"):null;
+ if(feedback){
+   feedback.setAttribute("role","status");
+   body.append(feedback);
+ }
  deckButton(body,"移動する",()=>{
   if(p!==side)return;
+  if(clockCard && (ruleBusy || players[p].clock[index]!==clockCard)){
+    feedback.textContent="クロックが更新されました。カードを選び直してください";
+    return;
+  }
   if(markerOwner){
    const marker=markerOwner.markers[index];
    if(!marker)return;
@@ -189,13 +201,21 @@ function manualDestination(p,from,index,markerOwner){
   }
   if(sel.value==="marker"){
    const owner=players[p][target.value]?.at(-1),card=players[p][from]?.[index];
-   if(!owner||!card||owner===card){message("別のカードをマーカーの配置先に選んでください");return}
+   if(!owner||!card||owner===card){
+     const text="別のカードをマーカーの配置先に選んでください";
+     if(feedback)feedback.textContent=text;
+     else message(text);
+     return;
+   }
    players[p][from].splice(index,1);
    if(isStageZone(from)){card.orientation=0;releaseMarkers(p,card)}
    (owner.markers??=[]).push({card,faceUp:face.value==="up"});
    d.close();selected=null;updateBoard();return;
   }
-  if(!stageAvailable(p,sel.value))return;
+  if(!stageAvailable(p,sel.value)){
+    if(feedback)feedback.textContent="移動先が埋まっています。別の移動先を選んでください";
+    return;
+  }
   d.close();manualTransfer(p,from,index,sel.value,pos.value);
   if(pendingMarkerChoices.length&&!d.open)showPendingMarkerChoices();
  });
@@ -224,7 +244,15 @@ function appendZoneFan(zone, cards, z, p) {
   // Keep the newest card visible, with the older cards exposed in order.
   const visible = cards.slice(z === "level" ? -3 : -10);
   visible.forEach((card, index) => {
-    const slot = document.createElement("div");
+    const ownClock = z === "clock" && p === side;
+    const cardIndex = cards.length - visible.length + index;
+    const slot = document.createElement(ownClock ? "button" : "div");
+    if (ownClock) {
+      slot.type = "button";
+      slot.dataset.clockIndex = String(cardIndex);
+      slot.setAttribute("aria-label","クロック "+(cardIndex+1)+"枚目 "+card.id);
+      slot.setAttribute("aria-pressed",String(selected?.p===p && selected.z===z && selected.index===cardIndex));
+    }
     slot.className = "zone-fan-card " + (z === "level" ? "sideways" : "portrait");
     slot.style.setProperty("--fan-index", String(index));
     if (!card.faceUp && p !== side) {
@@ -238,7 +266,9 @@ function appendZoneFan(zone, cards, z, p) {
     slot.onclick = event => {
       if (selected && selected.p === p && selected.z !== z) return;
       event.stopPropagation();
-      if (p === side || card.faceUp) showCardDetail(card);
+      if (ownClock) {
+        if (players[p].clock[cardIndex]===card) cardClick(p,z,cardIndex);
+      } else if (p === side || card.faceUp) showCardDetail(card);
     };
     fan.append(slot);
   });
@@ -286,12 +316,34 @@ function renderZone(p, z, cards) {
   if(stage||z==="waiting"||z==="memory"){
     bindCardTaps(el,()=>zoneClick(p,z),()=>{if(cards.length){if(p===side)openList(p,z);else if(match?.online)openOnlinePublicList(p,z)}});
   }else el.onclick=()=>zoneClick(p,z);
+  let actionContainer = el;
+  if (z === "clock" && p === side && cards.length) {
+    actionContainer = document.createElement("div");
+    actionContainer.className = "clock-actions";
+    const action = (label, handler) => {
+      const button=document.createElement("button");
+      button.type="button";
+      button.className="zone-zoom";
+      button.textContent=label;
+      button.onclick=event=>{event.stopPropagation();handler();};
+      actionContainer.append(button);
+    };
+    action("一覧",()=>openList(p,z));
+    if (selected?.p===p && selected.z===z && cards[selected.index]) {
+      action("移動先",()=>manualDestination(p,z,selected.index));
+    }
+    el.append(actionContainer);
+  }
   if (!["deck", "stock"].includes(z) && (cards.at(-1)?.faceUp || (cards.length && p === side))) {
     const zoom = document.createElement("button");
     zoom.className = "zone-zoom";
     zoom.textContent = "拡大";
-    zoom.onclick = event => { event.stopPropagation(); showCardDetail(cards.at(-1)); };
-    el.append(zoom);
+    zoom.onclick = event => {
+      event.stopPropagation();
+      const card = z==="clock" && selected?.p===p && selected.z===z ? cards[selected.index] : cards.at(-1);
+      if(card)showCardDetail(card);
+    };
+    actionContainer.append(zoom);
   }
   el.ondragover = event => { if (p === side) event.preventDefault(); };
   el.ondrop = event => {
@@ -302,6 +354,10 @@ function renderZone(p, z, cards) {
 }
 function makeZoneCardButton(card,p,z,index){
   const b=document.createElement("button");b.className="modal-card";
+  if(z==="clock" && p===side){
+    b.setAttribute("aria-label","クロック "+(index+1)+"枚目 "+card.id);
+    b.setAttribute("aria-pressed",String(selected?.p===p && selected.z===z && selected.index===index));
+  }
   const hidden=p!==side&&(!card.faceUp||z==="hand");
   if(hidden){const back=document.createElement("div");back.className="card-back";b.append(back)}
   else if(!addCardImage(b,card,card.id)){const span=document.createElement("span");span.textContent=card.id;b.append(span)}
