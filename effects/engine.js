@@ -15,6 +15,37 @@ const WSEffects = (() => {
   const zoneLabel = ({side,zone}) => sides[side]+"の"+zones[zone];
   const operations = new Map();
   const conditions = new Map();
+  const tagFields = {traits:["traitChanges","removed","特徴"],keywords:["keywordChanges","disabled","キーワード能力"]};
+  const names = value => Array.isArray(value)&&value.every(word);
+  const validFilter = filter => object(filter)&&names(filter.names)&&filter.names.length>0
+    && ["any","all","none"].includes(filter.mode)
+    && Object.keys(filter).every(key=>key==="names"||key==="mode");
+  const tagList = value => Array.isArray(value)?value:[];
+  function effectiveTags(card, kind) {
+    const [field,off]=tagFields[kind];
+    if (card[kind]==null)return null;
+    const removed=tagList(card[field]?.[off]);
+    return [...new Set([...card[kind],...tagList(card[field]?.added)])].filter(tag=>!removed.includes(tag));
+  }
+  function matchTags(card,kind,filter) {
+    const [field,off]=tagFields[kind];
+    const effective=effectiveTags(card,kind);
+    const results=filter.names.map(tag=>{
+      if(effective!==null)return effective.includes(tag);
+      if(tagList(card[field]?.[off]).includes(tag))return false;
+      if(tagList(card[field]?.added).includes(tag))return true;
+      return null;
+    });
+    if(filter.mode==="none")return results.includes(true)?false:results.includes(null)?null:true;
+    if(filter.mode==="all")return results.includes(false)?false:results.includes(null)?null:true;
+    return results.includes(true)?true:results.includes(null)?null:false;
+  }
+  function checkTags(card,kind,filter) {
+    const matched=matchTags(card,kind,filter);
+    if(matched===null)fail(card.uid+" の"+tagFields[kind][2]+"は未確認です","unconfirmed");
+    return matched;
+  }
+
   const emptyBoard = () => Object.fromEntries(Object.keys(sides).map(side=>[
     side,Object.fromEntries(Object.keys(zones).map(zone=>[zone,[]]))
   ]));
@@ -35,6 +66,15 @@ const WSEffects = (() => {
           if (!object(card) || !word(card.uid) || seen.has(card.uid) || !word(card.cardNumber)
               || ["power","soul"].some(stat=>card[stat]!=null&&!integer(card[stat]))) {
             fail(zoneLabel({side,zone})+"のカード番号・個体ID・数値を確認してください","invalid");
+          }
+          for(const [kind,[field,off,label]] of Object.entries(tagFields)){
+            const changes=card[field];
+            const invalidTags=card[kind]!=null&&!names(card[kind]);
+            const invalidChanges=changes!=null&&(!object(changes) ||
+              [changes.added,changes[off]].some(value=>value!==undefined&&!names(value)));
+            if(invalidTags || invalidChanges){
+              fail(card.uid+" の"+label+"が不正です","invalid");
+            }
           }
           seen.add(card.uid);
         }
@@ -95,17 +135,22 @@ const WSEffects = (() => {
   operation("payStock","ストック支払い",p=>knownKey(sides,p.side)&&count(p.count),
     p=>sides[p.side]+"のストックを"+p.count+"枚支払う",
     (ctx,p)=>takeFromTop(ctx,p.side,"stock","waiting",p.count),["side","count"]);
-  operation("selectCards","対象カード選択",p=>ref(p.from)&&word(p.as)&&p.as!=="activate"&&count(p.count),
-    p=>zoneLabel(p.from)+"から"+p.count+"枚を選ぶ（"+p.as+"）",
+  operation("selectCards","対象カード選択",p=>ref(p.from)&&word(p.as)&&p.as!=="activate"&&count(p.count)
+    && ["traits","keywords"].every(kind=>p[kind]===undefined||validFilter(p[kind])),
+    p=>zoneLabel(p.from)+"から"+p.count+"枚を選ぶ（"+p.as+"）"+
+      ["traits","keywords"].filter(kind=>p[kind]).map(kind=>" ／ "+tagFields[kind][2]+" "+filterLabel(p[kind])).join(""),
     (ctx,p)=>{
       const picks = p.count===0 ? [] : Object.hasOwn(ctx.choices,p.as) ? ctx.choices[p.as] : undefined;
       if (picks===undefined) fail("選択「"+p.as+"」に"+p.count+"枚指定してください","needs-choice");
-      const available = new Set(pile(ctx,p.from).map(card=>card.uid));
+      const available = new Map(pile(ctx,p.from).map(card=>[card.uid,card]));
       if (!Array.isArray(picks) || picks.length!==p.count || new Set(picks).size!==p.count
           || !picks.every(id=>available.has(id))) fail("選択「"+p.as+"」の枚数・対象を確認してください","needs-choice");
+      for(const uid of picks)for(const kind of ["traits","keywords"]){
+        if(p[kind]&&!checkTags(available.get(uid),kind,p[kind]))fail("選択「"+p.as+"」は"+tagFields[kind][2]+"の条件に合いません","needs-choice");
+      }
       ctx.selections.set(p.as,[...picks]);
       return [...picks];
-    },["from","as","count"]);
+    },["from","as","count","traits","keywords"]);
   for (const [id,stat,label] of [["modifyPower","power","パワー"],["modifySoul","soul","ソウル"]]) {
     operation(id,label+"増減",p=>word(p.selection)&&integer(p.amount),
       p=>"選択したカードの"+label+"を"+(p.amount>0?"+":"")+p.amount,
@@ -128,6 +173,18 @@ const WSEffects = (() => {
     (ctx,p)=>{const n=pile(ctx,p.from).length;return n>=(p.min??0)&&n<=(p.max??Infinity);},
     ["from","min","max"]);
 
+  const filterLabel = filter=>filter.names.join("、")+"（"+({all:"すべて",any:"いずれか",none:"どれも持たない"})[filter.mode]+"）";
+  for(const [id,kind] of [["hasTraits","traits"],["hasKeywords","keywords"]]){
+    const label=tagFields[kind][2];
+    register(conditions,id,label+"の判定",p=>word(p.uid)&&validFilter({names:p.names,mode:p.mode}),
+      p=>p.uid+" の"+label+" "+filterLabel(p),
+      (ctx,p)=>{
+        const card=cardsIn(ctx.board).find(entry=>entry.card.uid===p.uid)?.card;
+        if(!card)fail("個体ID "+p.uid+" のカードが盤面にありません");
+        return checkTags(card,kind,p);
+      },["uid","names","mode"]);
+  }
+
   function instructions(effect) {
     return [
       ...(effect.conditions??[]).map(step=>({phase:"conditions",step})),
@@ -138,6 +195,7 @@ const WSEffects = (() => {
   }
 
   function inspect(effect) {
+    if(effect?.implementationStatus==="unimplemented")return {issues:[{status:"unsupported",message:"実行処理は未実装です"}],entries:[]};
     const issues=[];
     if (!object(effect) || typeof effect.optional!=="boolean" || !Array.isArray(effect.steps)
         || !effect.steps.length || ["conditions","costs","choices"].some(key=>key in effect&&!Array.isArray(effect[key]))) {
@@ -215,7 +273,7 @@ const WSEffects = (() => {
     return actual.status===expected?.status && equal(actual.state,expected.state);
   }
 
-  return {zones,sides,emptyBoard,validateBoard,cardsIn,inspect,run,compare,
+  return {zones,sides,emptyBoard,validateBoard,cardsIn,effectiveTags,matchTags,inspect,run,compare,
     describe:(entry)=>entry.implementation?.valid(entry.step.params)
       ? entry.implementation.describe(entry.step.params):String(entry.step?.handler??"未確認"),
     handlers:()=>[...operations,...conditions].map(([id,entry])=>({id,label:entry.label}))};

@@ -35,7 +35,7 @@ for(const file of fs.readdirSync(casesDirectory).filter(file=>file.endsWith(".js
   const source=catalog.parseJson(fs.readFileSync(path.join(casesDirectory,file),"utf8"));
   for(const scenario of source.cases){
     test(file+" / "+scenario.label,()=>{
-      const card=source.card??official.cards.find(card=>card.cardNumber===scenario.cardNumber);
+      const card=source.card??catalog.findCard(official.cards,scenario.cardNumber);
       const verdict=suite.execute(card,scenario,engine);
       assert.deepEqual(verdict.actual.status,verdict.expected.status,JSON.stringify(verdict.actual.log));
       assert.deepEqual(verdict.actual.state,verdict.expected.state);

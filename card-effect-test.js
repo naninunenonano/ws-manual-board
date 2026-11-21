@@ -7,7 +7,7 @@
   const putOptions=(select,options)=>select.replaceChildren(...Object.entries(options).map(([v,label])=>new Option(label,v)));
   const nextBoard=()=>WSEffects.emptyBoard();
   const statusLabels={success:"解決",invalid:"定義エラー",unsupported:"未実装",failed:"途中停止",
-    skipped:"任意効果を辞退","needs-choice":"選択が必要","condition-not-met":"条件未達"};
+    unconfirmed:"未確認",skipped:"任意効果を辞退","needs-choice":"選択が必要","condition-not-met":"条件未達"};
   const phaseLabels={conditions:"条件",costs:"支払い",target:"対象",steps:"処理"};
   let board=nextBoard(),catalog,card,scenario,serial=0;
   let choices={},expectations=[];
@@ -37,6 +37,10 @@
           const remove=node("button","取り除く");
           remove.type="button";
           remove.onclick=()=>{pile.splice(pile.indexOf(entry),1);renderBoard();renderChoices();clearResults();};
+          for(const [kind,label] of [["traits","特徴"],["keywords","キーワード能力"]]){
+            const effective=WSEffects.effectiveTags(entry,kind);
+            row.append(node("div",label+" "+(effective?.join("、") || (effective?"なし":"未確認"))));
+          }
           row.append(remove);list.append(row);
         }
         details.append(list);panel.append(details);
@@ -135,7 +139,13 @@
     if(!CardCatalog.validNumber(cardNumber)||ids.has(uid)||[power,soul].some(n=>n!==null&&!Number.isSafeInteger(n))){
       $("boardStatus").textContent="カード番号、重複していない個体ID、数値を確認してください。";return;
     }
-    board[$("placeSide").value][$("placeZone").value].push({uid,cardNumber,power,soul});
+    const tags=id=>$(id).value.split(/[,、]/).map(tag=>tag.trim()).filter(Boolean);
+    const traitChanges={added:tags("traitsAdded"),removed:tags("traitsRemoved")};
+    const keywordChanges={added:tags("keywordsAdded"),disabled:tags("keywordsDisabled")};
+    const entry={uid,cardNumber,power,soul,traits:found?.traits??null,keywords:found?.keywords??null};
+    if(Object.values(traitChanges).some(list=>list.length))entry.traitChanges=traitChanges;
+    if(Object.values(keywordChanges).some(list=>list.length))entry.keywordChanges=keywordChanges;
+    board[$("placeSide").value][$("placeZone").value].push(entry);
     $("boardStatus").textContent=uid+" を追加しました。";
     $("placeUid").value="";
     renderBoard();renderChoices();clearResults();
@@ -206,6 +216,7 @@
     board=nextBoard();choices={};scenario=null;expectations=[];
     card=null;$("testNumber").value="";$("testEffect").replaceChildren();$("testEffect").disabled=true;
     $("testCardStatus").textContent="テスト状態をリセットしました。";
+    $("placeCard").reset();
     $("boardStatus").textContent="";$("expectError").textContent="";
     renderExpected();renderBoard();readEffect();
   };
@@ -213,7 +224,7 @@
   renderBoard();readEffect();
   WSFormalCards.load().then(data=>{
     catalog=data;
-    $("testNumbers").replaceChildren(...data.cards.map(card=>new Option(card.name??"",card.cardNumber)));
+    $("testNumbers").replaceChildren(...data.cards.flatMap(card=>CardCatalog.cardNumbers(card).map(number=>new Option(card.name??"",number))));
     $("testOpen").disabled=false;
     const params=new URLSearchParams(location.search);
     if(params.has("card")){$("testNumber").value=params.get("card");openFormal(params.get("effect"));}

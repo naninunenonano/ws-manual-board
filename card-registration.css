@@ -78,3 +78,6 @@ dd { margin: 0; overflow-wrap: anywhere; }
 summary { cursor: pointer; }
 #effectChoices label + label, #placeCard > button, #addExpectation > button { margin-top: .65rem; }
 #boardEditor li, #effectLog, #compareResults { overflow-wrap: anywhere; }
+
+.formal-overview { display: block; margin-top: .25rem; overflow-wrap: anywhere; }
+.effect-original { white-space: pre-wrap; overflow-wrap: anywhere; }

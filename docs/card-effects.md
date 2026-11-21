@@ -14,7 +14,8 @@
 | `name`, `title`, `product`, `color` | カード名、タイトル、商品、色。未確認は `null` または省略。 |
 | `type` | `character`、`event`、`climax`。未確認は `null`。 |
 | `stats` | `level`、`cost`、`power`、`soul`。数値0は確認済みの0。未確認または該当しない項目は `null` または省略。 |
-| `triggers`, `traits` | トリガー、特徴の文字列配列。未確認は `null`、該当なしは `[]`。 |
+| `triggers`, `traits`, `keywords` | トリガー、特徴、キーワード能力をそれぞれ文字列配列で記録。未確認は `null`、該当なしは `[]`。 |
+| `variants` | 同じ定義を使う別バージョン番号の配列。代表番号を含めても可。対応番号の重複はカード間も含めて検証。 |
 | `effects` | 効果定義の配列。未確認は `null`、効果なしは `[]`。 |
 | `sourceText` | 確認に使う、提供された記述。必要箇所だけ任意で保存。 |
 
@@ -22,7 +23,7 @@ PR #58のブラウザデータとJSON入出力はschemaVersion 1を維持しま�
 
 ## 効果定義
 
-効果ID `id` はカード内で一意です。`type` は能力種別（例 `auto`、`activated`、`continuous`）、`timing` は発動タイミング（例 `on_play`、`on_attack`）を表します。独立テストでは選んだ効果を直接呼び出します。効果の自動検出は対戦エンジンに統合する段階で扱います。
+効果ID `id` はカード内で一意です。`category` は能力分類です。分類名は検索・確認に使い、処理の実行には処理識別子とパラメータを使います。`type` は能力種別（例 `auto`、`activated`、`continuous`）、`timing` は発動タイミング（例 `on_play`、`on_attack`）を表します。独立テストでは選んだ効果を直接呼び出します。効果の自動検出は対戦エンジンに統合する段階で扱います。
 
 `optional` は任意なら `true`、強制なら `false` です。解釈が未確認の項目には `null` を設定し、実行可能にするための推測は避けます。確認画面の日本語には `description` を使えます。
 
@@ -39,7 +40,10 @@ PR #58のブラウザデータとJSON入出力はschemaVersion 1を維持しま�
 | `payStock` | `side`, `count`。ストックの上から順に控え室へ。 |
 | `selectCards` | `from`, `count`, `as`（選択ID）。実行時の `choices[選択ID]` に個体IDの配列を渡す。 |
 | `modifyPower`, `modifySoul` | `selection`, `amount`。選択した個体の数値を指定した分だけ増減。 |
+| `hasTraits`, `hasKeywords` | 条件用。`uid`、`names`（名前の配列）、`mode`（`any`、`all`、`none`）。 |
 | `zoneCount` | 条件用。`from` と `min` または `max`。両方指定可。 |
+
+`selectCards` でも `traits` と `keywords` に `{"names":["特徴名"],"mode":"any"}` を指定できます。盤面上の個体は元の `traits`、`keywords` と、`traitChanges:{added,removed}`、`keywordChanges:{added,disabled}` を持ちます。取り除き・無効化は追加より優先します。元の一覧が未確認で判定が確定できない場合は処理を停止します。能力の保有はこのデータで判定し、効果原文中の語句からは推定しません。能力の保有判定で、能力自体の効果が実行されることはありません。
 
 回復は `move` にクロックから控え室、`count:1` を指定します。手札を捨てる場合は `selectCards` と `move` を組み合わせます。共通処理の追加は、エンジンのレジストリに識別子、パラメータの許可キーと検証、日本語表示、実行関数を1組追加します。カード番号で分岐せず、ルール上の意味が異なる処理には別の識別子を使います。
 

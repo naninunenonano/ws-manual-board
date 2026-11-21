@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>カード効果テスト | WS手動対戦盤面</title>
-  <link rel="stylesheet" href="card-registration.css?v=2">
-  <script src="card-catalog.js?v=2" defer></script>
-  <script src="effects/engine.js?v=1" defer></script>
-  <script src="card-data/load.js?v=1" defer></script>
-  <script src="effects/cases.js?v=1" defer></script>
-  <script src="card-effect-test.js?v=1" defer></script>
+  <link rel="stylesheet" href="card-registration.css?v=3">
+  <script src="card-catalog.js?v=3" defer></script>
+  <script src="effects/engine.js?v=2" defer></script>
+  <script src="card-data/load.js?v=2" defer></script>
+  <script src="effects/cases.js?v=2" defer></script>
+  <script src="card-effect-test.js?v=2" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -42,6 +42,16 @@
           <label>パワー <input id="placePower" type="number" step="1"></label>
           <label>ソウル <input id="placeSoul" type="number" step="1"></label>
         </div>
+        <details>
+          <summary>テスト中の特徴・キーワード変更</summary>
+          <p class="muted">追加・無効化する名前は読点かカンマで区切ります。</p>
+          <div class="fields">
+            <label>追加する特徴 <input id="traitsAdded"></label>
+            <label>取り除く特徴 <input id="traitsRemoved"></label>
+            <label>追加するキーワード能力 <input id="keywordsAdded"></label>
+            <label>無効化するキーワード能力 <input id="keywordsDisabled"></label>
+          </div>
+        </details>
         <button type="submit">領域の上に追加</button>
       </form>
       <p id="boardStatus" class="feedback" role="status"></p>
