@@ -190,8 +190,7 @@
       const raw = decodeTransfer(encoded);
       const deck = await classify(parse(raw));
       preview(deck);
-      const code = typeof raw.code === "string" ? codeOf(raw.code) : null;
-      if (code) $("deckCode").value = code;
+      // The transferred deck is stored in the shared library; no code field is needed.
       status.textContent = "Deck Logから50枚を受信しました。登録先を確認し「操作側に50枚登録」を押してください";
     } catch (e) {
       status.textContent = "Deck Log転送データを読み込めません: " + e.message;
