@@ -208,6 +208,29 @@ const WSEffects = (() => {
     (ctx,p)=>{const deck=pile(ctx,{side:p.side,zone:"deck"});
       for(let i=deck.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]];}
       return deck.map(c=>c.uid);},["side"]);
+  operation("selectNamed","同名カード選択",p=>ref(p.from)&&word(p.as)&&word(p.cardNumber)&&count(p.count)&&p.count>0,
+    p=>zoneLabel(p.from)+"から指定カードを"+p.count+"枚選ぶ",
+    (ctx,p)=>{const ids=ctx.choices[p.as],available=new Map(pile(ctx,p.from).filter(c=>c.cardNumber.replace(/(?:SP|S)$/,"")===p.cardNumber).map(c=>[c.uid,c]));
+      if(!Array.isArray(ids)||ids.length!==p.count||new Set(ids).size!==ids.length||!ids.every(id=>available.has(id)))fail("同名カードを選択してください","needs-choice");
+      ctx.selections.set(p.as,[...ids]);return [...ids];},["from","as","cardNumber","count"]);
+  operation("modifyLevel","レベル増減",p=>word(p.selection)&&integer(p.amount),
+    p=>"選択したカードのレベルを"+p.amount+"変更",
+    (ctx,p)=>{const ids=ctx.selections.get(p.selection);if(!ids)fail("選択がありません");
+      const found=cardsIn(ctx.board).filter(e=>ids.includes(e.card.uid));if(found.length!==ids.length||found.some(e=>!integer(e.card.level)))fail("レベルを確認してください");
+      for(const e of found)e.card.level+=p.amount;return [...ids];},["selection","amount"]);
+  operation("chooseDestination","移動先選択",p=>ref(p.from)&&Array.isArray(p.destinations)&&p.destinations.length>0&&p.destinations.every(ref)&&word(p.selection)&&word(p.choiceKey),
+    p=>"選択したカードの移動先を選ぶ",
+    (ctx,p)=>{const destination=ctx.choices[p.choiceKey];if(!p.destinations.some(d=>d.side===destination?.side&&d.zone===destination?.zone))fail("移動先を選んでください","needs-choice");
+      return move(ctx,{from:p.from,to:destination,selection:p.selection});},["from","destinations","selection","choiceKey"]);
+  register(conditions,"otherStageTraitCount","他の舞台の特徴枚数条件",
+    p=>knownKey(sides,p.side)&&count(p.min)&&validFilter(p.traits),
+    p=>"他の舞台に条件を満たすキャラが"+p.min+"枚以上",
+    (ctx,p)=>pile(ctx,{side:p.side,zone:"stage"}).filter(c=>c.uid!==ctx.choices.sourceUid&&c.type==="character"&&checkTags(c,"traits",p.traits)).length>=p.min,
+    ["side","min","traits"]);
+  register(conditions,"cxName","CX置場のカード名",
+    p=>knownKey(sides,p.side)&&word(p.name)&&(p.cardNumbers===undefined||(Array.isArray(p.cardNumbers)&&p.cardNumbers.length>0&&p.cardNumbers.every(word))),
+    p=>"CX置場に「"+p.name+"」がある",
+    (ctx,p)=>pile(ctx,{side:p.side,zone:"cx"}).some(c=>p.cardNumbers?p.cardNumbers.includes(c.cardNumber):c.name===p.name),["side","name","cardNumbers"]);
   register(conditions,"memoryMarkerCount","思い出・マーカー合計",
     p=>knownKey(sides,p.side)&&count(p.max),
     p=>"思い出とマーカーの合計が"+p.max+"枚以下",
@@ -278,7 +301,7 @@ const WSEffects = (() => {
       else if (!implementation)issues.push({status:"unsupported",message:at+" の "+step.handler+" は未実装です"});
       else if (!implementation.valid(step.params))issues.push({status:"invalid",message:at+" の "+step.handler+" のパラメータが不正です"});
       else if (phase==="target" && step.handler!=="selectCards")issues.push({status:"unsupported",message:at+" の対象指定方式は未実装です"});
-      else if (step.handler==="selectCards"){
+      else if (step.handler==="selectCards"||step.handler==="selectNamed"){
         if(selections.has(step.params.as))issues.push({status:"invalid",message:at+" の選択IDが重複しています"});
         selections.add(step.params.as);
       }else if(step.handler==="searchDeck"){
@@ -293,11 +316,11 @@ const WSEffects = (() => {
 
   function selectionRequest(context,entry) {
     const {handler,params}=entry.step;
-    if(handler!=="selectCards"&&handler!=="searchDeck")return null;
+    if(handler!=="selectCards"&&handler!=="searchDeck"&&handler!=="selectNamed")return null;
     const from=params.from??{side:params.side,zone:"deck"};
     const filter={...params,excludeUid:params.excludeUid==="@source"||params.excludeSource?context.choices.sourceUid:params.excludeUid};
     const candidates=pile(context,from).filter(card=>{
-      try{return matching(card,filter)}catch(error){if(error.status==="unconfirmed")return false;throw error}
+      try{return matching(card,filter)&&(handler!=="selectNamed"||card.cardNumber.replace(/(?:SP|S)$/,"")===params.cardNumber)}catch(error){if(error.status==="unconfirmed")return false;throw error}
     });
     return {kind:"select",label:zoneLabel(from),from,candidates,min:handler==="searchDeck"?0:params.min??params.count,
       max:params.max??params.count,phase:entry.phase};
@@ -334,6 +357,7 @@ const WSEffects = (() => {
         at=entry;
         const {handler,params}=entry.step;
         if(guided){
+          if(handler==="chooseDestination"){const dest=yield {kind:"destination",destinations:params.destinations};choices[params.choiceKey]=dest;}
           const request=selectionRequest(context,entry);
           if(request){
             if(request.candidates.length<request.min)
