@@ -58,8 +58,13 @@
     el.className="lab-card";
     el.setAttribute("aria-pressed",String(pressed));
     el.append(node("strong",name(entry)));
+    const firen=entry.cardNumber?.startsWith("STS/W140-002")&&entry.type==="character";
+    const others=board.self.stage.filter(c=>c.uid!==entry.uid&&c.type==="character"&&c.traits?.some(t=>["巡遊者","魔王"].includes(t))).length;
+    const cxActive=board.self.cx.some(c=>["STS/W140-031","STS/W140-031R"].includes(c.cardNumber));
+    const powerShown=firen?(entry.power??3000)+(others>=2?4000:0)+(cxActive?1000:0):entry.power;
+    const soulShown=entry.type==="character"&&cxActive?(entry.soul??0)+1:entry.soul;
     const details=[entry.name&&entry.cardNumber,typeNames[entry.type],entry.level!=null?"Lv "+entry.level:"",
-      entry.cost!=null?"コスト "+entry.cost:"",entry.power!=null?"パワー "+entry.power:"",entry.soul!=null?"ソウル "+entry.soul:"",
+      entry.cost!=null?"コスト "+entry.cost:"",powerShown!=null?"パワー "+powerShown:"",soulShown!=null?"ソウル "+soulShown:"",
       entry.triggers?.length?"トリガー "+entry.triggers.join("、"):""].filter(Boolean);
     if(details.length) el.append(node("small",details.join(" ／ ")));
     for(const [key,title] of [["traits","特徴"],["keywords","キーワード能力"]]){
@@ -134,7 +139,7 @@
     const spent=usage.filter(entry=>(used.get(usageKey(entry.card.uid))??0)>=ability.limit.perTurn).length;
     $("turnUsed").textContent=ability?.limit?.perTurn?"ターン"+ability.limit.perTurn+"回 ／ 使用済み "+spent+"枚":"";
     $("undoBoard").disabled=!undo||!!session;
-    for(const id of ["nextTurn","resetEffectTest","loadPractice","loadSample","testEffect","testCard","testProduct"])$(id).disabled=!!session||(id==="testEffect"&&!ability);
+    for(const id of ["nextTurn","resetEffectTest","loadPractice","loadFiren","loadSample","testEffect","testCard","testProduct"])$(id).disabled=!!session||(id==="testEffect"&&!ability);
     $("placeCard").querySelectorAll("input,select,button").forEach(el=>el.disabled=!!session);
     $("cancelEffect").hidden=!session;
     $("restoreStart").hidden=!lastStart||!!session;
@@ -301,6 +306,27 @@
     renderProduct(entry,ability);
   }
   $("testFind").onsubmit=event=>{event.preventDefault();if(catalog&&!session)openNumber($("testNumber").value)};
+  $("loadFiren").onclick=()=>{
+    if(session)return;
+    const firen=WSFormalCards.find(catalog,"STS/W140-002");
+    const cx=WSFormalCards.find(catalog,"STS/W140-031");
+    if(!firen||!cx){$("boardStatus").textContent="フィレンまたは凱旋歌がカタログにありません。";return}
+    changeBoard(()=>{
+      board=WSEffects.emptyBoard();used.clear();turn=1;selected=null;
+      board.self.stage.push(temporaryCard({name:"巡遊者のキャラ",power:3000,soul:1,traits:["巡遊者"]}));
+      board.self.waiting.push(temporaryCard({name:"控え室の巡遊者",traits:["巡遊者"]}),formalCard(firen));
+      board.self.hand.push(formalCard(firen),formalCard(cx),temporaryCard({name:"手札コスト用カード"}));
+      // The deck top is the final array element in the effect engine.
+      board.self.deck.push(temporaryCard({name:"山札の下"}),temporaryCard({name:"山札の中"}),formalCard(cx));
+    });
+    openNumber("STS/W140-002");
+    for(const zone of ["hand","stage","waiting","deck","cx","stock"]){
+      const area=$("boardEditor").querySelector('[data-key="self.'+zone+'"]');
+      if(area)area.open=true;
+    }
+    $("boardStatus").textContent="フィレン確認用盤面を配置しました。舞台のフィレンのパワーは他の巡遊者が2枚以上で＋4000、CX配置中はさらに＋1000で表示します。";
+    clearResults();
+  };
   $("loadPractice").onclick=()=>{
     if(session||!card)return;
     changeBoard(()=>{
