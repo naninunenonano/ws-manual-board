@@ -19,8 +19,8 @@ async function main() {
       try{
         await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user]);
         const {p_action,p_room=null,p_revision=null,p_operation=null,p_data={}}=args;
-        const sql=name==="ws_attack_exchange"?"select ws_attack_exchange($1,$2,$3,$4,$5) as data":
-          "select ws_online_room($1,$2,$3,$4,$5) as data";
+        const functions={ws_attack_exchange:"ws_attack_exchange",ws_encore:"ws_encore",ws_online_room:"ws_online_room"};
+        const sql="select "+functions[name]+"($1,$2,$3,$4,$5) as data";
         const response=await db.query(sql,[p_action,p_room,p_revision,p_operation,p_data]);
         return {data:response.rows[0].data,error:null};
       }catch(e){return {data:null,error:{code:e.code,message:e.message}}}
@@ -253,6 +253,41 @@ async function main() {
     await attacker.waitForFunction(({seat,id})=>players[seat].waiting.at(-1)?.id===id,{seat:defenderSeat,id:expected[2]});
     assert.equal(await attacker.evaluate(seat=>players[seat].clock.length,defenderSeat),2);
     assert.equal(await attacker.evaluate(seat=>players[seat].deck.every(card=>!card.id&&!card.uid),defenderSeat),true);
+    await attacker.evaluate(()=>{players[side].front0[0].orientation=180;updateBoard()});
+    await defender.waitForFunction(p=>players[p].front0[0]?.orientation===180,attackerSeat);
+    await defender.evaluate(()=>{
+      const card=players[side].hand.find(c=>!c.cx);
+      move(side,"hand",players[side].hand.indexOf(card),"back0");
+    });
+    await attacker.waitForFunction(p=>players[p].back0.length===1,defenderSeat);
+    await defender.evaluate(()=>{players[side].back0[0].orientation=180;updateBoard()});
+    await attacker.waitForFunction(p=>players[p].back0[0]?.orientation===180,defenderSeat);
+    await $(attacker,"nextPhase").tap();
+    await $(defender,"encoreStatus").filter({hasText:"アンコールステップ開始時の効果確認"}).waitFor();
+    assert.equal(await $(defender,"encoreAction").isHidden(),true);
+    await $(attacker,"encoreAction").tap();
+    await $(defender,"encoreAction").tap();
+    await $(attacker,"encoreAction").tap();
+    await attacker.locator("#dialogBody button.modal-card").first().tap();
+    await $(defender,"encoreStatus").filter({hasText:"アンコール方法の選択"}).waitFor();
+    await attacker.getByRole("button",{name:"手札1枚を選ぶ",exact:true}).tap();
+    assert.equal(await attacker.getByRole("button",{name:"選んだ手札を控え室へ",exact:true}).isEnabled(),false);
+    await attacker.locator("#dialogBody button.modal-card").first().tap();
+    await attacker.getByRole("button",{name:"選んだ手札を控え室へ",exact:true}).tap();
+    await defender.waitForFunction(p=>players[p].front0[0]?.orientation===90,attackerSeat);
+    await $(defender,"encoreStatus").filter({hasText:"アンコール処理後の効果確認"}).waitFor();
+    await attacker.reload();
+    await $(attacker,"encoreAction").filter({hasText:"次のキャラへ"}).tap();
+    await $(attacker,"encoreAction").filter({hasText:"自分のアンコール処理を完了"}).tap();
+    await $(defender,"encoreAction").tap();
+    await defender.locator("#dialogBody button.modal-card").first().tap();
+    await defender.getByRole("button",{name:"アンコールしない",exact:true}).tap();
+    await attacker.waitForFunction(p=>players[p].back0.length===0,defenderSeat);
+    await $(defender,"encoreAction").filter({hasText:"次のキャラへ"}).tap();
+    await $(defender,"encoreAction").filter({hasText:"自分のアンコール処理を完了"}).tap();
+    await $(attacker,"encoreStatus").filter({hasText:"アンコールステップ完了"}).waitFor();
+    await $(attacker,"nextPhase").tap();
+    await $(defender,"turnStatus").filter({hasText:"エンドフェイズ"}).waitFor();
     b.once("dialog",dialog=>dialog.accept());
     await $(b,"surrender").click();
     await a.getByText("プレイヤー2が降参しました。勝者：プレイヤー1",{exact:true}).waitFor();
