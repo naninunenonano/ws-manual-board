@@ -81,7 +81,7 @@
               "handler": "searchDeck",
               "params": {
                 "side": "self",
-                "as": "found",
+                "as": "searched",
                 "max": 1,
                 "cardType": "character",
                 "maxLevel": 1
@@ -90,7 +90,7 @@
             {
               "handler": "revealSelection",
               "params": {
-                "selection": "found"
+                "selection": "searched"
               }
             },
             {
