@@ -575,6 +575,7 @@ test("auto attack rests a selected character, shows exactly one trigger, and sto
   assert.equal(state(page).stock.at(-1).faceUp,false);
   assert.equal(state(page).deck.length,before.deck.length-1);
   assert.equal(page.run("side"),1);
+  assert.equal(page.get("battleSide").value,"1");
   assert.equal(panel(page)[0].value,"damage");
 });
 

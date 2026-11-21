@@ -635,8 +635,10 @@ function startAutoAttack(p,z,index){
          message(online?"トリガーをストックに置きました。ダメージを受ける側は自分の山札から「ダメージ」を実行してください":"トリガーをストックに置きました");
          done();
          if(enterDamage && !document.getElementById("dialog").open){
-           document.getElementById("battleSide").onchange({target:{value:String(1-p)}});
-           openActions(1-p,"deck","damage");
+           const control=document.getElementById("battleSide");
+           control.value=String(1-p);
+           control.onchange({target:control});
+           if(!document.getElementById("dialog").open)openActions(1-p,"deck","damage");
          }
        });
      }
