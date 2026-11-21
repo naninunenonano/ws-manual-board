@@ -184,6 +184,214 @@
           "implementationStatus": "implemented"
         }
       ]
+    },
+    {
+      "cardNumber": "STS/W140-002",
+      "variants": [
+        "STS/W140-002",
+        "STS/W140-002S",
+        "STS/W140-002SP"
+      ],
+      "product": "ブースターパック ステラソラ",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 1,
+        "cost": 0,
+        "power": 3000,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者",
+        "アグリ・ユニオン"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "firen-own-turn-power",
+          "category": "永続パワー上昇",
+          "type": "continuous",
+          "timing": "own_turn",
+          "optional": false,
+          "description": "自分のターン中、他の《巡遊者》か《魔王》のキャラが2枚以上なら自身のパワー＋4000。",
+          "sourceText": "【永】 あなたのターン中、他のあなたの、《巡遊者》か《魔王》のキャラが2枚以上なら、このカードのパワーを＋4000。",
+          "conditions": [
+            {
+              "handler": "otherStageTraitCount",
+              "params": {
+                "side": "self",
+                "min": 2,
+                "traits": {
+                  "names": [
+                    "巡遊者",
+                    "魔王"
+                  ],
+                  "mode": "any"
+                }
+              }
+            }
+          ],
+          "costs": [],
+          "steps": [
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "stage"
+                },
+                "as": "firenSelf",
+                "count": 1
+              }
+            },
+            {
+              "handler": "modifyPower",
+              "params": {
+                "selection": "firenSelf",
+                "amount": 4000
+              }
+            }
+          ],
+          "implementationStatus": "implemented"
+        },
+        {
+          "id": "firen-on-play-duplicate",
+          "category": "登場時同名展開",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": true,
+          "description": "手札1枚を控え室に置き、控え室の同名カードを舞台に置いてそのターン中レベル＋1。",
+          "sourceText": "【自】［手札を1枚控え室に置く］ このカードが手札から舞台に置かれた時、あなたはコストを払ってよい。そうしたら、あなたは自分の控え室の「鋼に宿る優しき心 フィレン」を1枚選び、舞台の好きな枠に置き、そのターン中、そのキャラのレベルを＋1。",
+          "conditions": [],
+          "costs": [
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "as": "discard",
+                "count": 1
+              }
+            },
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "selection": "discard"
+              }
+            }
+          ],
+          "steps": [
+            {
+              "handler": "selectNamed",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "as": "duplicate",
+                "count": 1,
+                "cardNumber": "STS/W140-002"
+              }
+            },
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "stage"
+                },
+                "selection": "duplicate"
+              }
+            },
+            {
+              "handler": "modifyLevel",
+              "params": {
+                "selection": "duplicate",
+                "amount": 1
+              }
+            }
+          ],
+          "implementationStatus": "implemented"
+        },
+        {
+          "id": "firen-cx-combo",
+          "category": "CXコンボ",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": false,
+          "description": "アタック時に指定CXがあれば控え室の《巡遊者》か《魔王》のキャラ1枚を手札またはストックに置いてよい。",
+          "sourceText": "【自】【CXコンボ】 このカードがアタックした時、CX置場に「黎明告げる凱旋歌」があるなら、あなたは自分の控え室の、《巡遊者》か《魔王》のキャラを1枚選び、手札に戻すかストック置場に置いてよい。",
+          "conditions": [
+            {
+              "handler": "cxName",
+              "params": {
+                "side": "self",
+                "name": "黎明告げる凱旋歌"
+              }
+            }
+          ],
+          "costs": [],
+          "steps": [
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "as": "cxTarget",
+                "count": 1,
+                "min": 0,
+                "cardType": "character",
+                "traits": {
+                  "names": [
+                    "巡遊者",
+                    "魔王"
+                  ],
+                  "mode": "any"
+                }
+              }
+            },
+            {
+              "handler": "chooseDestination",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "selection": "cxTarget",
+                "choiceKey": "cxDestination",
+                "destinations": [
+                  {
+                    "side": "self",
+                    "zone": "hand"
+                  },
+                  {
+                    "side": "self",
+                    "zone": "stock"
+                  }
+                ]
+              }
+            }
+          ],
+          "implementationStatus": "implemented"
+        }
+      ]
     }
   ]
 }
