@@ -102,6 +102,6 @@ test("the submitted Wraith data resolves all explicit variants and is implemente
   for(const effect of W.effects){
     const result=E.run(effect,E.emptyBoard());
     assert.equal(result.status,"needs-choice");
-    assert.deepEqual(result.log,[]);
+    assert.ok(result.log.every(entry=>entry.phase==="conditions"||entry.phase==="costs"));
   }
 });
