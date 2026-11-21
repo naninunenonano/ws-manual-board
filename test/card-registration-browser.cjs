@@ -7,8 +7,67 @@ const {chromium,devices} = require("playwright");
 const files = new Map([
   ["card-registration.html","text/html"],["card-registration.css","text/css"],
   ["card-registration.js","application/javascript"],["card-images.js","application/javascript"],
-  ["card-catalog.js","application/javascript"]
+  ["card-catalog.js","application/javascript"],["card-catalog-view.js","application/javascript"],
+  ["card-data/load.js","application/javascript"],["card-data/catalog.json","application/json"],
+  ["effects/engine.js","application/javascript"],["effects/cases.js","application/javascript"],
+  ["card-effect-test.html","text/html"],["card-effect-test.js","application/javascript"],
+  ["test/card-effects/example.json","application/json"]
 ]);
+
+async function checkEffects(browser,url) {
+  const page=await browser.newPage(devices["iPhone 13"]);
+  const errors=[];
+  page.on("pageerror",error=>errors.push(error.message));
+  const $=id=>page.locator("#"+id);
+  const catalog={schemaVersion:1,cards:[{
+    cardNumber:"TEST/S001-003",name:"検索用の架空カード",type:"character",color:"青",stats:{power:2500},
+    effects:[
+      {id:"draw",type:"auto",timing:"on_play",optional:false,steps:[{handler:"draw",params:{side:"self",count:1}}]},
+      {id:"future",type:"auto",timing:"on_play",optional:false,steps:[{handler:"futureAction",params:{}}]}
+    ]
+  }]};
+  await page.route("**/card-data/catalog.json",route=>route.fulfill({json:catalog}));
+  await page.goto(url+"/card-registration.html");
+  await $("formalName").fill("見つからない");
+  await $("formalStatus").getByText(/0件 ／ 全1件/).waitFor();
+  await $("formalName").fill("架空カード");
+  await $("formalNumber").fill("test/s001-003");
+  await $("formalResults").getByText(/検索用の架空カード/).click();
+  await $("formalResults").getByText("2500",{exact:true}).waitFor();
+  await $("formalResults").getByText("処理 ／ 自分が1枚引く",{exact:true}).waitFor();
+  await $("formalResults").getByText(/futureAction は未実装/).waitFor();
+  await $("formalResults").getByRole("link",{name:"この効果をテスト"}).first().click();
+  await $("testEffectStatus").getByText("テスト実行可能",{exact:true}).waitFor();
+  await $("placeNumber").fill("TEST/S001-003");
+  await $("placeUid").fill("drawn");
+  await page.getByRole("button",{name:"領域の上に追加"}).click();
+  await $("expectZone").selectOption("hand");
+  await $("expectValue").fill("1");
+  await page.getByRole("button",{name:"比較条件を追加"}).click();
+  await $("runEffectTest").click();
+  assert.equal(await $("effectResult").innerText(),"解決 ／ 一致");
+  assert.equal(JSON.parse(await $("afterBoard").textContent()).self.hand[0].uid,"drawn");
+  assert.equal(JSON.parse(await $("beforeBoard").textContent()).self.deck[0].uid,"drawn");
+  await $("testEffect").selectOption("future");
+  await $("runEffectTest").click();
+  assert.match(await $("effectResult").innerText(),/未実装.*実行前に停止/);
+  await $("loadSample").click();
+  await $("testCardStatus").getByText(/架空のテスト例/).waitFor();
+  await $("runEffectTest").click();
+  assert.equal(await $("effectResult").innerText(),"解決 ／ 一致");
+  assert.match(await $("effectLog").innerText(),/支払い ／ payStock/);
+  assert.equal(JSON.parse(await $("afterBoard").textContent()).self.stage[1].power,1500);
+  await $("effectChoices").getByLabel("任意効果").selectOption("no");
+  await $("runEffectTest").click();
+  assert.match(await $("effectResult").innerText(),/任意効果を辞退 ／ 不一致/);
+  await $("resetEffectTest").click();
+  assert.equal(await $("runEffectTest").isDisabled(),true);
+  assert.equal(await page.evaluate(()=>localStorage.length),0);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  assert.deepEqual(errors,[]);
+  await page.close();
+  console.log("Effect tester: formal number/name search, Japanese definitions, test board, expectations, sample, preflight failure and isolation passed");
+}
 
 async function main() {
   const server = http.createServer((request,response)=>{
@@ -21,6 +80,8 @@ async function main() {
   let browser;
   try {
     browser = await chromium.launch(fs.existsSync("/usr/bin/google-chrome")?{channel:"chrome"}:{});
+    const url="http://127.0.0.1:"+server.address().port;
+    await checkEffects(browser,url);
     const page = await browser.newPage({...devices["iPhone 13"],acceptDownloads:true});
     const consoleErrors = [];
     page.on("pageerror",error=>consoleErrors.push(error.message));
@@ -34,6 +95,7 @@ async function main() {
     assert.equal(await page.locator('a[href="index.html"]').innerText(),"対戦盤面");
     const widthBefore = await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth);
     assert.ok(widthBefore);
+    await page.locator("#localDraftTools > summary").click();
     await $("lookupNumber").fill("test/s001-001");
     await $("cardImage").waitFor();
     assert.match(await $("cardImage").getAttribute("src"),/test_s001_001\.png$/);
@@ -69,6 +131,7 @@ async function main() {
     await page.getByText("カードを保存しました。").waitFor();
     await $("cardRows").getByText("未実装あり").waitFor();
     await page.reload();
+    await page.locator("#localDraftTools > summary").click();
     await $("cardRows").getByRole("button",{name:"TEST/S001-001"}).click();
     assert.equal(await $("cost").inputValue(),"0");
     page.once("dialog",d=>d.accept());

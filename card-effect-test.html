@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>カード効果テスト | WS手動対戦盤面</title>
+  <link rel="stylesheet" href="card-registration.css?v=2">
+  <script src="card-catalog.js?v=2" defer></script>
+  <script src="effects/engine.js?v=1" defer></script>
+  <script src="card-data/load.js?v=1" defer></script>
+  <script src="effects/cases.js?v=1" defer></script>
+  <script src="card-effect-test.js?v=1" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell header-content">
+      <h1>カード効果テスト</h1>
+      <a href="card-registration.html">カード情報・効果登録</a>
+    </div>
+  </header>
+  <main class="shell">
+    <section class="panel" aria-labelledby="testCardHeading">
+      <h2 id="testCardHeading">テストする効果</h2>
+      <form id="testFind" class="row">
+        <label class="grow">正式カード番号 <input id="testNumber" list="testNumbers" autocomplete="off" required></label>
+        <datalist id="testNumbers"></datalist>
+        <button id="testOpen" type="submit" disabled>カードを開く</button>
+      </form>
+      <button id="loadSample" type="button">架空カードのテスト例を開く</button>
+      <p id="testCardStatus" role="status"></p>
+      <label>効果 <select id="testEffect" disabled></select></label>
+      <p id="testEffectStatus" class="muted"></p>
+    </section>
+    <section class="panel" aria-labelledby="testBoardHeading">
+      <h2 id="testBoardHeading">テスト用の初期盤面</h2>
+      <form id="placeCard">
+        <div class="fields">
+          <label>プレイヤー <select id="placeSide"></select></label>
+          <label>領域 <select id="placeZone"></select></label>
+          <label>カード番号 <input id="placeNumber" required></label>
+          <label>個体ID <input id="placeUid" placeholder="空欄なら自動"></label>
+          <label>パワー <input id="placePower" type="number" step="1"></label>
+          <label>ソウル <input id="placeSoul" type="number" step="1"></label>
+        </div>
+        <button type="submit">領域の上に追加</button>
+      </form>
+      <p id="boardStatus" class="feedback" role="status"></p>
+      <div id="boardEditor"></div>
+      <button id="resetEffectTest" type="button">テスト状態をリセット</button>
+    </section>
+    <section class="panel" aria-labelledby="choiceHeading">
+      <h2 id="choiceHeading">実行時の選択</h2>
+      <div id="effectChoices"></div>
+    </section>
+    <section class="panel" aria-labelledby="expectHeading">
+      <h2 id="expectHeading">期待結果</h2>
+      <p id="sampleInfo" hidden>架空例のテストケースと、盤面全体・結果ステータスを比較します。</p>
+      <div id="manualExpect">
+        <label>結果
+          <select id="expectedStatus"><option value="success">解決</option><option value="skipped">任意効果を辞退</option><option value="condition-not-met">条件未達</option></select>
+        </label>
+        <form id="addExpectation">
+          <div class="fields">
+            <label>プレイヤー <select id="expectSide"></select></label>
+            <label>領域 <select id="expectZone"></select></label>
+            <label>比較方法 <select id="expectKind"><option value="count">カード枚数</option><option value="order">個体IDの並び（下から）</option><option value="power">指定した個体のパワー</option><option value="soul">指定した個体のソウル</option></select></label>
+            <label id="expectUidLabel" hidden>個体ID <input id="expectUid"></label>
+            <label>期待値 <input id="expectValue" placeholder="個体IDの並びは空白区切り"></label>
+          </div>
+          <button type="submit">比較条件を追加</button>
+        </form>
+        <ul id="expectations"></ul>
+      </div>
+      <p id="expectError" class="feedback" role="status"></p>
+      <button class="primary" id="runEffectTest" type="button" disabled>効果を実行</button>
+      <p id="effectResult" class="feedback" role="status"></p>
+      <ul id="compareResults"></ul>
+      <details><summary>実行前の盤面</summary><pre id="beforeBoard"></pre></details>
+      <details open><summary>実行後の盤面</summary><pre id="afterBoard"></pre></details>
+      <h3>処理履歴</h3>
+      <ol id="effectLog"></ol>
+    </section>
+  </main>
+</body>
+</html>

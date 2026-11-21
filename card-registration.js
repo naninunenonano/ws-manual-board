@@ -1,6 +1,7 @@
 "use strict";
 
 (() => {
+  const validationOptions={supportedHandlers:new Set(WSEffects.handlers().map(entry=>entry.id))};
   const catalogKey = "ws-card-catalog-v1";
   const draftKey = "ws-card-catalog-draft-v1";
   const $ = id => document.getElementById(id);
@@ -185,7 +186,7 @@
     }
     const card = {...draft.base,cardNumber:draft.number,type:draft.type,color:draft.color.trim(),
       title:draft.title.trim(),product:draft.product.trim(),stats,effects};
-    return {card,issues:[...syntaxIssues,...CardCatalog.validateCard(card)]};
+    return {card,issues:[...syntaxIssues,...CardCatalog.validateCard(card,undefined,validationOptions)]};
   }
 
   function updateCard(remove=false) {
@@ -250,7 +251,7 @@
     $("cardRows").replaceChildren(...cards.map(card=>{
       const row = document.createElement("tr");
       row.insertCell().append(button(card.cardNumber,()=>openCard(card.cardNumber,true)));
-      const issues = CardCatalog.validateCard(card);
+      const issues = CardCatalog.validateCard(card,undefined,validationOptions);
       const state = issues.some(issue=>issue.severity==="error")?"エラー":issues.length?"未実装あり":"OK";
       for (const value of [CardCatalog.types[card.type],card.stats.level,card.stats.cost,card.stats.power,card.effects.length,state]) {
         row.insertCell().textContent=value ?? "—";
@@ -267,7 +268,7 @@
       const result = CardCatalog.mergeCatalog(current,incoming,overwrite);
       if (result.updated && !confirm(result.updated+"件の登録を上書きしますか？")) return;
       storeCatalog(result.catalog);
-      report(CardCatalog.validateCatalog(incoming));
+      report(CardCatalog.validateCatalog(incoming,validationOptions));
       $("jsonStatus").textContent = "追加 "+result.added+"件 ／ 上書き "+result.updated+"件 ／ 既存保持 "+result.skipped+"件";
     } catch(error) {showError($("jsonStatus"),error);}
   }
@@ -321,7 +322,7 @@
     $("validation").scrollIntoView({block:"nearest"});
   };
   $("validateAll").onclick = () => {
-    try {report(CardCatalog.validateCatalog(readCatalog()));}
+    try {report(CardCatalog.validateCatalog(readCatalog(),validationOptions));}
     catch(error) {showError($("editorStatus"),error);}
   };
   $("filterNumber").oninput = renderList;
@@ -378,6 +379,7 @@
       const saved = CardCatalog.parseJson(raw);
       if (!CardCatalog.validNumber(saved?.number) || !Array.isArray(saved.effects) || !saved.stats) throw Error("下書きを復元できません。");
       draft = saved;
+      $("localDraftTools").open=true;
       $("lookupNumber").value=draft.number;
       previewImage();
       renderEditor();

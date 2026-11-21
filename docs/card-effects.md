@@ -1,0 +1,56 @@
+# WS カード・効果の登録手順
+
+通常チャットには、ユーザーが提供したカード番号、基本情報、効果の記述と、このページのURLを渡します。GitHub連携でこのリポジトリを編集できる場合に、作業ブランチから変更を登録します。
+
+## 正式カードデータ
+
+保存先は [card-data/catalog.json](../card-data/catalog.json) です。カード追加には、原則としてこのファイルと、そのカードのテストファイル1件を変更します。処理の追加が必要なときだけ [effects/engine.js](../effects/engine.js) も編集します。
+
+形式は `{"schemaVersion":1,"cards":[...]}` です。カード番号は前後の空白を除いて大文字化し、重複登録を拒否します。修正するカードは同じ番号のエントリを編集します。
+
+| キー | 形式 |
+| --- | --- |
+| `cardNumber` | カード番号。必須。 |
+| `name`, `title`, `product`, `color` | カード名、タイトル、商品、色。未確認は `null` または省略。 |
+| `type` | `character`、`event`、`climax`。未確認は `null`。 |
+| `stats` | `level`、`cost`、`power`、`soul`。数値0は確認済みの0。未確認または該当しない項目は `null` または省略。 |
+| `triggers`, `traits` | トリガー、特徴の文字列配列。未確認は `null`、該当なしは `[]`。 |
+| `effects` | 効果定義の配列。未確認は `null`、効果なしは `[]`。 |
+| `sourceText` | 確認に使う、提供された記述。必要箇所だけ任意で保存。 |
+
+PR #58のブラウザデータとJSON入出力はschemaVersion 1を維持します。公開データには未確認の項目を許容する検証を使用し、下書きには従来の必須チェックを適用します。ブラウザ内の下書き・入出力は従来の保存先を使います。正式データを更新する手段はGitHubのファイル変更です。
+
+## 効果定義
+
+効果ID `id` はカード内で一意です。`type` は能力種別（例 `auto`、`activated`、`continuous`）、`timing` は発動タイミング（例 `on_play`、`on_attack`）を表します。独立テストでは選んだ効果を直接呼び出します。効果の自動検出は対戦エンジンに統合する段階で扱います。
+
+`optional` は任意なら `true`、強制なら `false` です。解釈が未確認の項目には `null` を設定し、実行可能にするための推測は避けます。確認画面の日本語には `description` を使えます。
+
+`conditions` → 任意の実行判断 → `costs` → `target` → `steps` の順で解決します。`conditions`、`costs`、`steps` は処理の順序を持つ配列で、各要素は `{"handler":"処理識別子","params":{...}}` です。`target` を使う場合は同じ形式で `selectCards` を指定します。`stateRefs` は参照する状態を記録する注記です。現在は `duration`、`limit`、枝分かれを定義する `choices` が指定された効果を実行前に未実装として止めます。任意能力の実行／辞退は実行時の入力 `choices.activate` で扱います。
+
+### 共通処理
+
+領域指定は `{"side":"self","zone":"clock"}` の形式です。`side` は `self` または `opponent`、`zone` は `deck`、`hand`、`stage`、`clock`、`level`、`stock`、`waiting`、`memory`、`cx` のいずれかです。
+
+| 処理識別子 | パラメータ |
+| --- | --- |
+| `move` | `from`, `to` と `count` または `selection`（選択ID）。上／下を `end` と `position` で指定でき、既定は両方 `top`。移動する複数枚の並びを維持。 |
+| `draw` | `side`, `count`。山札の上から引いた順に手札へ。 |
+| `payStock` | `side`, `count`。ストックの上から順に控え室へ。 |
+| `selectCards` | `from`, `count`, `as`（選択ID）。実行時の `choices[選択ID]` に個体IDの配列を渡す。 |
+| `modifyPower`, `modifySoul` | `selection`, `amount`。選択した個体の数値を指定した分だけ増減。 |
+| `zoneCount` | 条件用。`from` と `min` または `max`。両方指定可。 |
+
+回復は `move` にクロックから控え室、`count:1` を指定します。手札を捨てる場合は `selectCards` と `move` を組み合わせます。共通処理の追加は、エンジンのレジストリに識別子、パラメータの許可キーと検証、日本語表示、実行関数を1組追加します。カード番号で分岐せず、ルール上の意味が異なる処理には別の識別子を使います。
+
+## 個別テストと検証
+
+1. 登録するカード番号が重複していないか確認し、正式カタログを編集します。
+2. 発動条件、コスト、対象、実行順に分解し、上の共通処理で定義します。不足処理は別途実装するか、未対応の識別子として保持します。
+3. `test/card-effects/` に、`cases` 配列を持つJSONを追加します。各ケースに `label`、`cardNumber`、`effectId`、`before`、`choices` と `expected: {status,state}` を記載します。正式カードは `cardNumber` からカタログを参照します。架空例だけテストファイル内に `card` を置きます。
+4. `node --test test/card-effects.test.cjs` で効果とカタログを検証し、`node --test test/*.test.cjs` で全ユニットテストを実行します。
+5. PRを作成し、カード定義・テストの差分とCIの結果を確認します。
+
+[架空カードの試験例](../test/card-effects/example.json) を雛形にできます。盤面は `self` と `opponent` を持ち、それぞれ全領域の配列を持ちます。山札やクロックの上は配列の末尾です。カードは `uid`（盤面全体で一意）、`cardNumber`、必要に応じて `power` と `soul` を持ちます。同名カードも別の個体IDを使います。
+
+結果の状態が `success`、`skipped`、`condition-not-met` のいずれかで、期待するステータスと盤面全体が一致したときだけ合格です。未登録識別子は正式カード一覧とテストページに表示され、実行前に停止します。途中で停止したときはログと部分結果を確認し、入力盤面からやり直せます。独立ページの比較条件で試す場合は、指定した枚数・並び・個体の数値とステータスを比較します。

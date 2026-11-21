@@ -4,19 +4,33 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>カード情報・効果登録 | WS手動対戦盤面</title>
-  <link rel="stylesheet" href="card-registration.css?v=1">
+  <link rel="stylesheet" href="card-registration.css?v=2">
   <script src="card-images.js?v=1" defer></script>
-  <script src="card-catalog.js?v=1" defer></script>
-  <script src="card-registration.js?v=1" defer></script>
+  <script src="card-catalog.js?v=2" defer></script>
+  <script src="effects/engine.js?v=1" defer></script>
+  <script src="card-data/load.js?v=1" defer></script>
+  <script src="card-catalog-view.js?v=1" defer></script>
+  <script src="card-registration.js?v=2" defer></script>
 </head>
 <body>
   <header class="site-header">
     <div class="shell header-content">
       <h1>カード情報・効果登録</h1>
-      <a href="index.html">対戦盤面</a>
+      <nav class="row" aria-label="ページ移動"><a href="index.html">対戦盤面</a><a href="card-effect-test.html">カード効果テスト</a></nav>
     </div>
   </header>
   <main class="shell">
+    <section class="panel" aria-labelledby="formalHeading">
+      <h2 id="formalHeading">正式カードデータ</h2>
+      <div class="fields list-filters">
+        <label>正式データのカード番号 <input id="formalNumber" type="search" autocomplete="off"></label>
+        <label>カード名 <input id="formalName" type="search" autocomplete="off"></label>
+      </div>
+      <p id="formalStatus" class="muted" role="status">読み込み中</p>
+      <div id="formalResults"></div>
+    </section>
+    <details id="localDraftTools">
+      <summary class="panel">ブラウザ内の下書きとJSON入出力</summary>
     <section class="panel" aria-labelledby="editorHeading">
       <h2 id="editorHeading">カードを開く</h2>
       <form id="lookupForm" class="row">
@@ -112,6 +126,7 @@
       <p class="muted">タイトル・商品別の出力には、登録済みカード一覧の絞り込みを使います。</p>
       <p id="jsonStatus" class="feedback" role="status"></p>
     </section>
+    </details>
   </main>
 </body>
 </html>

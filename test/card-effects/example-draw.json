@@ -1,0 +1,121 @@
+{
+  "card": {
+    "cardNumber": "TEST/S001-002",
+    "name": "架空のカードB",
+    "effects": [
+      {
+        "id": "opponent-draw",
+        "type": "auto",
+        "timing": "manual",
+        "optional": false,
+        "steps": [
+          {
+            "handler": "draw",
+            "params": {
+              "side": "opponent",
+              "count": 2
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "label": "別のカードで同じドローを再利用",
+      "cardNumber": "TEST/S001-002",
+      "effectId": "opponent-draw",
+      "before": {
+        "self": {
+          "deck": [],
+          "hand": [],
+          "stage": [],
+          "clock": [],
+          "level": [],
+          "stock": [],
+          "waiting": [],
+          "memory": [],
+          "cx": []
+        },
+        "opponent": {
+          "deck": [
+            {
+              "uid": "d1",
+              "cardNumber": "TEST/S001-002",
+              "power": 1000,
+              "soul": 1
+            },
+            {
+              "uid": "d2",
+              "cardNumber": "TEST/S001-002",
+              "power": 1000,
+              "soul": 1
+            },
+            {
+              "uid": "d3",
+              "cardNumber": "TEST/S001-002",
+              "power": 1000,
+              "soul": 1
+            }
+          ],
+          "hand": [],
+          "stage": [],
+          "clock": [],
+          "level": [],
+          "stock": [],
+          "waiting": [],
+          "memory": [],
+          "cx": []
+        }
+      },
+      "choices": {},
+      "expected": {
+        "status": "success",
+        "state": {
+          "self": {
+            "deck": [],
+            "hand": [],
+            "stage": [],
+            "clock": [],
+            "level": [],
+            "stock": [],
+            "waiting": [],
+            "memory": [],
+            "cx": []
+          },
+          "opponent": {
+            "deck": [
+              {
+                "uid": "d1",
+                "cardNumber": "TEST/S001-002",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "hand": [
+              {
+                "uid": "d3",
+                "cardNumber": "TEST/S001-002",
+                "power": 1000,
+                "soul": 1
+              },
+              {
+                "uid": "d2",
+                "cardNumber": "TEST/S001-002",
+                "power": 1000,
+                "soul": 1
+              }
+            ],
+            "stage": [],
+            "clock": [],
+            "level": [],
+            "stock": [],
+            "waiting": [],
+            "memory": [],
+            "cx": []
+          }
+        }
+      }
+    }
+  ]
+}
