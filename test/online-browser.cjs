@@ -225,7 +225,7 @@ async function main() {
     await defender.getByLabel("カウンターに使う手札",{exact:true}).selectOption(handUid);
     await defender.getByLabel("ストックコスト",{exact:true}).selectOption("1");
     await defender.getByRole("button",{name:"カウンターを使う",exact:true}).tap();
-    await attacker.waitForFunction(({seat,id})=>players[seat].waiting.at(-1)?.id===id && players[seat].stock.length===0,
+    await attacker.waitForFunction(({seat,id})=>players[seat].waiting.at(-2)?.id===id && players[seat].stock.length===0,
       {seat:defenderSeat,id:counter});
     assert.equal(await $(attacker,"attackExchange").isHidden(),true);
     await defender.reload();

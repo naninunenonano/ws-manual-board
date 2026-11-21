@@ -761,7 +761,8 @@ function openAttackExchange(){
      if(index<0 || amount>board.stock.length)return;
      closeResolution();
      runRuleOperation(done=>{
-       const cards=[...board.stock.splice(board.stock.length-amount).reverse(),...board.hand.splice(index,1)];
+       const counter=board.hand.splice(index,1)[0];
+       const cards=[counter,...board.stock.splice(board.stock.length-amount).reverse()];
        for(const card of cards){card.faceUp=true;board.waiting.push(card)}
        resolveBoardRules(p,()=>finishAttackStep("use_counter",null,done));
      });

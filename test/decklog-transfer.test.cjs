@@ -675,8 +675,8 @@ test("counter discards only the selected hand card, pays stock and waits for man
   const paid=page.run("players[1].stock.at(-1).uid");
   hand.value=uid;hand.onchange();cost.value="1";
   action(page,"カウンターを使う");
-  assert.equal(page.run("players[1].waiting.at(-1).uid"),uid);
-  assert.equal(page.run("players[1].waiting.at(-2).uid"),paid);
+  assert.equal(page.run("players[1].waiting.at(-2).uid"),uid);
+  assert.equal(page.run("players[1].waiting.at(-1).uid"),paid);
   assert.equal(page.run("players[1].stock.length"),1);
   assert.equal(page.run("match.attackExchange.stage"),"counter_effect");
   assert.equal(page.run("side"),1);

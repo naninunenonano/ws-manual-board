@@ -1,5 +1,7 @@
 -- Apply after 052-online.sql. The room row lock and existing board RPC keep the
 -- exchange and the acting player's private/public board in one transaction.
+begin;
+
 create or replace function public.ws_attack_exchange(
   p_action text, p_room uuid, p_revision bigint, p_operation uuid, p_data jsonb
 ) returns jsonb language plpgsql volatile security definer set search_path = '' as $$
@@ -98,3 +100,5 @@ create trigger guard_attack_exchange before update on public.room_states
 for each row execute function ws_online.guard_attack_exchange();
 
 notify pgrst, 'reload schema';
+
+commit;
