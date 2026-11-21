@@ -585,13 +585,72 @@ function ensureTurn(){
    enterTurnPhase();
  }
 }
+let drawConfirmationPending=false;
+function beforeDrawConfirmation(){
+ drawConfirmationPending=true;
+ const p=match.turn.player,d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
+ d.classList.remove("zoom-mode");body.replaceChildren();
+ document.getElementById("dialogTitle").textContent="通常ドロー前の能力確認";
+ const info=document.createElement("p");
+ info.textContent="プレイヤー"+(p+1)+"の思い出と、両プレイヤーの舞台の能力を確認してください。必要な効果は手動で処理してください。";
+ body.append(info);
+ const memory=document.createElement("div");memory.className="modalcards";
+ for(const c of players[p].memory){
+  const b=document.createElement("button");b.className="modal-card";
+  if(!addCardImage(b,c,c.id))b.textContent=c.id;
+  b.onclick=()=>{d.close();showCardDetail(c)};
+  memory.append(b);
+ }
+ body.append(memory);
+ deckButton(body,"確認完了・通常ドロー",()=>{
+  d.close();drawConfirmationPending=false;
+  pullDeck(p,1,"hand",true,false,moved=>{if(!moved)message("山札と控え室が空です")});
+ });
+ d.showModal();
+}
+function endHandConfirmation(){
+ const p=match.turn.player,d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
+ d.classList.remove("zoom-mode");body.replaceChildren();
+ document.getElementById("dialogTitle").textContent="エンド時の手札上限";
+ const label=document.createElement("label");label.textContent="手札上限 ";
+ const limit=document.createElement("select");
+ for(let i=0;i<=5;i++){const o=document.createElement("option");o.value=7+i;o.textContent=i===0?"変更なし（7枚）":"+"+i+"（"+(7+i)+"枚）";limit.append(o)}
+ label.append(limit);body.append(label);
+ const note=document.createElement("p");body.append(note);
+ const list=document.createElement("div");list.className="modalcards";body.append(list);
+ const chosen=new Set();
+ function refresh(){
+  list.replaceChildren();
+  const max=Number(limit.value),hand=players[p].hand;
+  note.textContent="手札 "+hand.length+"枚／上限 "+max+"枚。超過 "+Math.max(0,hand.length-max)+"枚を選択してください。";
+  hand.forEach((c,i)=>{
+   const b=document.createElement("button");b.className="modal-card";
+   b.style.outline=chosen.has(i)?"3px solid #f4cf73":"";
+   if(!addCardImage(b,c,c.id))b.textContent=c.id;
+   b.onclick=()=>{if(chosen.has(i))chosen.delete(i);else chosen.add(i);refresh()};
+   list.append(b);
+  });
+ }
+ limit.onchange=()=>{chosen.clear();refresh()};refresh();
+ deckButton(body,"確認完了・ターン終了",()=>{
+  const excess=Math.max(0,players[p].hand.length-Number(limit.value));
+  if(chosen.size!==excess){message("超過枚数と選択枚数を一致させてください");return}
+  for(const i of [...chosen].sort((a,b)=>b-a))manualTransfer(p,"hand",i,"waiting");
+  d.close();finishEndTurn();
+ });
+ d.showModal();
+}
+function finishEndTurn(){
+ const t=match.turn;t.player=1-t.player;t.number++;t.phase="stand";
+ side=t.player;document.getElementById("battleSide").value=String(side);enterTurnPhase();
+}
 function enterTurnPhase(){
  const t=match.turn;
  if(t.phase==="stand"){
    for(const z of ["front0","front1","front2","back0","back1"])
      for(const c of players[t.player][z])if(c.orientation===90)c.orientation=0;
  }else if(t.phase==="draw"){
-   pullDeck(t.player,1,"hand",true,false,moved=>{if(!moved)message("山札と控え室が空です")});
+   beforeDrawConfirmation();
  }
  selected=null;
  updateBoard();
@@ -602,13 +661,11 @@ function setTurnPhase(next){
  enterTurnPhase();
 }
 function advanceTurn(){
- if(!isMatchActive())return;
+ if(!isMatchActive()||drawConfirmationPending)return;
  ensureTurn();
  const t=match.turn;
  if(t.phase==="end"){
-   t.player=1-t.player;t.number++;t.phase="stand";
-   side=t.player;document.getElementById("battleSide").value=String(side);
-   enterTurnPhase();
+   endHandConfirmation();
  }else setTurnPhase(TURN_PHASES[TURN_PHASES.indexOf(t.phase)+1]);
 }
 function clockAction(){
