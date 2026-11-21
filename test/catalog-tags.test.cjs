@@ -93,15 +93,15 @@ test("common condition and selection handlers work with current tags and preserv
   assert.equal(E.compare(unknown,{status:"unconfirmed",state:board}),false);
 });
 
-test("the submitted Wraith data resolves all explicit variants and remains unimplemented",()=>{
+test("the submitted Wraith data resolves all explicit variants and is implemented",()=>{
   for(const number of ["STS/W140-001","STS/W140-001S","STS/W140-001SP"])
     assert.equal(C.findCard(data.cards,number),W);
   assert.equal(W.product,"ブースターパック ステラソラ");
   assert.equal(W.type,"character");
-  assert.deepEqual(W.effects.map(effect=>effect.category),["控えオカケン","条件付き山札公開"]);
+  assert.deepEqual(W.effects.map(effect=>effect.category),["控えオカケン","コンソール系"]);
   for(const effect of W.effects){
     const result=E.run(effect,E.emptyBoard());
-    assert.equal(result.status,"unsupported");
+    assert.equal(result.status,"needs-choice");
     assert.deepEqual(result.log,[]);
   }
 });
