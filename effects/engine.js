@@ -235,10 +235,10 @@ const WSEffects = (() => {
     p=>"トレジャーを手札に戻し、任意で山札の上をストックに置く",
     (ctx,p)=>{const waiting=pile(ctx,{side:p.side,zone:"waiting"});const idx=waiting.findIndex(c=>c.uid===p.triggerUid);
       if(idx<0)fail("トリガーしたCXが控え室にありません");
+      if(typeof ctx.choices.treasureStock!=="boolean")fail("ストックに置くか選んでください","needs-choice");
+      if(ctx.choices.treasureStock&&!pile(ctx,{side:p.side,zone:"deck"}).length)fail("山札がありません");
       const [card]=waiting.splice(idx,1);pile(ctx,{side:p.side,zone:"hand"}).push(card);
-      if(ctx.choices.treasureStock===true)return {cards:[card.uid],stock:takeFromTop(ctx,p.side,"deck","stock",1)};
-      if(ctx.choices.treasureStock!==false)fail("ストックに置くか選んでください","needs-choice");
-      return {cards:[card.uid],stock:[]};},["side","triggerUid"]);
+      return {cards:[card.uid],stock:ctx.choices.treasureStock?takeFromTop(ctx,p.side,"deck","stock",1):[]};},["side","triggerUid"]);
   register(conditions,"memoryMarkerCount","思い出・マーカー合計",
     p=>knownKey(sides,p.side)&&count(p.max),
     p=>"思い出とマーカーの合計が"+p.max+"枚以下",
