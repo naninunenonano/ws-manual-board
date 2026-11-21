@@ -76,17 +76,29 @@ function updateBoard(){
 }
 function isStageZone(z){return /^(front|back)/.test(z)}
 function ownerZone(el){return {p:Number(el.dataset.p),z:el.dataset.z}}
+let pendingMarkerChoices=[];
 function manualTransfer(p,from,index,to,position="top"){
  const a=players[p][from],card=a?.[index];if(!card)return;
  a.splice(index,1);card.faceUp=!["deck","stock"].includes(to);
  if(isStageZone(from)&&!isStageZone(to)){
    card.orientation=0;
-   for(const m of card.markers||[])players[p].waiting.push(m.card);
+   for(const m of card.markers||[]){players[p].waiting.push(m.card);pendingMarkerChoices.push({p,card:m.card})}
    card.markers=[];
  }
  if(["deck","stock"].includes(to)&&position==="bottom")players[p][to].unshift(card);
  else players[p][to].push(card);
  selected=null;updateBoard();
+ if(pendingMarkerChoices.length)showPendingMarkerChoices();
+}
+function showPendingMarkerChoices(){
+ const pending=pendingMarkerChoices.splice(0);if(!pending.length)return;
+ const d=document.getElementById("dialog"),body=document.getElementById("dialogBody");
+ d.classList.remove("zoom-mode");body.replaceChildren();document.getElementById("dialogTitle").textContent="マーカーの移動先確認";
+ const note=document.createElement("p");note.textContent="通常は控え室です。別の移動先を選ぶ場合は各マーカーを選択してください。";body.append(note);
+ for(const item of pending)deckButton(body,item.card.id+" の移動先",()=>{
+  const i=players[item.p].waiting.lastIndexOf(item.card);d.close();if(i>=0)manualDestination(item.p,"waiting",i);
+ });
+ deckButton(body,"控え室で確定",()=>d.close());d.showModal();
 }
 function openStageMarkers(p,z){
  const owner=players[p][z]?.at(-1);if(!owner)return;
