@@ -50,6 +50,12 @@ async function main() {
       future:{key:"keep me"}};
     await $("effect-1").fill(JSON.stringify(custom));
     await page.getByRole("button",{name:"上へ",exact:true}).last().click();
+    await $("lookupNumber").fill("TEST/S001-002");
+    assert.equal(await $("editor").isVisible(),false);
+    page.once("dialog",d=>d.dismiss());
+    await page.getByRole("button",{name:"開く",exact:true}).click();
+    assert.equal(await $("lookupNumber").inputValue(),"TEST/S001-001");
+    assert.equal(await $("editor").isVisible(),true);
     await page.reload();
     await page.getByText("下書きを復元しました。").waitFor();
     assert.equal(await $("level").inputValue(),"0");

@@ -85,7 +85,12 @@
       return;
     }
     if (draft?.number !== number) {
-      if (draft?.dirty && !confirm("保存していない入力を破棄して、別のカードを開きますか？")) return;
+      if (draft?.dirty && !confirm("保存していない入力を破棄して、別のカードを開きますか？")) {
+        $("lookupNumber").value = draft.number;
+        previewImage();
+        $("editor").hidden = false;
+        return;
+      }
       draft = draftFrom(number,catalog.cards.find(card=>card.cardNumber===number));
       saveDraft();
     }
@@ -279,7 +284,13 @@
     } catch(error) {showError($("jsonStatus"),error);}
   }
 
-  $("lookupNumber").oninput = previewImage;
+  $("lookupNumber").oninput = () => {
+    previewImage();
+    if (!draft) return;
+    const same = CardCatalog.normalizeNumber($("lookupNumber").value) === draft.number;
+    $("editor").hidden = !same;
+    $("editorStatus").textContent = same ? "編集中のカードを表示しています。" : "別のカードを編集するには「開く」を押してください。";
+  };
   $("lookupForm").onsubmit = event => {event.preventDefault();openCard($("lookupNumber").value);};
   $("editor").onsubmit = event => {event.preventDefault();updateCard();};
   $("reloadCard").onclick = () => {
