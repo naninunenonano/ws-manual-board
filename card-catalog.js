@@ -84,7 +84,7 @@ const CardCatalog = (() => {
     }
   }
 
-  const requiredStats = type => Object.hasOwn(stats,type) ? stats[type] : [];
+  const requiredStats = type => typeof type==="string" && Object.hasOwn(stats,type) ? stats[type] : [];
 
   function validateCard(card, path = "カード", {formal=false,supportedHandlers=null} = {}) {
     const issues = [];
@@ -95,9 +95,9 @@ const CardCatalog = (() => {
       return issues;
     }
     if (!validNumber(normalizeNumber(card.cardNumber))) add(".cardNumber","カード番号の形式を確認してください");
-    if (!(formal && card.type==null) && !Object.hasOwn(types,card.type)) add(".type","カード種別を選んでください");
+    if (!(formal && card.type==null) && !(typeof card.type==="string" && Object.hasOwn(types,card.type))) add(".type","カード種別を選んでください");
     if (!(formal && card.color==null) && !nonempty(card.color)) add(".color","色を入力してください");
-    for (const key of ["title","product","name","sourceText"]) {
+    for (const key of formal ? ["title","product","name","sourceText"] : ["title","product"]) {
       if (card[key] != null && typeof card[key] !== "string") add("."+key,"文字列を指定してください");
     }
     for (const key of ["triggers","traits"]) {
@@ -138,7 +138,7 @@ const CardCatalog = (() => {
       if ("stateRefs" in effect && !(Array.isArray(effect.stateRefs) && effect.stateRefs.every(nonempty))) {
         add(key+".stateRefs","参照する状態は文字列の配列で指定してください");
       }
-      for (const field of ["description","sourceText"]) {
+      for (const field of formal ? ["description","sourceText"] : []) {
         if (effect[field]!=null && typeof effect[field]!=="string") add(key+"."+field,"文字列を指定してください");
       }
       if (formal && effect.steps==null)return;

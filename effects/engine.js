@@ -9,7 +9,8 @@ const WSEffects = (() => {
   const integer = Number.isSafeInteger;
   const count = n => integer(n) && n >= 0;
   const end = s => s === "top" || s === "bottom";
-  const ref = v => object(v) && Object.hasOwn(sides,v.side) && Object.hasOwn(zones,v.zone)
+  const knownKey = (table,key)=>typeof key==="string" && Object.hasOwn(table,key);
+  const ref = v => object(v) && knownKey(sides,v.side) && knownKey(zones,v.zone)
     && Object.keys(v).every(key=>key==="side" || key==="zone");
   const zoneLabel = ({side,zone}) => sides[side]+"の"+zones[zone];
   const operations = new Map();
@@ -88,10 +89,10 @@ const WSEffects = (() => {
     && [p.end,p.position].every(v=>v===undefined||end(v)),
     p=>zoneLabel(p.from)+"から"+zoneLabel(p.to)+"へ"+(p.selection?"選んだカードを":p.count+"枚を")+"移動",
     move,["from","to","count","end","position","selection"]);
-  operation("draw","ドロー",p=>Object.hasOwn(sides,p.side)&&count(p.count),
+  operation("draw","ドロー",p=>knownKey(sides,p.side)&&count(p.count),
     p=>sides[p.side]+"が"+p.count+"枚引く",
     (ctx,p)=>takeFromTop(ctx,p.side,"deck","hand",p.count),["side","count"]);
-  operation("payStock","ストック支払い",p=>Object.hasOwn(sides,p.side)&&count(p.count),
+  operation("payStock","ストック支払い",p=>knownKey(sides,p.side)&&count(p.count),
     p=>sides[p.side]+"のストックを"+p.count+"枚支払う",
     (ctx,p)=>takeFromTop(ctx,p.side,"stock","waiting",p.count),["side","count"]);
   operation("selectCards","対象カード選択",p=>ref(p.from)&&word(p.as)&&p.as!=="activate"&&count(p.count),
@@ -144,14 +145,14 @@ const WSEffects = (() => {
     }
     for (const key of ["duration","limit","choices"]) {
       if (key==="choices"?effect[key]?.length:effect[key]!=null) {
-        issues.push({status:"unsupported",message:key+" の実行は未実装です"});
+        issues.push({status:"unsupported",message:({duration:"継続期間",limit:"回数制限",choices:"分岐する選択肢"})[key]+"の実行は未実装です"});
       }
     }
     if (effect.target!=null && !object(effect.target))issues.push({status:"invalid",message:"対象定義が不正です"});
     const entries=instructions(effect);
     const selections=new Set();
     for (const {phase,step,implementation,index} of entries) {
-      const at = phase+" "+(index+1);
+      const at = ({conditions:"条件",costs:"コスト",target:"対象",steps:"処理"})[phase]+" "+(index+1);
       if (!object(step)||!word(step.handler))issues.push({status:"invalid",message:at+" の処理識別子がありません"});
       else if (!implementation)issues.push({status:"unsupported",message:at+" の "+step.handler+" は未実装です"});
       else if (!implementation.valid(step.params))issues.push({status:"invalid",message:at+" の "+step.handler+" のパラメータが不正です"});

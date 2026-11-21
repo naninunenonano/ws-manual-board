@@ -18,6 +18,9 @@ test("formal catalog normalizes and checks unique card numbers; unresolved facts
   assert.equal(catalog.selectCards([card],{name:"架空",number:"s001"}).length,1);
   assert.throws(()=>catalog.checked({...input,cards:[partial,card]},{formal:true}),err=>err.issues.some(i=>i.code==="duplicate-card"));
   assert.ok(Array.isArray(official.cards));
+  const legacy={schemaVersion:1,cards:[{cardNumber:"TEST/S001-011",name:{custom:"metadata"},
+    type:"climax",color:"赤",stats:{},effects:[]}]};
+  assert.deepEqual(catalog.checked(legacy),legacy);
 });
 test("official records with supported handlers use valid effect parameters",()=>{
   for(const card of official.cards)for(const effect of card.effects??[]){
