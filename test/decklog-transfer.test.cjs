@@ -1023,11 +1023,12 @@ test("仮カード5種：特徴・キーワードの全一致と応援の位置�
     const all=[...chars.front0,...chars.back0,...chars.back1,...chars.deck.slice(-9,-7)];
     return JSON.stringify(all.map(c=>{
       const entry=botEffectCard(c);
-      return [entry.cardNumber,WSEffects.matchTags(entry,"traits",{names:["任意の特徴"],mode:"all"}),
+      return [entry.cardNumber,botDefinition(c).color,WSEffects.matchTags(entry,"traits",{names:["任意の特徴"],mode:"all"}),
         WSEffects.matchTags(entry,"keywords",{names:["任意の能力"],mode:"all"})];
     }));
   })()`);
-  assert.deepEqual(JSON.parse(example),["101","102","103","105","104"].map(id=>["BOT/W000-"+id,true,true]));
+  assert.deepEqual(JSON.parse(example),[["101","red"],["102","blue"],["103","blue"],["105","blue"],["104","red"]]
+    .map(([id,color])=>["BOT/W000-"+id,color,true,true]));
   assert.deepEqual(JSON.parse(page.run("JSON.stringify([botStats(0,players[0].front0[0]).power,botStats(0,players[0].front1[0]).power])")),[3500,3000]);
   page.run('botMove(players[0],"back0",0,"front2");updateBoard()');
   assert.equal(page.run("botStats(0,players[0].front0[0]).power"),3000);
@@ -1065,7 +1066,11 @@ test("仮カード5種：集中の任意ドローと回収先、CXの1001、ト�
   ruleButton(page,"仮CX");
   ruleButton(page,"選択を確定");
   assert.equal(snapshot(page).players[0].stock.at(-1).id,"BOT/W000-105");
-  page.run('botMove(players[0],"stock",players[0].stock.length-1,"hand");setTurnPhase("climax");autoRulePlace(0,players[0].hand.at(-1).uid,"cx")');
+  page.run('botMove(players[0],"stock",players[0].stock.length-1,"hand");setTurnPhase("climax")');
+  assert.equal(page.run('autoRulePlace(0,players[0].hand.at(-1).uid,"cx")'),false);
+  assert.match(page.get("notice").textContent,/同じ色が必要/);
+  page.run('botMove(players[0],"back1",0,"clock")');
+  assert.equal(page.run('autoRulePlace(0,players[0].hand.at(-1).uid,"cx")'),true);
   assert.deepEqual(JSON.parse(page.run("JSON.stringify(botStats(0,players[0].front0[0]))")),{power:4500,soul:3});
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
