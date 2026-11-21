@@ -155,11 +155,11 @@ function startMatch(readDeck) {
   }
   const boards = decks.map((deck, p) => {
     const board = Object.fromEntries(zones.map(zone => [zone, []]));
-    for (const { id, num } of deck.cards) {
+    for (const { id, num, cx } of deck.cards) {
       for (let i = 0; i < num; i++) {
         board.deck.push({
           uid: p + "-" + id + "-" + i, id,
-          level: cardCatalog[id]?.level ?? "?", orientation: 0, faceUp: false, cx:deck.cards.find(x=>x.id===id)?.cx===true
+          level: cardCatalog[id]?.level ?? "?", orientation: 0, faceUp: false, cx:typeof cx==="boolean"?cx:null
         });
       }
     }

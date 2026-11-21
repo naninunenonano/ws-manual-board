@@ -170,6 +170,66 @@ async function main() {
     await clockB.locator(".zone-fan-card").waitFor({state:"detached"});
     assert.equal(await a.evaluate(()=>players[0].hand.at(-1).uid),returned);
     assert.equal(await b.evaluate(()=>players[0].hand.every(card=>!card.id&&!card.uid)),true);
+    const attackerSeat=await a.evaluate(()=>match.turn.player);
+    const attacker=attackerSeat===0?a:b, defender=attacker===a?b:a;
+    const attackZone=page=>page.locator('#boards .zone[data-p="'+attackerSeat+'"][data-z="front0"]');
+    if(attacker===b){
+      await b.locator("#boards .player.active .hand .card").first().tap();
+      await b.locator("#boards .card.selected").waitFor();
+      await attackZone(b).tap();
+      await a.waitForFunction(()=>players[1].front0.length===1);
+    }
+    await $(attacker,"nextPhase").tap();
+    await attacker.getByRole("button",{name:"確認完了・通常ドロー",exact:true}).tap();
+    await $(attacker,"clockSkip").tap();
+    await $(attacker,"nextPhase").tap();
+    await $(attacker,"nextPhase").tap();
+    await attacker.locator("#turnStatus").filter({hasText:"アタックフェイズ"}).waitFor();
+    const trigger=await attacker.evaluate(()=>players[side].deck.at(-1).id);
+    await attackZone(attacker).tap();
+    await $(attacker,"autoAttack").tap();
+    await attacker.getByRole("heading",{name:"トリガーチェック",exact:true}).waitFor();
+    await defender.waitForFunction(seat=>players[seat].front0[0]?.orientation===90,attackerSeat);
+    await $(defender,"onlinePublicReveals").getByText(trigger,{exact:true}).waitFor();
+    assert.equal(await defender.evaluate(seat=>players[seat].deck.every(card=>!card.id&&!card.uid),attackerSeat),true);
+    await attacker.getByRole("button",{name:"ストックに置く",exact:true}).tap();
+    await defender.waitForFunction(seat=>players[seat].stock.length===1,attackerSeat);
+    assert.equal(await defender.evaluate(seat=>players[seat].stock.every(card=>!card.id&&!card.uid),attackerSeat),true);
+    await $(defender,"onlinePublicReveals").waitFor({state:"hidden"});
+
+    const defenderSeat=1-attackerSeat;
+    const expected=await defender.evaluate(()=>{
+      const {deck}=players[side];
+      const ids=[deck.find(c=>c.cx),...deck.filter(c=>!c.cx).slice(0,2).reverse()];
+      for(const card of ids)deck.push(...deck.splice(deck.indexOf(card),1));
+      updateBoard();
+      return deck.slice(-3).reverse().map(card=>card.id);
+    });
+    const applyDamage=async count=>{
+      await defender.locator('#boards .zone[data-p="'+defenderSeat+'"][data-z="deck"]').tap();
+      await defender.locator("#dialogBody select").first().selectOption("damage");
+      await defender.getByLabel("枚数",{exact:true}).selectOption(String(count));
+      await defender.getByRole("button",{name:"実行",exact:true}).tap();
+    };
+    const revealed=$(attacker,"onlinePublicReveals").locator(".modal-card span");
+    await applyDamage(2);
+    await revealed.first().waitFor();
+    assert.deepEqual(await revealed.allTextContents(),expected.slice(0,1));
+    await defender.getByRole("button",{name:"次のカードを公開",exact:true}).tap();
+    await revealed.nth(1).waitFor();
+    assert.deepEqual(await revealed.allTextContents(),expected.slice(0,2));
+    await defender.getByRole("button",{name:"キャンセルなしとしてクロック",exact:true}).tap();
+    await attacker.waitForFunction(seat=>players[seat].clock.length===2,defenderSeat);
+    assert.deepEqual(await attacker.evaluate(seat=>players[seat].clock.map(card=>card.id),defenderSeat),expected.slice(0,2));
+    await $(attacker,"onlinePublicReveals").waitFor({state:"hidden"});
+    await applyDamage(3);
+    await revealed.first().waitFor();
+    assert.deepEqual(await revealed.allTextContents(),expected.slice(2));
+    assert.equal(await defender.getByRole("button",{name:"次のカードを公開",exact:true}).count(),0);
+    await defender.getByRole("button",{name:"キャンセルとして控え室",exact:true}).tap();
+    await attacker.waitForFunction(({seat,id})=>players[seat].waiting.at(-1)?.id===id,{seat:defenderSeat,id:expected[2]});
+    assert.equal(await attacker.evaluate(seat=>players[seat].clock.length,defenderSeat),2);
+    assert.equal(await attacker.evaluate(seat=>players[seat].deck.every(card=>!card.id&&!card.uid),defenderSeat),true);
     b.once("dialog",dialog=>dialog.accept());
     await $(b,"surrender").click();
     await a.getByText("プレイヤー2が降参しました。勝者：プレイヤー1",{exact:true}).waitFor();

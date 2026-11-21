@@ -46,7 +46,7 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
   let blockedWrite=failingKey;
   const element = () => ({
     value:"", isConnected:true, textContent:"", children:[], style:{setProperty(){}}, dataset:{}, classList:{add(){},remove(){}},
-    append(...children){ this.children.push(...children); },
+    append(...children){ this.children.push(...children); }, prepend(...children){ this.children.unshift(...children); },
     replaceChildren(...children){ this.children = children; },
     setAttribute(){}, insertBefore(){}, addEventListener(){}, scrollIntoView(){}, querySelector(){ return null; },
     showModal(){ this.open = true; }, close(){ this.open = false; }
@@ -181,7 +181,10 @@ test("start deals five once, then reload restores every zone, order, flags and p
   page.run('pullDeck(side,1,"hand")');
   page.click("shuffle");
   page.run("players[side].deck.slice(-7).forEach(card=>card.cx=false)");
-  for(let i=0;i<7;i++) page.run("runDamage(side,1)");
+  for(let i=0;i<7;i++){
+    page.run("runDamage(side,1)");
+    action(page,"キャンセルなしとしてクロック");
+  }
   page.run("checkMandatoryLevel()");
   page.get("dialogBody").children[2].onclick();
   page.get("battleSide").onchange({target:{value:"1"}});
@@ -309,6 +312,11 @@ function ruleGame(deck,clock,waiting,cx=false){
 }
 const state=page=>JSON.parse(page.run("JSON.stringify(players[0])"));
 const panel=page=>page.get("dialogBody").children;
+const action=(page,label)=>{
+  const button=panel(page).find(item=>item.textContent===label);
+  assert.ok(button,label);
+  button.onclick();
+};
 const chooseLevel=page=>{
   assert.match(page.get("dialogTitle").textContent,/強制レベルアップ/);
   panel(page)[1].onclick();
@@ -358,6 +366,9 @@ for(const cancelled of [false,true]){
     const page=ruleGame(1,0,4,cancelled);
     const first=state(page).deck[0].uid;
     page.run("runDamage(0,2)");
+    assert.match(panel(page)[0].textContent,/1 \/ 2/);
+    if(!cancelled)action(page,"次のカードを公開");
+    action(page,cancelled?"キャンセルとして控え室":"キャンセルなしとしてクロック");
     const board=state(page);
     assert.equal(board.deck.length,cancelled?3:2);
     assert.equal(board.clock.length,cancelled?1:3);
@@ -544,4 +555,64 @@ test("clock cancellation, blocked destinations and stale selection preserve the 
   panel(page).at(-1).onclick();
   assert.equal(state(page).clock.length,0);
   assert.equal(state(page).waiting.at(-1).uid,before.clock[0].uid);
+});
+
+test("auto attack rests a selected character, shows exactly one trigger, and stocks that copy on confirmation",()=>{
+  const page=ruleGame(4,0,2);
+  page.run('move(0,"hand",0,"front0"); match.turn.phase="main"; match.turn.player=0; zoneClick(0,"front0")');
+  assert.equal(page.get("autoAttack").hidden,true);
+  page.run('match.turn.phase="attack"; renderTurnControls()');
+  assert.equal(page.get("autoAttack").hidden,false);
+  const before=state(page),trigger=before.deck.at(-1);
+  page.click("autoAttack");
+  assert.equal(state(page).front0[0].orientation,90);
+  assert.equal(page.get("dialogTitle").textContent,"トリガーチェック");
+  assert.equal(panel(page)[0].children[0].children.at(-1).textContent,"1．"+trigger.id);
+  assert.deepEqual(state(page).deck,before.deck);
+  assert.deepEqual(state(page).stock,before.stock);
+  action(page,"ストックに置いて相手のダメージへ");
+  assert.equal(state(page).stock.at(-1).uid,trigger.uid);
+  assert.equal(state(page).stock.at(-1).faceUp,false);
+  assert.equal(state(page).deck.length,before.deck.length-1);
+  assert.equal(page.run("side"),1);
+  assert.equal(panel(page)[0].value,"damage");
+});
+
+test("last deck card is stocked before refresh and never joins the refresh pool",()=>{
+  const page=ruleGame(1,0,4);
+  page.run('move(0,"hand",0,"front0"); match.turn.phase="attack"; match.turn.player=0; zoneClick(0,"front0")');
+  const uid=state(page).deck[0].uid;
+  page.click("autoAttack");
+  action(page,"ストックに置く");
+  const board=state(page);
+  assert.equal(board.stock.at(-1).uid,uid);
+  assert.equal(board.deck.length,3);
+  assert.ok(!board.deck.some(card=>card.uid===uid));
+  assert.equal(board.clock.length,1);
+});
+
+test("effect damage checks one card at a time, with ordered clock placement",()=>{
+  const page=ruleGame(5,0,1);
+  const expected=state(page).deck.slice(-3).reverse().map(card=>card.uid);
+  page.run('match.turn.phase="main"; runDamage(0,3)');
+  assert.equal(state(page).deck.length,4);
+  assert.equal(state(page).clock.length,0);
+  action(page,"次のカードを公開");
+  assert.equal(state(page).deck.length,3);
+  action(page,"次のカードを公開");
+  assert.equal(state(page).clock.length,0);
+  action(page,"キャンセルなしとしてクロック");
+  assert.deepEqual(state(page).clock.map(card=>card.uid),expected);
+});
+
+test("an unclassified reveal can be continued or manually cancelled",()=>{
+  for(const resume of [true,false]){
+    const page=ruleGame(4,0,2);
+    page.run("delete players[0].deck.at(-1).cx; runDamage(0,2)");
+    assert.match(page.get("dialogTitle").textContent,/CX判定未登録/);
+    if(resume)action(page,"次のカードを公開");
+    action(page,resume?"キャンセルなしとしてクロック":"キャンセルとして控え室");
+    assert.equal(state(page).clock.length,resume?2:0);
+    assert.equal(state(page).waiting.length,resume?2:3);
+  }
 });
