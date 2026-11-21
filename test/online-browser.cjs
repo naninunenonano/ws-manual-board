@@ -183,6 +183,7 @@ async function main() {
     }
     await $(attacker,"nextPhase").tap();
     await attacker.getByRole("button",{name:"確認完了・通常ドロー",exact:true}).tap();
+    await $(attacker,"nextPhase").tap();
     await $(attacker,"clockSkip").tap();
     await $(attacker,"nextPhase").tap();
     await $(attacker,"nextPhase").tap();
