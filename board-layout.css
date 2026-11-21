@@ -115,6 +115,30 @@
 .board[data-player="1"] .zone[data-z="level"] .zone-fan-card {
   inset: auto auto calc(var(--fan-index) * 3.35cqw) calc(var(--fan-index) * .55cqw);
 }
+button.zone-fan-card[data-clock-index] {
+  padding: 0;
+  border: 0;
+  background: #24334c;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.zone-fan-card[data-clock-index][aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid #f4cf73;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.clock-actions {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  display: flex;
+  gap: 3px;
+}
+
 .zone .zone-zoom {
   position: absolute;
   right: 1px;
@@ -123,6 +147,8 @@
   background: #183453e8;
   font-size: 10px;
 }
+
+.zone .clock-actions .zone-zoom { position: static; }
 
 /* Rotation changes the card presentation while leaving the playmat slots in place. */
 .board .zone.stage { overflow: visible; }
