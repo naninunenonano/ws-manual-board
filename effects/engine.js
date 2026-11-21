@@ -259,7 +259,7 @@ const WSEffects = (() => {
     operation(id,label+"増減",p=>word(p.selection)&&integer(p.amount),
       p=>"選択したカードの"+label+"を"+(p.amount>0?"+":"")+p.amount,
       (ctx,p)=>{
-        const uids = ctx.selections.get(p.selection);
+        const uids = p.selection==="@source"&&ctx.choices.sourceUid?[ctx.choices.sourceUid]:ctx.selections.get(p.selection);
         if (!uids) fail("選択「"+p.selection+"」がありません");
         const cards = cardsIn(ctx.board).filter(({card})=>uids.includes(card.uid)).map(({card})=>card);
         if (cards.length!==uids.length || cards.some(card=>!integer(card[stat])||!integer(card[stat]+p.amount))) {
@@ -325,7 +325,8 @@ const WSEffects = (() => {
       }else if(step.handler==="searchDeck"){
         if(selections.has(step.params.as))issues.push({status:"invalid",message:at+" の選択IDが重複しています"});
         selections.add(step.params.as);
-      }else if (step.params.selection && !selections.has(step.params.selection)){
+      }else if (step.params.selection && !selections.has(step.params.selection) &&
+        !(step.params.selection==="@source"&&["modifyPower","modifySoul"].includes(step.handler))){
         issues.push({status:"invalid",message:at+" が未定義の選択 "+step.params.selection+" を参照しています"});
       }
     }

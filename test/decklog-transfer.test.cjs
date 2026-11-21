@@ -76,6 +76,7 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
     vm.runInContext(read("card-data/load.js"),context);
     context.fetch=async()=>({ok:true,text:async()=>read("card-data/catalog.json")});
   }
+  vm.runInContext(read("auto-rules.js"),context);
   vm.runInContext(read("bot-match.js"),context);
   vm.runInContext(importScript,context);
   return {
@@ -915,4 +916,102 @@ test("Bot draws, deploys and attacks only on its turn",()=>{
   assert.equal(players[1].front0[0].orientation,90);
   assert.equal(players[1].stock.length,1);
   assert.deepEqual(players.map(board=>Object.values(board).flat().length),[50,50]);
+});
+
+function launchRules(){
+  const page=launch("",new Map(),null,100,null,true);
+  page.get("botScenario").value="rules";
+  page.click("startBotBattle");
+  return page;
+}
+function ruleButton(page,text){
+  const button=page.get("dialogBody").children.find(el=>el.textContent===text);
+  assert.ok(button,text);
+  button.onclick();
+}
+function ruleCounts(snapshot){
+  return snapshot.players.map(board=>Object.values(board).flat().length);
+}
+
+test("自動ルール：レベル・ストック不足で中止し、2枚支払い後に登場と起動を解決する",()=>{
+  const page=launchRules();
+  page.run('botMove(players[0],"level",0,"waiting")');
+  page.run('cardClick(0,"hand",2)');
+  assert.match(page.get("dialogBody").children.at(-1).textContent,/レベルが不足/);
+  page.run('closeResolution();selected=null;botMove(players[0],"waiting",0,"level")');
+  page.run('cardClick(0,"hand",2)');
+  ruleButton(page,"プレイする");
+  ruleButton(page,"前列②");
+  let snap=snapshot(page);
+  assert.equal(snap.players[0].front1[0].id,"BOT/W000-002");
+  assert.equal(snap.players[0].stock.length,1);
+  assert.equal(page.run("botStats(0,players[0].front1[0]).power"),4500,JSON.stringify(snap.bot.log));
+  page.run('zoneClick(0,"front1")');
+  ruleButton(page,"起動・ストック1枚でパワー＋500");
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"コストを支払う");
+  assert.equal(page.run("botStats(0,players[0].front1[0]).power"),5000);
+  assert.equal(snapshot(page).players[0].stock.length,0);
+  page.run('cardClick(0,"hand",2)');
+  assert.match(page.get("dialogBody").children.at(-1).textContent,/ストックが不足/);
+  page.run('closeResolution()');
+  assert.equal(page.run('autoRulePlace(0,players[0].hand[2].uid,"front2")'),false);
+  assert.equal(snapshot(page).players[0].front2.length,0);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("自動ルール：CX、アタック時能力、トリガー、カウンター、ダメージ、バトルの順に解決する",()=>{
+  const page=launchRules();
+  page.run('autoRulePlace(0,players[0].hand[2].uid,"front1");advanceTurn()');
+  const before=snapshot(page);
+  page.run('cardClick(0,"hand",3)');
+  ruleButton(page,"プレイする");
+  let snap=snapshot(page);
+  assert.equal(snap.players[0].cx.length,1);
+  assert.equal(snap.players[0].deck.length,before.players[0].deck.length-1);
+  assert.equal(page.run("botStats(0,players[0].front1[0]).soul"),2);
+  page.run('advanceTurn();startAutoAttack(0,"front1",0)');
+  ruleButton(page,"フロントアタック");
+  snap=snapshot(page);
+  assert.deepEqual(snap.bot.log.filter(line=>/CXコンボ|トリガー|カウンター|ソウル 4|ダメージ|バトル/.test(line)).map(line=>line.split(/[ （]/)[0]),[
+    "CXコンボ・ソウル＋1","トリガー","仮カウンターを使用","ソウル","CXでダメージをキャンセル","バトル"
+  ]);
+  assert.equal(snap.players[0].front1[0].orientation,180);
+  assert.equal(snap.players[1].front1[0].orientation,0);
+  assert.equal(snap.players[1].stock.length,2);
+  assert.equal(page.run("botStats(0,players[0].front1[0]).soul"),4);
+  assert.deepEqual(ruleCounts(snap),[50,50]);
+  page.run('advanceTurn()');
+  assert.equal(snapshot(page).encore.step,"choose");
+  page.run('chooseEncoreCard(0,"front1",0)');
+  ruleButton(page,"アンコールしない");
+  assert.equal(snapshot(page).players[0].front1.length,0);
+  page.run('advanceTurn();advanceTurn()');
+  assert.equal(snapshot(page).turn.player,1);
+  assert.equal(snapshot(page).players[0].cx.length,0);
+  assert.equal(snapshot(page).players[1].front1[0].botPower,4500);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("自動ルール：サイドはレベル分を引きバトルなし、ダイレクトはソウル追加、ドローとクロック2ドロー",()=>{
+  const page=launchRules();
+  page.run('autoRulePlace(0,players[0].hand[2].uid,"front1");setTurnPhase("attack");botMove(players[0],"deck",players[0].deck.length-1,"waiting");startAutoAttack(0,"front1",0)');
+  ruleButton(page,"サイドアタック");
+  let snap=snapshot(page);
+  assert.equal(snap.players[1].stock.length,3);
+  assert.equal(snap.players[1].front1[0].orientation,0);
+  assert.ok(snap.bot.log.includes("ソウル 1"));
+  page.run('startAutoAttack(0,"front0",0)');
+  ruleButton(page,"ダイレクトアタック");
+  assert.ok(snapshot(page).bot.log.includes("ソウル 2"));
+  let hand=snapshot(page).players[0].hand.length;
+  page.run('setTurnPhase("draw")');
+  assert.equal(snapshot(page).players[0].hand.length,++hand);
+  assert.equal(page.get("dialog").open,false);
+  page.run('advanceTurn();selected={p:0,z:"hand",index:0};clockAction()');
+  snap=snapshot(page);
+  assert.equal(snap.turn.phase,"main");
+  assert.equal(snap.players[0].hand.length,hand+1);
+  assert.equal(snap.players[0].clock.length,1);
+  assert.deepEqual(ruleCounts(snap),[50,50]);
 });

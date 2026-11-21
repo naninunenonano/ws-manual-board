@@ -19,7 +19,7 @@ const files = new Map([
   ["/cloud-decks.js",["cloud-decks.js","text/javascript"]],
   ["/card-images.js",["card-images.js","application/javascript"]],
   ["/online-match.js",["online-match.js","text/javascript"]],
-  ...["bot-match.js","card-catalog.js","effects/engine.js","card-data/load.js"].map(file=>["/"+file,[file,"text/javascript"]]),
+  ...["auto-rules.js","bot-match.js","card-catalog.js","effects/engine.js","card-data/load.js"].map(file=>["/"+file,[file,"text/javascript"]]),
   ["/card-data/catalog.json",["card-data/catalog.json","application/json"]]
 ]);
 
@@ -240,6 +240,7 @@ async function main() {
     assert.deepEqual(errors,[]);
     console.log(JSON.stringify(geometry));
     await checkBot(browser,url);
+    await checkAutoRules(browser,url);
   } finally {
     if(browser)await browser.close();
     server.close();
@@ -349,6 +350,51 @@ async function checkBot(browser,url){
   assert.deepEqual(errors,[]);
   await page.close();
   console.log("Bot opening, presets, attack, Firen, Treasure and reload passed at 390px");
+}
+
+async function checkAutoRules(browser,url){
+  const page=await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
+  const errors=[];
+  page.on("pageerror",error=>errors.push(error.message));
+  await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
+  await page.goto(url);
+  const button=name=>page.getByRole("button",{name,exact:true});
+  await page.locator("#botSetup summary").tap();
+  await page.locator("#botScenario").selectOption("rules");
+  await page.locator("#startBotBattle").tap();
+  const hand=page.locator("#boards .player.active .hand");
+  const center=page.locator('#boards .zone[data-p="0"][data-z="front1"]');
+  await hand.locator('.card[title^="2コストの仮キャラ"]').first().tap({position:{x:8,y:10}});
+  await button("プレイする").tap();
+  await button("前列②").tap();
+  assert.equal(await center.locator(".bot-power").innerText(),"4500");
+  await center.tap({position:{x:14,y:10}});
+  await button("起動・ストック1枚でパワー＋500").tap();
+  await button("使わない").tap();
+  await page.locator("#nextPhase").tap();
+  await hand.locator('.card[title^="仮CX"]').tap({position:{x:8,y:10}});
+  await button("プレイする").tap();
+  assert.equal(await center.locator(".bot-power").innerText(),"5500");
+  await page.locator("#nextPhase").tap();
+  await center.tap({position:{x:14,y:10}});
+  await page.locator("#autoAttack").tap();
+  await button("フロントアタック").tap();
+  assert.match(await page.locator("#botStatus").innerText(),/CXコンボ.*トリガー.*仮カウンター.*ソウル 4.*バトル/);
+  assert.equal(await center.getAttribute("data-orientation"),"180");
+  await page.locator("#nextPhase").tap();
+  await center.tap({position:{x:14,y:10}});
+  await page.locator("#encoreAction").tap();
+  await button("アンコールしない").tap();
+  await page.locator("#nextPhase").tap();
+  await page.locator("#nextPhase").tap();
+  assert.equal(await page.evaluate(()=>match.turn.player),1);
+  assert.equal(await page.evaluate(()=>players[0].cx.length),0);
+  await page.locator("#botStep").tap();
+  assert.equal(await page.locator("#dialog").isVisible(),false);
+  assert.equal(await page.evaluate(()=>match.turn.phase),"draw");
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
+  assert.deepEqual(errors,[]);
+  await page.close();
 }
 
 main().catch(error=>{console.error(error);process.exitCode=1});
