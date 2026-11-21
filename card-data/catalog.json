@@ -1,4 +1,59 @@
 {
   "schemaVersion": 1,
-  "cards": []
+  "cards": [
+    {
+      "cardNumber": "STS/W140-001",
+      "variants": [
+        "STS/W140-001",
+        "STS/W140-001S",
+        "STS/W140-001SP"
+      ],
+      "product": "ブースターパック ステラソラ",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 1500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者",
+        "恩恵意志"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "on-play-waiting-okaken",
+          "category": "控えオカケン",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": true,
+          "description": "手札から登場時、ストック1枚と控え室の《巡遊者》または《魔王》のキャラ1枚をクロックの下に置くことで、山札からレベル1以下のキャラを最大1枚公開して手札に加え、シャッフルする。",
+          "sourceText": "【自】［(1) あなたの控え室の、《巡遊者》か《魔王》のキャラを1枚クロック置場の下に置く］ このカードが手札から舞台に置かれた時、あなたはコストを払ってよい。そうしたら、あなたは自分の山札を見てレベル1以下のキャラを1枚まで選んで相手に見せ、手札に加え、その山札をシャッフルする。",
+          "conditions": null,
+          "costs": null,
+          "steps": null,
+          "implementationStatus": "unimplemented"
+        },
+        {
+          "id": "memory-recollection-top-reveal",
+          "category": "条件付き山札公開",
+          "type": "activated",
+          "timing": "main_phase",
+          "optional": false,
+          "limit": {
+            "perTurn": 1
+          },
+          "description": "思い出とマーカーの合計が1枚以下のとき、他の『回想』を持つ自分のキャラ1枚を思い出にして、山札の上を公開。レベル0以下のキャラなら手札に加え、そうでなければ元に戻す。",
+          "sourceText": "【起】【ターン1】［他のあなたの舞台の『回想』を持つキャラを1枚思い出にする］ この能力はあなたの、思い出とマーカー置場のカードの合計が1枚以下なら使える。あなたは自分の山札の上から1枚を公開する。そのカードがレベル0以下のキャラなら手札に加える。（そうでないなら元に戻す）",
+          "conditions": null,
+          "costs": null,
+          "steps": null,
+          "implementationStatus": "unimplemented"
+        }
+      ]
+    }
+  ]
 }
