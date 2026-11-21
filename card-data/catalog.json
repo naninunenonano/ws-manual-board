@@ -432,17 +432,11 @@
           "costs": [],
           "steps": [
             {
-              "handler": "modifyPower",
+              "handler": "continuousCxBuff",
               "params": {
-                "selection": "ownStageCharacters",
-                "amount": 1000
-              }
-            },
-            {
-              "handler": "modifySoul",
-              "params": {
-                "selection": "ownStageCharacters",
-                "amount": 1
+                "side": "self",
+                "power": 1000,
+                "soul": 1
               }
             }
           ],
@@ -463,7 +457,7 @@
               "handler": "treasureTrigger",
               "params": {
                 "side": "self",
-                "triggerUid": "@triggered"
+                "triggerUid": "@source"
               }
             }
           ],
