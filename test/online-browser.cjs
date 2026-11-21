@@ -13,13 +13,15 @@ async function main() {
   const channels=new Set();
   let work=Promise.resolve();
   let dropHostReply=false;
-  function query(user,args) {
+  function query(user,name,args) {
     const result=work.then(async()=>{
       await db.exec("set role authenticated");
       try{
         await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user]);
         const {p_action,p_room=null,p_revision=null,p_operation=null,p_data={}}=args;
-        const response=await db.query("select ws_online_room($1,$2,$3,$4,$5) as data",[p_action,p_room,p_revision,p_operation,p_data]);
+        const sql=name==="ws_attack_exchange"?"select ws_attack_exchange($1,$2,$3,$4,$5) as data":
+          "select ws_online_room($1,$2,$3,$4,$5) as data";
+        const response=await db.query(sql,[p_action,p_room,p_revision,p_operation,p_data]);
         return {data:response.rows[0].data,error:null};
       }catch(e){return {data:null,error:{code:e.code,message:e.message}}}
       finally{await db.exec("reset role")}
@@ -42,8 +44,8 @@ async function main() {
   let browser;
   async function pageFor(user,title) {
     const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
-    await ctx.exposeBinding("testOnlineRpc",async(_source,args)=>{
-      const result=await query(user,args);
+    await ctx.exposeBinding("testOnlineRpc",async(_source,name,args)=>{
+      const result=await query(user,name,args);
       if(args.p_action!=="read" && result.data?.room && !result.error){
         for(const page of channels)page.evaluate(()=>window.testReceiveRevision?.()).catch(()=>{});
       }
@@ -62,7 +64,7 @@ async function main() {
       const client={
         auth:{getSession:async()=>({data:{session:{user:{id:user}}}})},
         from:()=>({select(){return this},eq(){return this},order(){return this},limit(){return this},then(resolve){resolve({data:[]})}}),
-        rpc:(_name,args)=>window.testOnlineRpc(args),
+        rpc:(name,args)=>window.testOnlineRpc(name,args),
         channel:()=>({
           on(_kind,_filter,cb){window.testReceiveRevision=cb;return this},
           subscribe(cb){cb("SUBSCRIBED");return this}
@@ -191,7 +193,7 @@ async function main() {
     const trigger=await attacker.evaluate(()=>players[side].deck.at(-1).id);
     await attackZone(attacker).tap();
     await $(attacker,"autoAttack").tap();
-    await attacker.getByRole("heading",{name:"トリガーチェック",exact:true}).waitFor();
+    await attacker.getByRole("heading",{name:"トリガーチェック・解決領域",exact:true}).waitFor();
     await defender.waitForFunction(seat=>players[seat].front0[0]?.orientation===90,attackerSeat);
     await $(defender,"onlinePublicReveals").getByText(trigger,{exact:true}).waitFor();
     assert.equal(await defender.evaluate(seat=>players[seat].deck.every(card=>!card.id&&!card.uid),attackerSeat),true);
@@ -202,7 +204,8 @@ async function main() {
 
     const defenderSeat=1-attackerSeat;
     const expected=await defender.evaluate(()=>{
-      const {deck}=players[side];
+      const {deck,stock}=players[side];
+      stock.push(deck.pop());
       const ids=[deck.find(c=>c.cx),...deck.filter(c=>!c.cx).slice(0,2).reverse()];
       for(const card of ids)deck.push(...deck.splice(deck.indexOf(card),1));
       updateBoard();
@@ -215,7 +218,24 @@ async function main() {
       await defender.getByRole("button",{name:"実行",exact:true}).tap();
     };
     const revealed=$(attacker,"onlinePublicReveals").locator(".modal-card span");
-    await applyDamage(2);
+    assert.equal(await $(attacker,"attackExchange").isHidden(),true);
+    await $(defender,"attackExchange").tap();
+    const counter=await defender.evaluate(()=>players[side].hand[1].id);
+    const handUid=await defender.evaluate(()=>players[side].hand[1].uid);
+    await defender.getByLabel("カウンターに使う手札",{exact:true}).selectOption(handUid);
+    await defender.getByLabel("ストックコスト",{exact:true}).selectOption("1");
+    await defender.getByRole("button",{name:"カウンターを使う",exact:true}).tap();
+    await attacker.waitForFunction(({seat,id})=>players[seat].waiting.at(-2)?.id===id && players[seat].stock.length===0,
+      {seat:defenderSeat,id:counter});
+    assert.equal(await $(attacker,"attackExchange").isHidden(),true);
+    await defender.reload();
+    await $(defender,"attackExchange").filter({hasText:"カウンター効果の処理完了"}).waitFor();
+    await $(defender,"attackExchange").tap();
+    await defender.getByRole("button",{name:"効果の処理を確定",exact:true}).tap();
+    await $(attacker,"attackExchange").tap();
+    await attacker.getByLabel("枚数",{exact:true}).selectOption("2");
+    await attacker.getByRole("button",{name:"ダメージ枚数を確定",exact:true}).tap();
+    await $(defender,"attackExchange").tap();
     await revealed.first().waitFor();
     assert.deepEqual(await revealed.allTextContents(),expected.slice(0,1));
     await defender.getByRole("button",{name:"次のカードを公開",exact:true}).tap();

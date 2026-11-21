@@ -33,7 +33,11 @@ async function onlineTestDatabase() {
       create publication supabase_realtime;
     `);
     const sql=fs.readFileSync(new URL("../supabase/052-online.sql","file://"+__filename),"utf8");
-    for(let i=0;i<2;i++)await db.exec(sql);
+    const attackSql=fs.readFileSync(new URL("../supabase/053-attack-exchange.sql","file://"+__filename),"utf8");
+    for(let i=0;i<2;i++){
+      await db.exec(sql);
+      await db.exec(attackSql);
+    }
     return db;
   } catch(error) {
     await db.close();
@@ -55,6 +59,9 @@ async function main() {
     };
     const rpc=(user,action,room=null,rev=null,data={},op=randomUUID())=>as(user,async()=>
       (await db.query("select public.ws_online_room($1,$2,$3,$4,$5) as result",[action,room,rev,op,data])).rows[0].result);
+    const exchange=(user,step,room,rev,data)=>as(user,async()=>
+      (await db.query("select public.ws_attack_exchange($1,$2,$3,$4,$5) as result",
+        [step,room,rev,randomUUID(),data])).rows[0].result);
     const deck=prefix=>({title:prefix,cards:Array.from({length:13},(_,n)=>({id:prefix+"-"+n,num:n===12?2:4,cx:n<2}))});
     assert.deepEqual(await rpc(guest,"join",null,null,{code:"bad"}),{error:"INVALID_CODE"});
     let a=await rpc(alice,"create");
@@ -126,11 +133,31 @@ async function main() {
     const actor=turn.player===0?alice:bob;
     const opponent=turn.player===0?bob:alice;
     let current=updated;
-    for(const [phase,drawPending] of [["draw",false],["clock",false],["main",false],["climax",false],["attack",false],["end",false]]){
+    for(const [phase,drawPending] of [["draw",false],["clock",false],["main",false],["climax",false],["attack",false]]){
       current=await rpc(actor,"board",room,current.revision,{board:current.own.board,turn:{...turn,phase,drawPending}});
       assert.equal(current.state.turn.phase,phase);
     }
     let other=await rpc(opponent,"read",room);
+    const startData={board:current.own.board};
+    await assert.rejects(exchange(guest,"counter",room,current.revision,startData),/ROOM_UNAVAILABLE/);
+    await assert.rejects(exchange(opponent,"counter",room,current.revision,{board:other.own.board}),/INVALID_ATTACK_STEP/);
+    current=await exchange(actor,"counter",room,current.revision,startData);
+    assert.deepEqual(current.state.attack_exchange,{attacker:turn.player,stage:"counter",count:null});
+    await assert.rejects(rpc(actor,"board",room,current.revision,{board:current.own.board,turn:{...turn,phase:"end"}}),/INVALID_ATTACK_STEP/);
+    await assert.rejects(exchange(actor,"skip_counter",room,current.revision,startData),/INVALID_ATTACK_STEP/);
+    assert.equal((await exchange(opponent,"use_counter",room,other.revision,{board:other.own.board})).error,"REVISION_CONFLICT");
+    other=await exchange(opponent,"use_counter",room,current.revision,{board:other.own.board});
+    assert.equal(other.state.attack_exchange.stage,"counter_effect");
+    await assert.rejects(exchange(actor,"damage",room,other.revision,{...startData,count:2}),/INVALID_ATTACK_STEP/);
+    other=await exchange(opponent,"counter_done",room,other.revision,{board:other.own.board});
+    await assert.rejects(exchange(actor,"damage",room,other.revision,{...startData,count:51}),/INVALID_COUNT/);
+    current=await exchange(actor,"damage",room,other.revision,{...startData,count:2});
+    assert.deepEqual(current.state.attack_exchange,{attacker:turn.player,stage:"damage",count:2});
+    assert.doesNotMatch(JSON.stringify(current.state),/"uid"|"registry"/);
+    other=await exchange(opponent,"damage_done",room,current.revision,{board:other.own.board});
+    assert.equal(other.state.attack_exchange,undefined);
+    current=await rpc(actor,"board",room,other.revision,{board:current.own.board,turn:{...turn,phase:"end"}});
+    other=await rpc(opponent,"read",room);
     const otherBoard=other.own.board;
     if(!otherBoard.front1.length)otherBoard.front1.push(otherBoard.hand.pop());
     otherBoard.front1[0].orientation=90;

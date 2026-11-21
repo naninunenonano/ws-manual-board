@@ -32,7 +32,8 @@ function initializeOnlineMatch({authenticate,getDecks}) {
     NOT_READY:"両プレイヤーの準備が完了してから開始してください",
     INVALID_TURN:"現在のターンとフェイズを確認してください",
     REQUEST_PENDING:"相手の山札操作依頼がすでに送信されています",
-    INVALID_COUNT:"1〜10枚を指定してください"
+    INVALID_COUNT:"指定できる枚数を確認してください",
+    INVALID_ATTACK_STEP:"相手の操作または最新の対戦状態を確認してください"
   };
 
   function status(text) {
@@ -43,6 +44,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
     const blocked=!!roomId && (sending || !online);
     el("boards").inert=blocked;
     el("autoAttack").disabled=blocked;
+    el("attackExchange").disabled=blocked || ruleBusy;
     el("playerActions").inert=blocked;
     el("confirmMulligan").disabled=blocked || !!snapshot?.state.mulligan?.[snapshot.seat];
     for(const id of ["surrender","leaveBattle","onlineRevealDeckTop","onlineReveal","onlineEndReveal","onlineDeckRequest","onlineAnswerDeck","onlineAcceptDeck","onlineOpponentReveal"]) {
@@ -58,7 +60,9 @@ function initializeOnlineMatch({authenticate,getDecks}) {
 
   async function request(action, args={}) {
     client ??= await authenticate();
-    const {data,error}=await client.rpc("ws_online_room",{p_action:action,...args});
+    const isAttack=action==="attack_exchange";
+    const {data,error}=await client.rpc(isAttack?"ws_attack_exchange":"ws_online_room",
+      {p_action:isAttack?args.p_data.step:action,...args});
     if(error){
       if(errors[error.message] || /^INVALID_[A-Z_]+$/.test(error.message)) throw Object.assign(Error(error.message),{roomError:error.message});
       throw error;
@@ -129,7 +133,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
     snapshot=data;
     online=true;
     renderLobby();
-    const {stage,boards,turn,first,mulligan,result,reveals,deck_request:deckRequest}=data.state;
+    const {stage,boards,turn,first,mulligan,result,reveals,attack_exchange:attackExchange,deck_request:deckRequest}=data.state;
     const ownBoard=data.own?.board;
     el("onlineBattle").hidden=!roomId;
     el("onlineMulligan").hidden=!roomId;
@@ -159,7 +163,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
       screen:stage==="finished"?"result":stage==="mulligan"?"mulligan":"battle",
       firstPlayer:first,players,decks:me===0?[data.own?.deck,null]:[null,data.own?.deck],
       mulliganPlayer:me,result:result?.reason==="leave"?{...result,reason:"left"}:result ?? null,
-      turn:turn?{...turn}:undefined
+      turn:turn?{...turn}:undefined,attackExchange:readyForBattle && turn?.phase==="attack"?attackExchange??null:null
     };
     lastBoard=ownWire;
     if(turn)lastTurn=JSON.stringify(onlineTurnWire(turn));
@@ -209,7 +213,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
   }
 
   async function send(action, data={}, {recover=false}={}) {
-    if(sending || (roomId && !online && action!=="read") || (action==="board" && !snapshot))return false;
+    if(sending || (roomId && !online && action!=="read") || (["board","attack_exchange"].includes(action) && !snapshot))return false;
     sending=true;lockBoard();renderLobby();
     try{
       const args=["create","join"].includes(action)?{p_data:data}:{
@@ -396,7 +400,14 @@ function initializeOnlineMatch({authenticate,getDecks}) {
   const controller={
     active:()=>!!roomId,
     interactive:()=>!!roomId && online && !sending,
-    commit,reset,refreshDecks:()=>{if(controls.open)renderDeckChoices()},
+    commit,
+    commitAttack(step,count){
+      const board=onlineBoardWire(players[side],zones);
+      const data={board,step,count,clearReveal};
+      clearReveal=false;
+      return send("attack_exchange",data,{recover:true});
+    },
+    reset,refreshDecks:()=>{if(controls.open)renderDeckChoices()},
     mulligan:()=>send("mulligan",{cards:[...mulliganSelection].map(i=>players[side].hand[i].uid)}),
     finish:reason=>send(reason==="surrender"?"surrender":"leave"),
     async temporaryReveal(cards,options){

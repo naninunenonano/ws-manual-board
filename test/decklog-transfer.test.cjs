@@ -566,20 +566,35 @@ test("auto attack rests a selected character, shows exactly one trigger, and sto
   const before=state(page),trigger=before.deck.at(-1);
   page.click("autoAttack");
   assert.equal(state(page).front0[0].orientation,90);
-  assert.equal(page.get("dialogTitle").textContent,"トリガーチェック");
-  assert.equal(panel(page)[0].children[0].children.at(-1).textContent,"1．"+trigger.id);
-  assert.deepEqual(state(page).deck,before.deck);
+  assert.equal(page.get("dialogTitle").textContent,"トリガーチェック・解決領域");
+  assert.equal(panel(page)[1].children[0].children.at(-1).textContent,"1．"+trigger.id);
+  assert.deepEqual(state(page).deck,before.deck.slice(0,-1));
   assert.deepEqual(state(page).stock,before.stock);
-  action(page,"ストックに置いて相手のダメージへ");
+  action(page,"ストックに置く");
   assert.equal(state(page).stock.at(-1).uid,trigger.uid);
   assert.equal(state(page).stock.at(-1).faceUp,false);
   assert.equal(state(page).deck.length,before.deck.length-1);
   assert.equal(page.run("side"),1);
   assert.equal(page.get("battleSide").value,"1");
-  assert.equal(panel(page)[0].value,"damage");
+  assert.equal(page.run("match.attackExchange.stage"),"counter");
+  assert.equal(page.get("nextPhase").disabled,true);
+  page.click("attackExchange");
+  action(page,"カウンターなし");
+  assert.equal(page.run("side"),0);
+  page.click("attackExchange");
+  panel(page)[0].value="2";
+  action(page,"ダメージ枚数を確定");
+  assert.equal(page.run("match.attackExchange.count"),2);
+  page.run("players[1].deck.slice(-2).forEach(card=>card.cx=false)");
+  page.click("attackExchange");
+  action(page,"次のカードを公開");
+  action(page,"キャンセルなしとしてクロック");
+  assert.equal(page.run("players[1].clock.length"),2);
+  assert.equal(page.run("match.attackExchange"),null);
+  assert.equal(page.run("side"),0);
 });
 
-test("last deck card is stocked before refresh and never joins the refresh pool",()=>{
+test("last deck card remains in trigger resolution through refresh and is then stocked",()=>{
   const page=ruleGame(1,0,4);
   page.run('move(0,"hand",0,"front0"); match.turn.phase="attack"; match.turn.player=0; zoneClick(0,"front0")');
   const uid=state(page).deck[0].uid;
@@ -616,4 +631,61 @@ test("an unclassified reveal can be continued or manually cancelled",()=>{
     assert.equal(state(page).clock.length,resume?2:0);
     assert.equal(state(page).waiting.length,resume?2:3);
   }
+});
+
+test("trigger resolution keeps both checks queued and separates private look from the reveal",()=>{
+  const page=ruleGame(9,0,2);
+  page.run('move(0,"hand",0,"front0"); match.turn.phase="attack"; match.turn.player=0; zoneClick(0,"front0")');
+  const ordered=state(page).deck.slice().reverse();
+  const [first,second,lookFirst,lookSecond,draw,stock]=ordered;
+  page.click("autoAttack");
+  action(page,"追加トリガーチェック");
+  assert.equal(panel(page)[1].children.length,2);
+  action(page,"控え室に置き、山札の上から2枚を見る");
+  assert.match(page.get("dialogTitle").textContent,/自分だけ/);
+  action(page,"2．"+lookSecond.id+"を手札へ");
+  assert.equal(state(page).waiting.at(-1).uid,first.uid);
+  assert.equal(state(page).hand.at(-1).uid,lookSecond.uid);
+  assert.equal(state(page).stock.at(-1).uid,lookFirst.uid);
+  action(page,"山札の上から1枚を手札に加える");
+  action(page,"山札の上から1枚をストックに置く");
+  assert.equal(state(page).hand.at(-1).uid,draw.uid);
+  assert.equal(state(page).stock.at(-1).uid,stock.uid);
+  assert.equal(page.run("!!match.attackExchange"),false);
+  action(page,"手札に加えて、山札の上から1枚をストック");
+  assert.equal(state(page).hand.at(-1).uid,second.uid);
+  assert.equal(state(page).stock.at(-1).uid,ordered[6].uid);
+  assert.equal(page.run("match.attackExchange.stage"),"counter");
+});
+
+test("counter discards only the selected hand card, pays stock and waits for manual effect completion",()=>{
+  const page=ruleGame(4,0,2);
+  page.run(`{
+    const board=players[1];
+    board.stock.push(board.deck.pop(),board.deck.pop());
+    move(0,"hand",0,"front0");
+    match.turn.phase="attack"; match.turn.player=0;
+    zoneClick(0,"front0");
+  }`);
+  page.click("autoAttack");
+  action(page,"ストックに置く");
+  page.click("attackExchange");
+  const hand=panel(page)[0],cost=panel(page)[1];
+  const uid=page.run("players[1].hand[1].uid");
+  const paid=page.run("players[1].stock.at(-1).uid");
+  hand.value=uid;hand.onchange();cost.value="1";
+  action(page,"カウンターを使う");
+  assert.equal(page.run("players[1].waiting.at(-2).uid"),uid);
+  assert.equal(page.run("players[1].waiting.at(-1).uid"),paid);
+  assert.equal(page.run("players[1].stock.length"),1);
+  assert.equal(page.run("match.attackExchange.stage"),"counter_effect");
+  assert.equal(page.run("side"),1);
+  page.click("attackExchange");
+  action(page,"効果の処理を確定");
+  assert.equal(page.run("match.attackExchange.stage"),"damage_input");
+  page.click("attackExchange");
+  panel(page)[0].value="0";
+  action(page,"ダメージ枚数を確定");
+  assert.equal(page.run("match.attackExchange"),null);
+  assert.equal(page.run("players[1].clock.length"),0);
 });
