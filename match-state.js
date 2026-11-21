@@ -247,6 +247,22 @@ function showRegisteredDecks() {
       if(url){img.src=url;img.alt=cardCatalog[id]?.name||id;img.style.cssText="width:100%;aspect-ratio:0.71;object-fit:contain";img.onerror=()=>{img.replaceWith(document.createTextNode(id))};row.append(img)}
       else row.append(document.createTextNode(id));
       const count=document.createElement("strong");count.textContent=" ×"+num;row.append(count);
+      row.classList.add("deck-preview-entry");
+      row.tabIndex=0;
+      row.setAttribute("role","button");
+      row.setAttribute("aria-label",id+" を拡大");
+      row.style.cursor="pointer";
+      const open=()=>{
+        const card={id,faceUp:true};
+        dialog.close();
+        showCardDetail(card);
+        const back=document.createElement("button");
+        back.textContent="デッキ一覧に戻る";
+        back.onclick=()=>{dialog.close();showRegisteredDecks()};
+        matchElement("dialogBody").append(back);
+      };
+      row.onclick=open;
+      row.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();open()}};
       list.append(row);
     }
     body.append(title, list);
