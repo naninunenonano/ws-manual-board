@@ -213,11 +213,15 @@ const WSEffects = (() => {
     (ctx,p)=>{const ids=ctx.choices[p.as],available=new Map(pile(ctx,p.from).filter(c=>c.cardNumber.replace(/(?:SP|S)$/,"")===p.cardNumber).map(c=>[c.uid,c]));
       if(!Array.isArray(ids)||ids.length!==p.count||new Set(ids).size!==ids.length||!ids.every(id=>available.has(id)))fail("同名カードを選択してください","needs-choice");
       ctx.selections.set(p.as,[...ids]);return [...ids];},["from","as","cardNumber","count"]);
-  operation("modifyLevel","レベル増減",p=>word(p.selection)&&integer(p.amount),
+  operation("modifyLevel","レベル増減",p=>word(p.selection)&&integer(p.amount)&&(p.untilTurnEnd===undefined||typeof p.untilTurnEnd==="boolean"),
     p=>"選択したカードのレベルを"+p.amount+"変更",
     (ctx,p)=>{const ids=ctx.selections.get(p.selection);if(!ids)fail("選択がありません");
       const found=cardsIn(ctx.board).filter(e=>ids.includes(e.card.uid));if(found.length!==ids.length||found.some(e=>!integer(e.card.level)))fail("レベルを確認してください");
-      for(const e of found)e.card.level+=p.amount;return [...ids];},["selection","amount"]);
+      for(const {card} of found){
+        card.level+=p.amount;
+        if(p.untilTurnEnd)card.turnLevelBonus=(card.turnLevelBonus??0)+p.amount;
+      }
+      return [...ids];},["selection","amount","untilTurnEnd"]);
   operation("chooseDestination","移動先選択",p=>ref(p.from)&&Array.isArray(p.destinations)&&p.destinations.length>0&&p.destinations.every(ref)&&word(p.selection)&&word(p.choiceKey),
     p=>"選択したカードの移動先を選ぶ",
     (ctx,p)=>{const destination=ctx.choices[p.choiceKey];if(!p.destinations.some(d=>d.side===destination?.side&&d.zone===destination?.zone))fail("移動先を選んでください","needs-choice");
@@ -244,7 +248,7 @@ const WSEffects = (() => {
       if(typeof ctx.choices.treasureStock!=="boolean")fail("ストックに置くか選んでください","needs-choice");
       if(ctx.choices.treasureStock&&!pile(ctx,{side:p.side,zone:"deck"}).length)fail("山札がありません");
       const [card]=waiting.splice(idx,1);pile(ctx,{side:p.side,zone:"hand"}).push(card);
-      return {cards:[card.uid],stock:ctx.choices.treasureStock?takeFromTop(ctx,p.side,"deck","stock",1):[]};},["side","triggerUid"]);
+      return {cards:[card.uid],revealed:[card.uid],stock:ctx.choices.treasureStock?takeFromTop(ctx,p.side,"deck","stock",1):[]};},["side","triggerUid"]);
   register(conditions,"memoryMarkerCount","思い出・マーカー合計",
     p=>knownKey(sides,p.side)&&count(p.max),
     p=>"思い出とマーカーの合計が"+p.max+"枚以下",
@@ -371,7 +375,16 @@ const WSEffects = (() => {
         at=entry;
         const {handler,params}=entry.step;
         if(guided){
-          if(handler==="chooseDestination"){const dest=yield {kind:"destination",destinations:params.destinations};choices[params.choiceKey]=dest;}
+          if(handler==="chooseDestination"){
+            if(context.selections.get(params.selection)?.length===0)continue;
+            choices[params.choiceKey]=yield {kind:"destination",destinations:params.destinations};
+          }
+          if(handler==="treasureTrigger"){
+            const uid=params.triggerUid==="@source"?choices.sourceUid:params.triggerUid;
+            const card=pile(context,{side:params.side,zone:"waiting"}).find(c=>c.uid===uid);
+            if(!card)fail("公開したトレジャーがありません");
+            choices.treasureStock=yield {kind:"treasure",card,canStock:pile(context,{side:params.side,zone:"deck"}).length>0};
+          }
           const request=selectionRequest(context,entry);
           if(request){
             if(request.candidates.length<request.min)
@@ -390,7 +403,7 @@ const WSEffects = (() => {
         const details=Array.isArray(outcome)?{cards:outcome}:outcome;
         if(handler==="revealTop"||handler==="revealSelection")details.revealed=details.cards;
         log.push({phase:entry.phase,handler,ok:true,...details});
-        if(guided&&details.revealed?.length){
+        if(guided&&handler!=="treasureTrigger"&&details.revealed?.length){
           const cards=cardsIn(working);
           yield {kind:"reveal",cards:details.revealed.map(uid=>cards.find(entry=>entry.card.uid===uid)?.card).filter(Boolean),
             returned:details.returned??[]};

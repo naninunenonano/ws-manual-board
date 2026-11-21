@@ -10,6 +10,7 @@
     unconfirmed:"未確認",skipped:"任意効果を辞退","needs-choice":"再選択が必要","condition-not-met":"使用できません"};
   const params=new URLSearchParams(location.search);
   const solo=params.get("mode")==="solo";
+  let firenPractice=false, practiceSide="self";
   let catalog, card, sample;
   let board = WSEffects.emptyBoard(), turn = 1, used = new Map(), serial = 0, selected = null;
   let undo = null, lastStart = null, session = null;
@@ -58,11 +59,8 @@
     el.className="lab-card";
     el.setAttribute("aria-pressed",String(pressed));
     el.append(node("strong",name(entry)));
-    const firen=entry.cardNumber?.startsWith("STS/W140-002")&&entry.type==="character";
-    const others=board.self.stage.filter(c=>c.uid!==entry.uid&&c.type==="character"&&c.traits?.some(t=>["巡遊者","魔王"].includes(t))).length;
-    const cxActive=board.self.cx.some(c=>["STS/W140-031","STS/W140-031R"].includes(c.cardNumber));
-    const powerShown=firen?(entry.power??3000)+(others>=2?4000:0)+(cxActive?1000:0):entry.power;
-    const soulShown=entry.type==="character"&&cxActive?(entry.soul??0)+1:entry.soul;
+    const powerShown=entry.shownPower??entry.power;
+    const soulShown=entry.shownSoul??entry.soul;
     const details=[entry.name&&entry.cardNumber,typeNames[entry.type],entry.level!=null?"Lv "+entry.level:"",
       entry.cost!=null?"コスト "+entry.cost:"",powerShown!=null?"パワー "+powerShown:"",soulShown!=null?"ソウル "+soulShown:"",
       entry.triggers?.length?"トリガー "+entry.triggers.join("、"):""].filter(Boolean);
@@ -74,11 +72,31 @@
     return el;
   }
 
+  function displayedCard(entry,side,zone,modifiers){
+    if(zone!=="stage"||entry.type!=="character")return entry;
+    const cx=modifiers.get(entry.uid);
+    let power=cx?.power??entry.power;
+    const definition=catalog&&WSFormalCards.find(catalog,entry.cardNumber);
+    if(practiceSide===side&&power!=null){
+      for(const ability of definition?.effects?.filter(item=>item.type==="continuous"&&item.timing==="own_turn")??[]){
+        const selection=ability.steps.find(step=>step.handler==="selectCards")?.params.as;
+        if(!selection)continue;
+        const relativeBoard=side==="self"?board:{self:board.opponent,opponent:board.self};
+        const result=WSEffects.run(ability,relativeBoard,{sourceUid:entry.uid,[selection]:[entry.uid]});
+        if(result.status==="success")power+=result.state.self.stage.find(card=>card.uid===entry.uid).power-entry.power;
+      }
+    }
+    return {...entry,shownPower:power,shownSoul:cx?.soul??entry.soul};
+  }
+
   function renderBoard(){
     const el=$("boardEditor"),open=new Set([...el.querySelectorAll("details[open]")].map(d=>d.dataset.key));
     el.replaceChildren();
+    el.classList.toggle("firen-practice",firenPractice);
     for(const [side,sideName] of Object.entries(sides)){
+      if(firenPractice&&side==="opponent")continue;
       const section=node("section");section.className="effect";
+      const modifiers=new Map(WSEffects.continuousModifiers(board,side).map(stat=>[stat.uid,stat]));
       section.append(node("h3",sideName));
       for(const [zone,title] of Object.entries(displayZones)){
         const entries=zone==="markers"?allCards(board).filter(x=>x.side===side&&x.zone===zone).reverse():
@@ -90,11 +108,11 @@
         const hide=session&&(["deck","stock"].includes(zone)||side==="opponent"&&zone==="hand");
         if(hide)cards.append(node("p","非公開"));
         else for(const entry of entries){
-          const pick=cardButton(entry.card,()=>{selected=entry.card.uid;renderBoard();renderEditor()},selected===entry.card.uid);
+          const pick=cardButton(displayedCard(entry.card,side,zone,modifiers),()=>{selected=entry.card.uid;renderBoard();renderEditor()},selected===entry.card.uid);
           pick.disabled=!!session;
           if(entry.host)pick.append(node("small","持ち主 "+name(entry.host)));
           cards.append(pick);
-          if(solo&&!session&&side==="self"&&selected===entry.card.uid)renderSoloActions(cards,entry.card,zone);
+          if((solo||firenPractice)&&!session&&side==="self"&&selected===entry.card.uid)renderSoloActions(cards,entry.card,zone);
         }
         details.append(cards);
         section.append(details);
@@ -144,7 +162,11 @@
     $("cancelEffect").hidden=!session;
     $("restoreStart").hidden=!lastStart||!!session;
     $("repeatTest").hidden=!lastStart||!!session;
-    $("runEffectTest").hidden=solo;
+    $("runEffectTest").hidden=solo||firenPractice;
+    $("firenActions").hidden=!firenPractice;
+    $("checkTrigger").disabled=!!session||!board.self.deck.length;
+    $("togglePracticeTurn").disabled=!!session;
+    $("togglePracticeTurn").textContent=practiceSide==="self"?"相手ターンのパワーを見る":"自分ターンのパワーに戻す";
     $("runEffectTest").disabled=!ability||!!session;
     document.querySelector("#testFind button").disabled=!!session;
     refreshDestination("place");
@@ -219,7 +241,7 @@
     const before=snapshot();
     changeBoard(()=>moveEntry(entry,dest,$("editPosition").value));
     $("boardStatus").textContent=name(entry.card)+"を"+label(dest.side,dest.zone)+"に移動しました。";
-    if(solo&&dest.side==="self"&&dest.zone==="stage"&&entry.side==="self"&&entry.zone==="hand"){
+    if((solo||firenPractice)&&dest.side==="self"&&dest.zone==="stage"&&entry.side==="self"&&entry.zone==="hand"){
       dispatchEntry(entry.card,before);
     }else if(dest.side==="self"&&dest.zone==="stage"&&(entry.side!==dest.side||entry.zone!==dest.zone)&&isOnPlay(effect())&&matches(entry.card)){
       if(entry.side==="self"&&entry.zone==="hand")begin(entry.card.uid,before,true);
@@ -247,6 +269,12 @@
   };
   $("nextTurn").onclick=()=>{
     if(session)return;
+    for(const {card} of allCards(board))if(card.turnLevelBonus){
+      card.level-=card.turnLevelBonus;
+      delete card.turnLevelBonus;
+    }
+    if(firenPractice)board.self.waiting.push(...board.self.cx.splice(0));
+    practiceSide="self";
     turn++;used.clear();undo=null;clearResults();render();
   };
 
@@ -307,10 +335,11 @@
   }
   $("testFind").onsubmit=event=>{event.preventDefault();if(catalog&&!session)openNumber($("testNumber").value)};
   $("loadFiren").onclick=()=>{
-    if(session)return;
+    if(session||!catalog)return;
     const firen=WSFormalCards.find(catalog,"STS/W140-002");
     const cx=WSFormalCards.find(catalog,"STS/W140-031");
     if(!firen||!cx){$("boardStatus").textContent="フィレンまたは凱旋歌がカタログにありません。";return}
+    firenPractice=true;practiceSide="self";
     changeBoard(()=>{
       board=WSEffects.emptyBoard();used.clear();turn=1;selected=null;
       board.self.stage.push(temporaryCard({name:"巡遊者のキャラ",power:3000,soul:1,traits:["巡遊者"]}));
@@ -320,15 +349,18 @@
       board.self.deck.push(temporaryCard({name:"山札の下"}),temporaryCard({name:"山札の中"}),formalCard(cx));
     });
     openNumber("STS/W140-002");
-    for(const zone of ["hand","stage","waiting","deck","cx","stock"]){
+    for(const zone of ["hand","stage","cx"]){
       const area=$("boardEditor").querySelector('[data-key="self.'+zone+'"]');
       if(area)area.open=true;
     }
-    $("boardStatus").textContent="フィレン確認用盤面を配置しました。舞台のフィレンのパワーは他の巡遊者が2枚以上で＋4000、CX配置中はさらに＋1000で表示します。";
+    $("boardStatus").textContent="手札のフィレンから舞台へ。凱旋歌をCX置場に出したら、舞台のフィレンでアタックできます。";
+    $("testBoardHeading").tabIndex=-1;
+    $("testBoardHeading").focus();
     clearResults();
   };
   $("loadPractice").onclick=()=>{
     if(session||!card)return;
+    firenPractice=false;practiceSide="self";
     changeBoard(()=>{
       board=WSEffects.emptyBoard();used.clear();turn=1;selected=null;
       board.self.hand.push(formalCard(card));
@@ -428,6 +460,17 @@
       });
       return;
     }
+    if(step.kind==="destination"){
+      panel.append(node("p","控え室からの移動先を選びます。"),
+        ...step.destinations.map(dest=>button(zones[dest.zone]+"へ",()=>advance(dest))));
+      return;
+    }
+    if(step.kind==="treasure"){
+      const stock=button("山札の上を1枚ストックへ",()=>advance(true));stock.disabled=!step.canStock;
+      panel.append(node("p",name(step.card)+"をトリガーしました。凱旋歌を手札に加えます。"),
+        stock,button("ストックに置かない",()=>advance(false)));
+      return;
+    }
     if(step.kind==="optional"){
       panel.append(node("p","この能力を使いますか？"),button("能力を使用する",()=>advance(true)),button("能力を使用しない",()=>advance(false)));
       return;
@@ -445,8 +488,25 @@
       container.append(button("舞台に出す",()=>enterFromHand(entry.uid)));
       return;
     }
+    if(firenPractice&&zone==="hand"&&entry.type==="climax"){
+      container.append(button("CX置場に出す",()=>{
+        changeBoard(()=>{
+          board.self.waiting.push(...board.self.cx.splice(0));
+          moveEntry({card:entry,side:"self",zone:"hand"},{side:"self",zone:"cx",pile:board.self.cx},"top");
+          selected=null;
+        });
+        $("boardStatus").textContent=name(entry)+"をCX置場に出しました。";
+      }));
+      return;
+    }
     if(zone!=="stage"||!catalog)return;
     const definition=WSFormalCards.find(catalog,entry.cardNumber);
+    if(firenPractice){
+      const attack=definition?.effects?.find(item=>item.timing==="on_attack"&&item.type==="auto");
+      if(attack)container.append(button("アタック · CXコンボ確認",()=>{
+        launchSoloAbility(definition,attack,entry.uid,snapshot(),false,"アタック時");
+      }));
+    }
     for(const ability of definition?.effects?.filter(item=>item.type==="activated")??[]){
       const usedUp=ability.limit?.perTurn&&
         (used.get(usageKey(entry.uid,ability,definition))??0)>=ability.limit.perTurn;
@@ -458,10 +518,10 @@
     }
   }
 
-  function launchSoloAbility(definition,ability,uid,start,entered){
+  function launchSoloAbility(definition,ability,uid,start,entered,timing){
     sample=null;
     showCard(definition,ability.id);
-    $("operationDescription").textContent=(entered?"手札から登場して誘発":"舞台から起動")+" ／ "+(ability.category??ability.id);
+    $("operationDescription").textContent=(timing??(entered?"手札から登場して誘発":"舞台から起動"))+" ／ "+(ability.category??ability.id);
     begin(uid,start,entered);
   }
 
@@ -485,7 +545,7 @@
     if(!entry)return;
     const before=snapshot();
     moveEntry(entry,{side:"self",zone:"stage",pile:board.self.stage},"top");
-    if(solo){
+    if(solo||firenPractice){
       selected=null;
       $("boardEditor").querySelector('[data-key="self.stage"]').open=true;
       $("boardStatus").textContent=name(entry.card)+"を手札から舞台に出しました。";
@@ -508,9 +568,27 @@
       candidates,min:1,max:1,confirm:entering?"舞台に登場させる":"このカードの能力を使う"},
       ([uid])=>{if(entering)enterFromHand(uid);else begin(uid)});
   };
+  $("togglePracticeTurn").onclick=()=>{
+    practiceSide=practiceSide==="self"?"opponent":"self";
+    render();
+  };
+  $("checkTrigger").onclick=()=>{
+    if(session||!board.self.deck.length)return;
+    const start=snapshot(),entry=board.self.deck.pop(),definition=WSFormalCards.find(catalog,entry.cardNumber);
+    const ability=definition?.effects?.find(item=>item.timing==="on_trigger"&&item.type==="trigger");
+    if(!ability){
+      board.self.stock.push(entry);render();
+      $("boardStatus").textContent=name(entry)+"をトリガーしてストックへ置きました。";
+      return;
+    }
+    board.self.waiting.push(entry);
+    launchSoloAbility(definition,ability,entry.uid,start,false,"トリガー");
+    if(lastStart)lastStart.trigger=true;
+  };
   $("cancelEffect").onclick=()=>{
     session?.iterator?.return();
     session=null;
+    if(lastStart?.trigger)restore(lastStart.state);
     $("effectChoices").replaceChildren();
     clearResults();
     $("effectResult").textContent="テストを中止しました。途中のコストや効果は盤面に反映していません。";
@@ -526,7 +604,8 @@
     if(!lastStart||session)return;
     const previous=lastStart;
     restore(previous.state);
-    if(previous.entered)enterFromHand(previous.uid);
+    if(previous.trigger)$("checkTrigger").click();
+    else if(previous.entered)enterFromHand(previous.uid);
     else begin(previous.uid);
   };
 
@@ -641,6 +720,7 @@
     if(solo){
       openNumber(params.get("card")??"STS/W140-001");
       if(card?.cardNumber==="STS/W140-001")$("loadPractice").click();
+      if(["STS/W140-002","STS/W140-031"].includes(card?.cardNumber))$("loadFiren").click();
       $("soloEffectText").hidden=true;
       $("expectedOutcome").hidden=true;
     }else if(params.has("card"))openNumber(params.get("card"),params.get("effect"));

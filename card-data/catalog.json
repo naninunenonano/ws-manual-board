@@ -323,7 +323,8 @@
               "handler": "modifyLevel",
               "params": {
                 "selection": "duplicate",
-                "amount": 1
+                "amount": 1,
+                "untilTurnEnd": true
               }
             }
           ],
