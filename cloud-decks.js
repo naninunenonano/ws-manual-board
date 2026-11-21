@@ -68,9 +68,17 @@ function createDeckCloudStore({loadClient, read, write, validate, uuid, storage,
   }
 
   async function rows(client) {
-    const result=await table(client).select(columns).eq("user_id",user);
-    if(result.error)throw result.error;
-    return new Map(result.data.map(row=>[row.id,{row,deck:unpack(row)}]));
+    const remote=new Map();
+    let lastId;
+    while(true){
+      let query=table(client).select(columns).eq("user_id",user).order("id").limit(250);
+      if(lastId)query=query.gt("id",lastId);
+      const result=await query;
+      if(result.error)throw result.error;
+      if(!result.data.length)return remote;
+      for(const row of result.data)remote.set(row.id,{row,deck:unpack(row)});
+      lastId=result.data.at(-1).id;
+    }
   }
   function accept(item, remote) {
     replace(item,remote

@@ -23,9 +23,12 @@ function fixture() {
     from(name){
       assert.equal(name,"decks");
       const where=[];
-      let operation="select",payload;
+      let operation="select",payload,afterId,limit;
       const q={
         eq(key,value){where.push([key,value]);return q},
+        gt(key,value){assert.equal(key,"id");afterId=value;return q},
+        order(key){assert.equal(key,"id");return q},
+        limit(value){limit=value;return q},
         select(){return q},
         insert(value){operation="insert";payload=value;return q},
         update(value){operation="update";payload=value;return q},
@@ -34,6 +37,8 @@ function fixture() {
           requests++;
           if(offline)return resolve({error:Error("offline")});
           let selected=[...rows.values()].filter(row=>where.every(([k,v])=>row[k]===v));
+          if(limit)selected=selected.filter(row=>!afterId || row.id>afterId)
+            .sort((a,b)=>a.id.localeCompare(b.id)).slice(0,limit);
           if(operation==="insert"){
             assert.equal(payload.user_id,session.user.id);
             if(rows.has(payload.id))return resolve({error:{code:"23505"}});
@@ -94,6 +99,19 @@ test("explicit migration preserves IDs, deduplicates and reloads cloud entries",
   await store.synchronize();
   assert.equal(f.list.length,2);
   assert.ok(f.list.every(item=>item.cloud.createdAt && item.cloud.updatedAt));
+});
+
+test("decks after the first response page remain linked",async()=>{
+  const f=fixture(),store=f.create();
+  for(let n=0;n<251;n++){
+    const id=String(n).padStart(3,"0");
+    const timestamp="2025-01-01T00:00:00Z";
+    f.rows.set(id,{id,user_id:"owner",name:id,cards,created_at:timestamp,updated_at:timestamp});
+  }
+  await store.synchronize();
+  assert.equal(f.list.length,251);
+  await store.synchronize();
+  assert.equal(f.list.filter(item=>item.cloud.removed).length,0);
 });
 
 test("network failure and response loss preserve local CRUD intent without duplication",async()=>{
