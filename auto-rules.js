@@ -121,8 +121,8 @@ const practiceCards={
       ruleStep("selectCards",{from:ownZone("hand"),as:"discard",count:1}),
       ruleStep("move",{from:ownZone("hand"),to:ownZone("waiting"),selection:"discard"})
     ]})]},
-  "113":{name:"仮イベント ストック入れ替え",type:"event",color:"blue",
-    stats:{level:2,cost:1,power:null,soul:null},triggers:[],replaceOpponentStock:true}
+  "113":{name:"仮イベント 光景",type:"event",color:"blue",
+    stats:{level:2,cost:1,power:null,soul:null},triggers:[],eventEffect:"光景"}
 };
 
 const practiceTitles={
@@ -305,11 +305,17 @@ function autoRulePlace(p,uid,zone){
   });
   return true;
 }
-function autoRulePlayStockEvent(p,uid){
+const autoRuleEventEffects=Object.freeze({"光景":resolveKoukei});
+function autoRuleEventEffect(definition){
+  const name=definition?.eventEffect;
+  return definition?.type==="event"&&Object.hasOwn(autoRuleEventEffects,name)?autoRuleEventEffects[name]:null;
+}
+function autoRulePlayEvent(p,uid){
   if(ruleBusy||p!==side)return false;
   const board=players[p],index=board.hand.findIndex(card=>card.uid===uid),card=board.hand[index];
   const definition=botDefinition(card);
-  if(!definition?.replaceOpponentStock)return false;
+  const effect=autoRuleEventEffect(definition);
+  if(!effect)return false;
   const error=autoRuleLegalPlay(p,card,"main","event");
   if(error){message(error);return false}
 
@@ -317,33 +323,38 @@ function autoRulePlayStockEvent(p,uid){
   runRuleOperation(done=>{
     autoRulePay(p,definition.stats.cost);
     board.hand.splice(index,1);
-    const target=1-p,rival=players[target];
-    const count=rival.stock.length;
-    for(let i=0;i<count;i++)botMove(rival,"stock",0,"waiting");
-    let replaced=0;
-    function finish(){
+    effect(p,()=>{
       card.faceUp=true;
       board.waiting.push(card);
-      autoRuleLog("相手のストック"+count+"枚を控え室へ、相手の山札から"+replaced+"枚をストックへ");
       done();
-    }
-    function next(){
-      if(replaced===count||rival.level.length>=4){finish();return}
-      botRevealTop(target,top=>{top.faceUp=false;rival.stock.push(top)},found=>{
-        if(!found){finish();return}
-        replaced++;
-        next();
-      });
-    }
-    next();
+    });
   });
   return true;
+}
+function resolveKoukei(p,done){
+  const target=1-p,rival=players[target];
+  const count=rival.stock.length;
+  for(let i=0;i<count;i++)botMove(rival,"stock",0,"waiting");
+  let replaced=0;
+  function finish(){
+    autoRuleLog("光景・相手のストック"+count+"枚を控え室へ、相手の山札から"+replaced+"枚をストックへ");
+    done();
+  }
+  function next(){
+    if(replaced===count||rival.level.length>=4){finish();return}
+    botRevealTop(target,top=>{top.faceUp=false;rival.stock.push(top)},found=>{
+      if(!found){finish();return}
+      replaced++;
+      next();
+    });
+  }
+  next();
 }
 function autoRuleHandMenu(p,index){
   if(ruleBusy||match.turn.player!==p)return false;
   const card=players[p].hand[index],definition=botDefinition(card),type=definition?.type,phase=match.turn.phase;
-  const stockEvent=definition?.replaceOpponentStock;
-  if(!(phase==="main"&&(type==="character"||stockEvent)||phase==="climax"&&type==="climax"))return false;
+  const playableEvent=autoRuleEventEffect(definition);
+  if(!(phase==="main"&&(type==="character"||playableEvent)||phase==="climax"&&type==="climax"))return false;
   const body=showResolution(botCardInfo(card).name,[card]);
   setRuleModal(false);
   const level=autoRuleHandLevel(players[p],definition);
@@ -353,7 +364,7 @@ function autoRuleHandMenu(p,index){
   deckButton(body,"プレイする",()=>{
     closeResolution();
     if(type==="climax"){autoRulePlace(p,card.uid,"cx");return}
-    if(stockEvent){autoRulePlayStockEvent(p,card.uid);return}
+    if(playableEvent){autoRulePlayEvent(p,card.uid);return}
     const targets=showResolution("登場させる枠",[card]);
     setRuleModal(false);
     for(const slot of botSlots){
