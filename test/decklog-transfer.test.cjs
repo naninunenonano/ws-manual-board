@@ -1335,8 +1335,10 @@ test("青Lv2イベント：自分が1ストック払い、相手のストック�
   const page=launchRules("practice-stock");
   const before=snapshot(page);
   page.run('cardClick(0,"hand",players[0].hand.findIndex(c=>c.id==="BOT/W000-113"))');
+  assert.equal(page.get("dialogTitle").textContent,"仮イベント 光景");
   ruleButton(page,"プレイする");
   const saved=snapshot(page),[own,rival]=saved.players;
+  assert.ok(saved.bot.log.some(line=>line.startsWith("光景・")));
   assert.equal(own.stock.length,before.players[0].stock.length-1);
   assert.deepEqual(own.deck,before.players[0].deck);
   assert.equal(own.waiting.at(-1).id,"BOT/W000-113");
@@ -1351,7 +1353,7 @@ test("青Lv2イベント：途中のリフレッシュ後も残りのストッ�
   const page=launchRules("practice-stock");
   page.run('const rival=players[1];rival.waiting.push(...rival.deck.splice(0,rival.deck.length-1))');
   const before=snapshot(page).players[1],count=before.stock.length;
-  assert.equal(page.run('autoRulePlayStockEvent(0,players[0].hand.find(c=>c.id==="BOT/W000-113").uid)'),true);
+  assert.equal(page.run('autoRulePlayEvent(0,players[0].hand.find(c=>c.id==="BOT/W000-113").uid)'),true);
   const saved=snapshot(page),rival=saved.players[1];
   assert.equal(rival.stock.length,count);
   assert.equal(rival.stock[0].uid,before.deck.at(-1).uid);
