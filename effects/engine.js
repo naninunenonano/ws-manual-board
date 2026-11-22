@@ -24,6 +24,7 @@ const WSEffects = (() => {
   const typeMatch = (card,type) => type===undefined || card.type===type;
   const levelMatch = (card,maxLevel) => maxLevel===undefined || (integer(card.level) && card.level<=maxLevel);
   const matching = (card,p) => typeMatch(card,p.cardType)&&levelMatch(card,p.maxLevel)
+    && (!p.cardNumbers || p.cardNumbers.includes(card.cardNumber))
     && (!p.traits || checkTags(card,"traits",p.traits))
     && (!p.keywords || checkTags(card,"keywords",p.keywords))
     && (!p.excludeUid || card.uid!==p.excludeUid);
@@ -148,9 +149,10 @@ const WSEffects = (() => {
     && (p.min===undefined||count(p.min)&&p.min<=p.count)
     && (p.cardType===undefined||["character","event","climax"].includes(p.cardType))
     && (p.maxLevel===undefined||integer(p.maxLevel))
+    && (p.cardNumbers===undefined||names(p.cardNumbers)&&p.cardNumbers.length>0)
     && (p.excludeUid===undefined||word(p.excludeUid))
     && (p.excludeSource===undefined||typeof p.excludeSource==="boolean"),
-    p=>zoneLabel(p.from)+"から"+p.count+"枚を選ぶ（"+p.as+"）"+
+    p=>zoneLabel(p.from)+"から"+p.count+"枚を選ぶ（"+(p.cardNumbers?.join("、")??p.as)+"）"+
       ["traits","keywords"].filter(kind=>p[kind]).map(kind=>" ／ "+tagFields[kind][2]+" "+filterLabel(p[kind])).join(""),
     (ctx,p)=>{
       const picks = Object.hasOwn(ctx.choices,p.as) ? ctx.choices[p.as] : (p.count===0 ? [] : undefined);
@@ -166,7 +168,7 @@ const WSEffects = (() => {
       }
       ctx.selections.set(p.as,[...picks]);
       return [...picks];
-    },["from","as","count","min","traits","keywords","cardType","maxLevel","excludeUid","excludeSource"]);
+    },["from","as","count","min","traits","keywords","cardType","maxLevel","cardNumbers","excludeUid","excludeSource"]);
   operation("searchDeck","山札検索",p=>knownKey(sides,p.side)&&word(p.as)&&count(p.max)&&
     (p.cardType===undefined||["character","event","climax"].includes(p.cardType))&&
     (p.maxLevel===undefined||integer(p.maxLevel)),
@@ -271,6 +273,12 @@ const WSEffects = (() => {
         return [...uids];
       },["selection","amount"]);
   }
+  register(conditions,"opposingLevel","正面のキャラのレベル",
+    p=>integer(p.level),
+    p=>"正面のキャラがLv"+p.level,
+    (ctx,p)=>pile(ctx,{side:"opponent",zone:"stage"}).some(card=>
+      card.uid===ctx.choices.opposingUid&&card.type==="character"&&card.level===p.level),
+    ["level"]);
   register(conditions,"zoneCount","領域の枚数条件",
     p=>ref(p.from)&&(p.min!==undefined||p.max!==undefined)
       && (p.min===undefined||count(p.min)) && (p.max===undefined||count(p.max))
