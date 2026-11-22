@@ -1164,3 +1164,85 @@ test("仮Lv2：ソウルトリガー1と、前回の仮Lv1のトリガーなし"
   assert.ok(saved.bot.log.some(line=>line.includes("ソウル＋1")));
   assert.deepEqual(ruleCounts(saved),[50,50]);
 });
+
+function enterGatePractice(page,cxNumber="105"){
+  const initial=snapshot(page).players[0];
+  assert.equal(page.run('autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-109").uid,"front0")'),true);
+  const played=snapshot(page).players[0];
+  assert.equal(played.stock.length,initial.stock.length-2);
+  assert.deepEqual(played.clock.map(card=>card.uid),initial.clock.slice(0,-1).map(card=>card.uid));
+  assert.equal(played.waiting.at(-1).uid,initial.clock.at(-1).uid);
+  assert.equal(page.run('botStats(0,players[0].front0[0]).power'),10000);
+  page.run(`(()=>{
+    const board=players[0],id="BOT/W000-${cxNumber}";
+    if(!board.hand.some(c=>c.id===id))botMove(board,"deck",board.deck.findIndex(c=>c.id===id),"hand");
+    setTurnPhase("climax");
+    autoRulePlace(0,board.hand.find(c=>c.id===id).uid,"cx");
+    setTurnPhase("attack");
+  })()`);
+}
+function attackWithGatePractice(page){
+  page.run('autoRuleAttack(0,"front0",players[0].front0[0].uid,"direct")');
+  return snapshot(page);
+}
+
+test("仮Lv3：クロックの一番上を回復し、ゲート連動は山札下4枚のCX数を通常アタック前に与える",()=>{
+  const page=launchRules("practice-level-three");
+  enterGatePractice(page);
+  const bottom=snapshot(page).players[1].deck.slice(0,4);
+  assert.equal(bottom.filter(c=>c.cx).length,2);
+  const saved=attackWithGatePractice(page);
+  assert.deepEqual(saved.players[1].waiting.slice(0,4).map(c=>c.uid),bottom.map(c=>c.uid));
+  const log=saved.bot.log;
+  const combo=log.findIndex(line=>line.includes("下から4枚／CX 2枚"));
+  assert.ok(combo>=0);
+  assert.match(log[combo+1],/^ダメージ 2枚/);
+  assert.match(log[combo+2],/^トリガー /);
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});
+
+test("仮Lv3：カムバックでは連動せず、ゲート連動の効果ダメージはキャンセルされる",()=>{
+  const other=launchRules("practice-level-three");
+  enterGatePractice(other,"104");
+  const before=snapshot(other).players[1].deck.slice(0,4).map(c=>c.uid);
+  const off=attackWithGatePractice(other);
+  assert.deepEqual(off.players[1].deck.slice(0,4).map(c=>c.uid),before);
+  assert.ok(!off.bot.log.some(line=>line.includes("ゲートCXコンボ")));
+
+  const page=launchRules("practice-level-three");
+  enterGatePractice(page);
+  page.run('const rival=players[1];botMove(rival,"deck",rival.deck.findIndex((c,i)=>i>=4&&c.cx),"deck")');
+  const saved=attackWithGatePractice(page);
+  const combo=saved.bot.log.findIndex(line=>line.includes("下から4枚／CX 2枚"));
+  assert.ok(combo>=0);
+  assert.match(saved.bot.log[combo+1],/^CXでダメージをキャンセル/);
+  assert.match(saved.bot.log[combo+2],/^トリガー /);
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});
+
+test("仮Lv3：山札が尽きてもリフレッシュを挟んで残りを落とす",()=>{
+  const page=launchRules("practice-level-three");
+  enterGatePractice(page);
+  page.run('const rival=players[1];rival.waiting.push(...rival.deck.splice(1))');
+  const saved=attackWithGatePractice(page);
+  assert.ok(saved.bot.log.some(line=>line.includes("下から4枚")));
+  assert.ok(saved.players[1].clock.length>=1);
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});
+
+test("仮Lv3：落とした4枚にCXがなければ効果ダメージは発生しない",()=>{
+  const page=launchRules("practice-level-three");
+  enterGatePractice(page);
+  page.run(`(()=>{
+    const deck=players[1].deck;
+    for(let i=0;i<4;i++)if(deck[i].cx){
+      const index=deck.findIndex((c,j)=>j>=4&&!c.cx);
+      [deck[i],deck[index]]=[deck[index],deck[i]];
+    }
+  })()`);
+  const saved=attackWithGatePractice(page);
+  const combo=saved.bot.log.findIndex(line=>line.includes("下から4枚／CX 0枚"));
+  assert.ok(combo>=0);
+  assert.match(saved.bot.log[combo+1],/^トリガー /);
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});
