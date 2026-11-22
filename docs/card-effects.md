@@ -41,6 +41,13 @@ Bot戦のイベントを追加するときは、[auto-rules.js](../auto-rules.js
 - `lookTop: {max, targetLabel, minLevel}` は指定枚数まで山札の上を見て、指定レベル以上を最大1枚手札に加えます。見た残りは控え室に置きます。
 - `traitLoot` に特徴を指定すると、山札の上を1枚公開し、一致したカードを手札に加えた後、手札を1枚捨てます。`discardHandSteps(trait)` では捨てられる手札を特徴で絞れます。支払い後に引く枚数は `drawAfterCost` で指定できます。
 
+### 早出し・助太刀とバトル相手のリバース
+
+- `handLevelReduction: {stageTrait, count, amount}` は、指定特徴の表向きキャラが舞台に必要数以上いる場合の手札レベル修正です。
+- `entryBattleBuff: {power, blocksBackup, extraTurns}` は、舞台に置いたターンから指定数先のターン終了まで有効です。助太刀封じの対象は助太刀で、イベントカウンターは引き続き使用できます。
+- `reverseMove: {zone, stock}` はバトルで新たにリバースさせた相手を指定領域に移動します。`stock` の指定があれば任意の支払いです。
+- `backup: {power, reverseMove}` はフロントアタックのカウンターステップに1枚使用できます。必要レベルとストックコストはカードの `stats` を使います。支払いと自身を控え室に置いた後、防御キャラにそのターン中のパワー修正と、指定があればリバース時の能力を与えます。
+
 ## 効果定義
 
 効果ID `id` はカード内で一意です。`category` は能力分類です。分類名は検索・確認に使い、処理の実行には処理識別子とパラメータを使います。`type` は能力種別（例 `auto`、`activated`、`continuous`）、`timing` は発動タイミング（例 `on_play`、`on_attack`）を表します。独立テストでは選んだ効果を直接呼び出します。効果の自動検出は対戦エンジンに統合する段階で扱います。

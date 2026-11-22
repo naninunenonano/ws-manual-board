@@ -1506,3 +1506,61 @@ test("赤Lv0：特徴を持つ手札がなければ任意ドローは使えな�
   assert.equal(snapshot(page).players[0].waiting.length,0);
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
+
+const playEarlyBackupTest='autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-119").uid,"front0")';
+test("赤Lv3は特徴4体でLv2からプレイでき、強化と助太刀封じは相手ターン終了まで",()=>{
+  const page=launchRules("practice-backup");
+  page.run('botMove(players[0],"back1",0,"waiting")');
+  assert.equal(page.run(playEarlyBackupTest),false);
+  page.run('botMove(players[0],"waiting",0,"back1")');
+  assert.equal(page.run(playEarlyBackupTest),true);
+  assert.equal(snapshot(page).players[0].stock.length,1);
+  assert.equal(page.run('botEffectCard(players[0].front0[0]).level'),3);
+  assert.equal(page.run('botStats(0,players[0].front0[0]).power'),13500);
+  page.run('finishEndTurn()');
+  assert.equal(page.run('botStats(0,players[0].front0[0]).power'),13500);
+  const prior=page.run('players[0].stock.length');
+  page.run('setTurnPhase("attack");autoRuleAttack(1,"front2",players[1].front2[0].uid,"front")');
+  assert.equal(page.get("dialogTitle").textContent,"カウンター");
+  assert.ok(!page.get("dialogBody").children.some(button=>button.textContent.includes("助太刀3000")));
+  assert.ok(page.get("dialogBody").children.some(button=>button.textContent==="仮カウンターを使う"));
+  ruleButton(page,"使わない");
+  assert.match(page.get("dialogTitle").textContent,/リバースしたキャラ/);
+  ruleButton(page,"払わない");
+  assert.equal(page.run('players[0].stock.length'),prior);
+  assert.ok(page.run('players[0].hand.some(card=>card.id==="BOT/W000-120")'));
+  page.run('finishEndTurn()');
+  assert.equal(page.run('botStats(0,players[0].front0[0]).power'),9000);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("赤Lv3のバトル中は相手が助太刀を使わず、リバースさせた相手を1ストックでクロックの上へ置く",()=>{
+  const page=launchRules("practice-backup");
+  page.run(playEarlyBackupTest);
+  const target=snapshot(page).players[1].front2[0];
+  const before=snapshot(page).players[0].stock.length;
+  page.run('setTurnPhase("attack");autoRuleAttack(0,"front0",players[0].front0[0].uid,"front")');
+  ruleButton(page,"1ストック払う");
+  const {players}=snapshot(page);
+  assert.equal(players[0].stock.length,before);
+  assert.equal(players[1].clock.at(-1).uid,target.uid);
+  assert.equal(players[1].front2.length,0);
+  assert.ok(players[1].hand.some(card=>card.id==="BOT/W000-120"));
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("青Lv2の助太刀は色がなくてもフロントアタック時に1回使用でき、リバースさせた攻撃キャラを思い出へ送る",()=>{
+  const page=launchRules("practice-backup");
+  page.run('finishEndTurn();setTurnPhase("attack")');
+  const before=snapshot(page);
+  page.run('autoRuleAttack(1,"front1",players[1].front1[0].uid,"front")');
+  ruleButton(page,"仮キャラ 助太刀3000・思い出送りを使う");
+  const {players}=snapshot(page);
+  assert.equal(players[0].stock.length,before.players[0].stock.length-1);
+  assert.ok(players[0].waiting.some(card=>card.id==="BOT/W000-120"));
+  assert.equal(page.run('botStats(0,players[0].front1[0]).power'),5500);
+  assert.equal(players[1].memory.at(-1).uid,before.players[1].front1[0].uid);
+  assert.equal(players[0].front1[0].orientation,0);
+  assert.equal(page.get("dialog").open,false);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
