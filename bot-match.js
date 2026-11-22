@@ -102,7 +102,7 @@ function startBotMatch(deck,scenario){
   const opening=scenario==="opening";
   const snapshot={version:1,phase:opening?"mulligan":"active",screen:opening?"mulligan":"battle",
     side:0,firstPlayer:0,mulliganPlayer:0,openingHandDealt:true,decks:[deck,opponentDeck],players:boards,result:null,
-    turn:{player:0,number:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[scenario===levelThreeScenario?"青Lv3を前列①に出し、ゲートCXを置いてアタックできます":scenario===levelTwoScenario?"手札のLv2を後列①に置き、前のLv0とLv1のパワーを確認できます":scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
+    turn:{player:0,number:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[scenario===entryScenario?"手札の青Lv0で山札調整とCX回収、赤Lv0でクロックサーチを確認できます":scenario===levelThreeScenario?"青Lv3を前列①に出し、ゲートCXを置いてアタックできます":scenario===levelTwoScenario?"手札のLv2を後列①に置き、前のLv0とLv1のパワーを確認できます":scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
   if(!writeMatch(snapshot))return;
   match=snapshot;players=boards;side=0;selected=null;mulliganSelection=new Set();
   showMatchScreen();
@@ -198,11 +198,14 @@ function botDispatch(card,timing,done,p=0){
   const effects=botDefinition(card)?.effects?.filter(item=>item.timing===timing&&item.type==="auto")??[];
   function next(i){
     if(i===effects.length){done?.();return}
-    botGuide(card,effects[i],()=>next(i+1),p);
+    const effect=effects[i],resume=()=>next(i+1);
+    if(effect.reorderTop)autoRuleReorderTop(p,resume);
+    else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
+    else botGuide(card,effect,resume,p);
   }
   next(0);
 }
-function botGuide(card,ability,done,p=0){
+function botGuide(card,ability,done,p=0,abortable=true){
   const key=card.uid+":"+ability.id;
   const iterator=WSEffects.guide(ability,botEffectBoard(p),{
     sourceUid:card.uid,usedThisTurn:match.bot.uses[key]??0
@@ -274,7 +277,7 @@ function botGuide(card,ability,done,p=0){
       body.append(document.createTextNode(prompt.text??"コストを確認してください"));
       respond("コストを支払う");
     }
-    add("効果確認を中止",()=>{iterator.return();done?.(false)});
+    if(abortable)add("効果確認を中止",()=>{iterator.return();done?.(false)});
   }
   step();
 }
