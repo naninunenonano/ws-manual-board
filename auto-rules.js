@@ -11,8 +11,11 @@ const levelTwoScenario="practice-level-two";
 const levelTwoTitle="仮カード・Lv2応援確認";
 const levelThreeScenario="practice-level-three";
 const levelThreeTitle="仮カード・Lv3ゲート連動確認";
+const entryScenario="practice-entry";
+const entryTitle="仮カード・Lv0登場時効果確認";
 const practiceTrait="巡遊者";
 const ruleStep=(handler,params)=>({handler,params});
+const ownZone=zone=>({side:"self",zone});
 const rulePower=(amount)=>ruleStep("modifyPower",{selection:"@source",amount});
 const ruleSoul=(amount)=>ruleStep("modifySoul",{selection:"@source",amount});
 const ruleEffect=(id,category,timing,steps,extra={})=>({
@@ -78,12 +81,37 @@ const practiceCards={
       ruleEffect("heal-on-play","登場時・クロック回復","from_hand_to_stage",[
         ruleStep("move",{from:{side:"self",zone:"clock"},to:{side:"self",zone:"waiting"},count:1,end:"top"})
       ],{conditions:[ruleStep("zoneCount",{from:{side:"self",zone:"clock"},min:1})]})
-    ],millOnAttack:{cxId:"BOT/W000-105",count:4}}
+    ],millOnAttack:{cxId:"BOT/W000-105",count:4}},
+  "110":{name:"仮キャラ 山札調整・CX回収",color:"blue",stats:{level:0,cost:0,power:500,soul:1},
+    triggers:["ソウル"],effects:[
+      ruleEffect("reorder-on-play","登場時・山札の上2枚","from_hand_to_stage",[],{reorderTop:true}),
+      ruleEffect("cx-recover-on-play","登場時・CX回収","from_hand_to_stage",[
+        ruleStep("selectCards",{from:ownZone("waiting"),as:"recoverCX",count:1,cardType:"climax"}),
+        ruleStep("move",{from:ownZone("waiting"),to:ownZone("hand"),selection:"recoverCX"})
+      ],{optional:true,conditions:[ruleStep("zoneCount",{from:ownZone("stock"),min:1})],costs:[
+        ruleStep("payStock",{side:"self",count:1}),
+        ruleStep("selectCards",{from:ownZone("hand"),as:"discardCX",count:1,cardType:"climax"}),
+        ruleStep("move",{from:ownZone("hand"),to:ownZone("waiting"),selection:"discardCX"})
+      ]})
+    ]},
+  "111":{name:"仮キャラ クロックサーチ",color:"red",stats:{level:0,cost:0,power:1500,soul:1},
+    triggers:[],effects:[
+      ruleEffect("clock-search-on-play","登場時・Lv1以下をサーチ","from_hand_to_stage",[
+        ruleStep("searchDeck",{side:"self",as:"search",max:1,maxLevel:1}),
+        ruleStep("revealSelection",{selection:"search"}),
+        ruleStep("move",{from:ownZone("deck"),to:ownZone("hand"),selection:"search"}),
+        ruleStep("shuffleDeck",{side:"self"})
+      ],{clockSearchCost:1}),
+      ruleEffect("trait-pump-on-attack","アタック時・《"+practiceTrait+"》にパワー＋1000","on_attack",[
+        ruleStep("selectCards",{from:ownZone("stage"),as:"boost",count:1,cardType:"character",traits:{names:[practiceTrait],mode:"any"}}),
+        ruleStep("modifyPower",{selection:"boost",amount:1000})
+      ])
+    ]}
 };
 
 const practiceTitles={
   [practiceScenario]:practiceTitle,[levelOneScenario]:levelOneTitle,[levelTwoScenario]:levelTwoTitle,
-  [levelThreeScenario]:levelThreeTitle
+  [levelThreeScenario]:levelThreeTitle,[entryScenario]:entryTitle
 };
 function isAutoRules(scenario=match?.bot?.scenario){
   return scenario===autoRuleScenario||Object.hasOwn(practiceTitles,scenario);
@@ -92,8 +120,9 @@ function practiceDeck(deck,scenario){
   // Single specimens for the effect test. The player deck remains independent.
   const replaced=new Set(["007","008","009","012","013"]);
   if(scenario!==practiceScenario){replaced.add("010");replaced.add("011")}
-  if(scenario===levelTwoScenario||scenario===levelThreeScenario)replaced.add("006");
-  if(scenario===levelThreeScenario)replaced.add("002");
+  if([levelTwoScenario,levelThreeScenario,entryScenario].includes(scenario))replaced.add("006");
+  if([levelThreeScenario,entryScenario].includes(scenario))replaced.add("002");
+  if(scenario===entryScenario){replaced.add("003");replaced.add("004")}
   const entries=Object.entries(practiceCards).slice(0,replaced.size);
   return {title:practiceTitles[scenario],cards:[
     ...deck.cards.map(card=>({...card,num:card.num-Number(replaced.has(card.id.slice(-3)))})),
@@ -137,6 +166,9 @@ function prepareAutoRuleBoards(boards,scenario){
     put(0,"101","level");put(0,"102","level");put(0,"103","clock",1);
     put(0,"007","clock",1);
     put(0,"105","hand");put(0,"109","hand");
+  }else if(scenario===entryScenario){
+    for(const n of ["105","110","111"])put(0,n,"hand");
+    put(0,"104","waiting");put(0,"101","front1");put(0,"007","deck");
   }else{
     put(0,"002","hand",2);put(0,"012","hand");put(0,"001","front0");
     // CX placement draws the top card; the next card is a soul trigger.
@@ -349,6 +381,38 @@ function matchesPracticeTrait(card,trait){
   return data.type==="character"&&WSEffects.matchTags(data,"traits",{names:[trait],mode:"any"})===true;
 }
 
+function autoRuleReorderTop(p,done){
+  const deck=players[p].deck;
+  if(!deck.length){done();return}
+  const top=deck.slice(-2).reverse();
+  const body=showResolution("山札の上"+top.length+"枚（1番が一番上）",top);
+  function finish(swap){
+    closeResolution();
+    if(swap){
+      const last=deck.length-1;
+      [deck[last],deck[last-1]]=[deck[last-1],deck[last]];
+    }
+    autoRuleLog("山札上"+top.length+"枚を確認"+(swap?"して入れ替え":""));
+    done();
+  }
+  deckButton(body,"この順番にする",()=>finish(false));
+  if(top.length===2)deckButton(body,"上下を入れ替える",()=>finish(true));
+}
+function autoRuleClockSearch(p,card,effect,done){
+  const board=players[p],stock=effect.clockSearchCost;
+  if(board.stock.length<stock||(!board.deck.length&&!board.waiting.length)){done();return}
+  const body=showResolution(effect.category,[]);
+  deckButton(body,stock+"ストック払う",()=>{
+    closeResolution();
+    autoRulePay(p,stock);
+    botRevealTop(p,top=>{top.faceUp=true;board.clock.push(top)},found=>{
+      if(!found||board.level.length>=4){done();return}
+      autoRuleLog(stock+"ストック支払い・山札の上1枚をクロックへ");
+      botGuide(card,effect,done,p,false);
+    });
+  });
+  deckButton(body,"払わない",()=>{closeResolution();done()});
+}
 function autoRuleLookOnAttack(p,{cxId,max,trait},done){
   const board=players[p];
   if(!board.cx.some(cx=>cx.id===cxId)){done();return}

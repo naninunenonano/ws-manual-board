@@ -1246,3 +1246,61 @@ test("仮Lv3：落とした4枚にCXがなければ効果ダメージは発生�
   assert.match(saved.bot.log[combo+1],/^トリガー /);
   assert.deepEqual(ruleCounts(saved),[50,50]);
 });
+
+test("青の仮Lv0：山札上2枚を入れ替え、1ストックと手札のCXで控え室のCXを回収",()=>{
+  const page=launchRules("practice-entry");
+  const before=snapshot(page).players[0];
+  assert.equal(page.run('autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-110").uid,"back0")'),true);
+  ruleButton(page,"上下を入れ替える");
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"コストを支払う");
+  assert.equal(page.get("dialogBody").children.some(el=>el.textContent==="仮キャラ クロックサーチ"),false);
+  ruleButton(page,"仮CX ゲート");
+  ruleButton(page,"選択を確定");
+  ruleButton(page,"コストを支払う");
+  ruleButton(page,"仮CX カムバック");
+  ruleButton(page,"選択を確定");
+  const saved=snapshot(page),board=saved.players[0];
+  assert.deepEqual(board.deck.slice(-2).map(c=>c.uid),before.deck.slice(-2).reverse().map(c=>c.uid));
+  assert.equal(board.stock.length,before.stock.length-1);
+  assert.ok(board.hand.some(c=>c.id==="BOT/W000-104"));
+  assert.ok(board.waiting.some(c=>c.id==="BOT/W000-105"));
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});
+
+test("赤の仮Lv0：ストックを払って山札上をクロックに置き、Lv1以下をサーチし、アタックで別の巡遊者を強化",()=>{
+  const page=launchRules("practice-entry");
+  const before=snapshot(page).players[0];
+  assert.equal(page.run('autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-111").uid,"front0")'),true);
+  ruleButton(page,"1ストック払う");
+  assert.equal(page.get("dialogBody").children.some(el=>el.textContent==="仮キャラ ゲート連動"),false);
+  ruleButton(page,"仮キャラ カムバック連動");
+  ruleButton(page,"選択を確定");
+  ruleButton(page,"公開を確認");
+  let saved=snapshot(page),board=saved.players[0];
+  assert.equal(board.clock.at(-1).uid,before.deck.at(-1).uid);
+  assert.equal(board.stock.length,before.stock.length-1);
+  assert.ok(board.hand.some(c=>c.id==="BOT/W000-106"));
+  const oldPower=page.run('botStats(0,players[0].front1[0]).power');
+  page.run('const mine=players[0];botMove(mine,"deck",mine.deck.findIndex(c=>!c.cx),"deck");setTurnPhase("attack");autoRuleAttack(0,"front0",mine.front0[0].uid,"direct")');
+  assert.match(page.get("dialogTitle").textContent,/巡遊者/);
+  ruleButton(page,"仮キャラ 3000");
+  ruleButton(page,"選択を確定");
+  assert.equal(page.run('botStats(0,players[0].front1[0]).power'),oldPower+1000);
+  assert.equal(page.run('botStats(0,players[0].front0[0]).power'),1500);
+  saved=snapshot(page);
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});
+
+test("赤の仮Lv0：最後の山札をクロックに置いた後、リフレッシュしてサーチできる",()=>{
+  const page=launchRules("practice-entry");
+  const top=page.run('const mine=players[0];mine.waiting.push(...mine.deck.splice(0,mine.deck.length-1));mine.deck.at(-1).uid');
+  page.run('autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-111").uid,"front0")');
+  ruleButton(page,"1ストック払う");
+  ruleButton(page,"選ばず進む");
+  const saved=snapshot(page);
+  assert.equal(saved.players[0].clock[0].uid,top);
+  assert.equal(saved.players[0].clock.length,2);
+  assert.ok(saved.players[0].deck.length>0);
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});
