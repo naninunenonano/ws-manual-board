@@ -1304,3 +1304,57 @@ test("赤の仮Lv0：最後の山札をクロックに置いた後、リフレ�
   assert.ok(saved.players[0].deck.length>0);
   assert.deepEqual(ruleCounts(saved),[50,50]);
 });
+
+test("赤Lv3：控え室のCX2枚以下で早出しし、手札を捨ててクロックをストックへ移す",()=>{
+  const page=launchRules("practice-stock");
+  const play='autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-112").uid,"front0")';
+  page.run('const mine=players[0];botMove(mine,"deck",mine.deck.findIndex(c=>c.cx),"waiting")');
+  assert.equal(page.run(play),false);
+  assert.match(page.get("notice").textContent,/必要 Lv3/);
+  page.run('botMove(mine,"waiting",mine.waiting.length-1,"deck")');
+  const before=snapshot(page).players[0];
+  assert.equal(page.run(play),true);
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"仮カウンター");
+  ruleButton(page,"選択を確定");
+  ruleButton(page,"コストを支払う");
+  const saved=snapshot(page),own=saved.players[0];
+  assert.equal(own.stock.length,before.stock.length-1);
+  assert.equal(own.stock.at(-1).uid,before.clock.at(-1).uid);
+  assert.equal(own.stock.at(-1).faceUp,false);
+  assert.deepEqual(own.clock.map(c=>c.uid),before.clock.slice(0,-1).map(c=>c.uid));
+  assert.ok(own.waiting.some(c=>c.id==="BOT/W000-004"));
+  assert.equal(page.run('botEffectCard(players[0].front0[0]).level'),3);
+  assert.equal(page.run('botStats(0,players[0].front0[0]).power'),9500);
+  page.run('botMove(mine,"back0",0,"waiting");updateBoard()');
+  assert.equal(page.run('botStats(0,players[0].front0[0]).power'),9000);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("青Lv2イベント：自分が1ストック払い、相手のストックを相手の山札の上で同数入れ替える",()=>{
+  const page=launchRules("practice-stock");
+  const before=snapshot(page);
+  page.run('cardClick(0,"hand",players[0].hand.findIndex(c=>c.id==="BOT/W000-113"))');
+  ruleButton(page,"プレイする");
+  const saved=snapshot(page),[own,rival]=saved.players;
+  assert.equal(own.stock.length,before.players[0].stock.length-1);
+  assert.deepEqual(own.deck,before.players[0].deck);
+  assert.equal(own.waiting.at(-1).id,"BOT/W000-113");
+  const count=before.players[1].stock.length;
+  assert.deepEqual(rival.waiting.map(c=>c.uid),before.players[1].stock.map(c=>c.uid));
+  assert.deepEqual(rival.stock.map(c=>c.uid),before.players[1].deck.slice(-count).reverse().map(c=>c.uid));
+  assert.ok(rival.stock.every(c=>!c.faceUp));
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});
+
+test("青Lv2イベント：途中のリフレッシュ後も残りのストックを補充する",()=>{
+  const page=launchRules("practice-stock");
+  page.run('const rival=players[1];rival.waiting.push(...rival.deck.splice(0,rival.deck.length-1))');
+  const before=snapshot(page).players[1],count=before.stock.length;
+  assert.equal(page.run('autoRulePlayStockEvent(0,players[0].hand.find(c=>c.id==="BOT/W000-113").uid)'),true);
+  const saved=snapshot(page),rival=saved.players[1];
+  assert.equal(rival.stock.length,count);
+  assert.equal(rival.stock[0].uid,before.deck.at(-1).uid);
+  assert.equal(rival.clock.length,1);
+  assert.deepEqual(ruleCounts(saved),[50,50]);
+});
