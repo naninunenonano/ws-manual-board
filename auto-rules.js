@@ -13,6 +13,8 @@ const levelThreeScenario="practice-level-three";
 const levelThreeTitle="仮カード・Lv3ゲート連動確認";
 const entryScenario="practice-entry";
 const entryTitle="仮カード・Lv0登場時効果確認";
+const stockScenario="practice-stock";
+const stockTitle="仮カード・早出しとストック入れ替え";
 const practiceTrait="巡遊者";
 const ruleStep=(handler,params)=>({handler,params});
 const ownZone=zone=>({side:"self",zone});
@@ -106,12 +108,26 @@ const practiceCards={
         ruleStep("selectCards",{from:ownZone("stage"),as:"boost",count:1,cardType:"character",traits:{names:[practiceTrait],mode:"any"}}),
         ruleStep("modifyPower",{selection:"boost",amount:1000})
       ])
-    ]}
+    ]},
+  "112":{name:"仮キャラ 早出し・クロックストック",color:"red",
+    stats:{level:3,cost:2,power:8500,soul:2},triggers:["ソウル"],
+    handLevelReduction:{maxWaitingCX:2,amount:1},otherTraitBuff:{trait:practiceTrait,powerPerCard:500},
+    effects:[ruleEffect("clock-to-stock-on-play","登場時・クロックをストックへ","from_hand_to_stage",[
+      ruleStep("move",{from:ownZone("clock"),to:ownZone("stock"),count:1,end:"top"})
+    ],{optional:true,conditions:[
+      ruleStep("zoneCount",{from:ownZone("clock"),min:1}),
+      ruleStep("zoneCount",{from:ownZone("hand"),min:1})
+    ],costs:[
+      ruleStep("selectCards",{from:ownZone("hand"),as:"discard",count:1}),
+      ruleStep("move",{from:ownZone("hand"),to:ownZone("waiting"),selection:"discard"})
+    ]})]},
+  "113":{name:"仮イベント ストック入れ替え",type:"event",color:"blue",
+    stats:{level:2,cost:1,power:null,soul:null},triggers:[],replaceOpponentStock:true}
 };
 
 const practiceTitles={
   [practiceScenario]:practiceTitle,[levelOneScenario]:levelOneTitle,[levelTwoScenario]:levelTwoTitle,
-  [levelThreeScenario]:levelThreeTitle,[entryScenario]:entryTitle
+  [levelThreeScenario]:levelThreeTitle,[entryScenario]:entryTitle,[stockScenario]:stockTitle
 };
 function isAutoRules(scenario=match?.bot?.scenario){
   return scenario===autoRuleScenario||Object.hasOwn(practiceTitles,scenario);
@@ -120,9 +136,10 @@ function practiceDeck(deck,scenario){
   // Single specimens for the effect test. The player deck remains independent.
   const replaced=new Set(["007","008","009","012","013"]);
   if(scenario!==practiceScenario){replaced.add("010");replaced.add("011")}
-  if([levelTwoScenario,levelThreeScenario,entryScenario].includes(scenario))replaced.add("006");
-  if([levelThreeScenario,entryScenario].includes(scenario))replaced.add("002");
-  if(scenario===entryScenario){replaced.add("003");replaced.add("004")}
+  if([levelTwoScenario,levelThreeScenario,entryScenario,stockScenario].includes(scenario))replaced.add("006");
+  if([levelThreeScenario,entryScenario,stockScenario].includes(scenario))replaced.add("002");
+  if(scenario===entryScenario||scenario===stockScenario){replaced.add("003");replaced.add("004")}
+  if(scenario===stockScenario){replaced.add("001");replaced.add("005")}
   const entries=Object.entries(practiceCards).slice(0,replaced.size);
   return {title:practiceTitles[scenario],cards:[
     ...deck.cards.map(card=>({...card,num:card.num-Number(replaced.has(card.id.slice(-3)))})),
@@ -169,6 +186,11 @@ function prepareAutoRuleBoards(boards,scenario){
   }else if(scenario===entryScenario){
     for(const n of ["105","110","111"])put(0,n,"hand");
     put(0,"104","waiting");put(0,"101","front1");put(0,"007","deck");
+  }else if(scenario===stockScenario){
+    put(0,"101","level");put(0,"102","clock");put(0,"007","clock");
+    put(0,"103","back0");put(0,"106","front1");
+    put(0,"112","hand");put(0,"113","hand");
+    put(0,"104","waiting");put(0,"105","waiting");
   }else{
     put(0,"002","hand",2);put(0,"012","hand");put(0,"001","front0");
     // CX placement draws the top card; the next card is a soul trigger.
@@ -223,7 +245,8 @@ function autoRuleBuff(p,card){
   if(traitBuff&&botSlots.some(slot=>live[slot].some(c=>c.uid===card.uid))){
     const other=botSlots.flatMap(slot=>live[slot]).filter(c=>
       c.uid!==card.uid&&c.faceUp&&matchesPracticeTrait(c,traitBuff.trait));
-    if(other.length>=traitBuff.count)totals.power+=traitBuff.power;
+    totals.power+=other.length*(traitBuff.powerPerCard??0);
+    if(other.length>=(traitBuff.count??0))totals.power+=traitBuff.power??0;
   }
   if(!live.cx.length)return totals;
   const board=botEffectBoard(p);
@@ -242,11 +265,17 @@ function autoRuleBuff(p,card){
   return totals;
 }
 
+function autoRuleHandLevel(board,definition){
+  const level=definition.stats.level;
+  const reduction=definition.handLevelReduction;
+  if(!reduction||board.waiting.filter(card=>card.cx===true).length>reduction.maxWaitingCX)return level;
+  return Math.max(0,level-reduction.amount);
+}
 function autoRuleLegalPlay(p,card,phase,type){
   const def=botDefinition(card),board=players[p];
   if(!def||def.type!==type)return "このカードは現在の操作ではプレイできません";
   if(match.turn.phase!==phase||(phase!=="attack"&&match.turn.player!==p))return "現在のフェイズではプレイできません";
-  const {level,cost}=def.stats;
+  const level=autoRuleHandLevel(board,def),cost=def.stats.cost;
   if(!Number.isInteger(cost)||board.stock.length<cost)return "ストックが不足しています（必要 "+cost+"枚）";
   if(level!=null&&board.level.length<level)return "プレイヤーのレベルが不足しています（必要 Lv"+level+"）";
   if(def.color&&(type==="climax"||level>0)&&![...board.level,...board.clock].some(c=>botDefinition(c)?.color===def.color))
@@ -276,17 +305,55 @@ function autoRulePlace(p,uid,zone){
   });
   return true;
 }
+function autoRulePlayStockEvent(p,uid){
+  if(ruleBusy||p!==side)return false;
+  const board=players[p],index=board.hand.findIndex(card=>card.uid===uid),card=board.hand[index];
+  const definition=botDefinition(card);
+  if(!definition?.replaceOpponentStock)return false;
+  const error=autoRuleLegalPlay(p,card,"main","event");
+  if(error){message(error);return false}
+
+  selected=null;
+  runRuleOperation(done=>{
+    autoRulePay(p,definition.stats.cost);
+    board.hand.splice(index,1);
+    const target=1-p,rival=players[target];
+    const count=rival.stock.length;
+    for(let i=0;i<count;i++)botMove(rival,"stock",0,"waiting");
+    let replaced=0;
+    function finish(){
+      card.faceUp=true;
+      board.waiting.push(card);
+      autoRuleLog("相手のストック"+count+"枚を控え室へ、相手の山札から"+replaced+"枚をストックへ");
+      done();
+    }
+    function next(){
+      if(replaced===count||rival.level.length>=4){finish();return}
+      botRevealTop(target,top=>{top.faceUp=false;rival.stock.push(top)},found=>{
+        if(!found){finish();return}
+        replaced++;
+        next();
+      });
+    }
+    next();
+  });
+  return true;
+}
 function autoRuleHandMenu(p,index){
   if(ruleBusy||match.turn.player!==p)return false;
-  const card=players[p].hand[index],type=botDefinition(card)?.type,phase=match.turn.phase;
-  if(!(phase==="main"&&type==="character"||phase==="climax"&&type==="climax"))return false;
+  const card=players[p].hand[index],definition=botDefinition(card),type=definition?.type,phase=match.turn.phase;
+  const stockEvent=definition?.replaceOpponentStock;
+  if(!(phase==="main"&&(type==="character"||stockEvent)||phase==="climax"&&type==="climax"))return false;
   const body=showResolution(botCardInfo(card).name,[card]);
   setRuleModal(false);
+  const level=autoRuleHandLevel(players[p],definition);
+  if(level!==definition.stats.level)body.append(document.createTextNode("手札ではLv"+level));
   const error=autoRuleLegalPlay(p,card,phase,type);
   if(error){body.append(document.createTextNode(error));return true}
   deckButton(body,"プレイする",()=>{
     closeResolution();
     if(type==="climax"){autoRulePlace(p,card.uid,"cx");return}
+    if(stockEvent){autoRulePlayStockEvent(p,card.uid);return}
     const targets=showResolution("登場させる枠",[card]);
     setRuleModal(false);
     for(const slot of botSlots){
