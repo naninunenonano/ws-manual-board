@@ -17,6 +17,8 @@ const stockScenario="practice-stock";
 const stockTitle="仮カード・早出しとストック入れ替え";
 const bondScenario="practice-bond";
 const bondTitle="仮カード・絆とLv3への攻撃";
+const waitingScenario="practice-waiting";
+const waitingTitle="仮カード・控え室誘発と特徴参照";
 const practiceTrait="巡遊者";
 const ruleStep=(handler,params)=>({handler,params});
 const ownZone=zone=>({side:"self",zone});
@@ -59,10 +61,7 @@ function discardBond(cardNumbers){
   return ruleEffect("discard-bond","絆・手札1枚を捨てて控え室から回収","from_hand_to_stage",[
     ruleStep("selectCards",{from:waiting,as:"bond",count:1,cardNumbers}),
     ruleStep("move",{from:waiting,to:hand,selection:"bond"})
-  ],{optional:true,conditions:[ruleStep("zoneCount",{from:hand,min:1})],costs:[
-    ruleStep("selectCards",{from:hand,as:"discard",count:1}),
-    ruleStep("move",{from:hand,to:waiting,selection:"discard"})
-  ]});
+  ],{optional:true,conditions:[ruleStep("zoneCount",{from:hand,min:1})],costs:discardHandSteps()});
 }
 const practiceClimax={
   type:"climax",stats:{level:null,cost:0,power:null,soul:null},
@@ -71,6 +70,13 @@ const practiceClimax={
   ],{type:"continuous"})]
 };
 const bondTargetNumbers=["BOT/W000-114"];
+function discardHandSteps(trait){
+  const hand=ownZone("hand");
+  return [
+    ruleStep("selectCards",{from:hand,as:"discard",count:1,...(trait?{traits:{names:[trait],mode:"any"}}:{})}),
+    ruleStep("move",{from:hand,to:ownZone("waiting"),selection:"discard"})
+  ];
+}
 const practiceCards={
   "101":{name:"仮キャラ 3000",color:"red",stats:{level:0,cost:0,power:3000,soul:1}},
   "102":{name:"仮キャラ 応援",color:"blue",stats:{level:0,cost:0,power:1000,soul:1},assist:{power:500}},
@@ -142,19 +148,30 @@ const practiceCards={
   "116":{name:"仮キャラ Lv3への攻撃",color:"blue",stats:{level:2,cost:1,power:7500,soul:1},triggers:["ソウル"],
     effects:[ruleEffect("attack-opposing-level","アタック時・正面Lv3ならパワー＋6000","on_attack",[rulePower(6000)],{
       conditions:[ruleStep("opposingLevel",{level:3})]
-    })]}
+    })]},
+  "117":{name:"仮キャラ サイド不可・控え室誘発",color:"blue",stats:{level:0,cost:0,power:2500,soul:1},triggers:[],
+    cannotSideAttack:true,effects:[ruleEffect("waiting-look","控え室に置かれた時・Lv1以上を探す","on_enter_waiting",
+      discardHandSteps(),{optional:true,conditions:[ruleStep("zoneCount",{from:ownZone("hand"),min:1})],
+        lookTop:{max:4,targetLabel:"Lv1以上のカード",minLevel:1}})]},
+  "118":{name:"仮キャラ 特徴公開・手札交換",color:"red",stats:{level:0,cost:0,power:1000,soul:1},triggers:[],effects:[
+    ruleEffect("trait-console-loot","登場時・《"+practiceTrait+"》公開と手札交換","from_hand_to_stage",[],{traitLoot:practiceTrait}),
+    ruleEffect("trait-discard-draw","登場時・《"+practiceTrait+"》を捨ててドロー","from_hand_to_stage",
+      discardHandSteps(practiceTrait),{optional:true,drawAfterCost:1,
+        conditions:[ruleStep("zoneCount",{from:ownZone("hand"),min:1,traits:{names:[practiceTrait],mode:"any"}})]})
+  ]}
 };
 
 const practiceTitles={
   [practiceScenario]:practiceTitle,[levelOneScenario]:levelOneTitle,[levelTwoScenario]:levelTwoTitle,
-  [levelThreeScenario]:levelThreeTitle,[entryScenario]:entryTitle,[stockScenario]:stockTitle,[bondScenario]:bondTitle
+  [levelThreeScenario]:levelThreeTitle,[entryScenario]:entryTitle,[stockScenario]:stockTitle,[bondScenario]:bondTitle,[waitingScenario]:waitingTitle
 };
 function isAutoRules(scenario=match?.bot?.scenario){
   return scenario===autoRuleScenario||Object.hasOwn(practiceTitles,scenario);
 }
 function practiceDeck(deck,scenario){
-  if(scenario===bondScenario){
-    const added=[["114",2],["115",1],["116",2]].map(([number,num])=>({id:"BOT/W000-"+number,num,cx:false}));
+  if([bondScenario,waitingScenario].includes(scenario)){
+    const specimens=scenario===bondScenario?[["114",2],["115",1],["116",2]]:[["117",2],["118",1],["114",1],["113",1]];
+    const added=specimens.map(([number,num])=>({id:"BOT/W000-"+number,num,cx:false}));
     const replaced=new Set(["005","007","008","009","010"]);
     return {title:bondTitle,cards:[...deck.cards.map(card=>({...card,num:card.num-Number(replaced.has(card.id.slice(-3)))})),...added]};
   }
@@ -220,6 +237,9 @@ function prepareAutoRuleBoards(boards,scenario){
     put(0,"114","level");put(0,"116","clock");put(0,"114","waiting");
     put(0,"115","hand");put(0,"116","hand");
     put(1,"109","front2");
+  }else if(scenario===waitingScenario){
+    put(0,"117","front1");put(0,"117","hand");put(0,"118","hand");
+    for(const n of ["003","113","114","001"])put(0,n,"deck");
   }else{
     put(0,"002","hand",2);put(0,"012","hand");put(0,"001","front0");
     // CX placement draws the top card; the next card is a soul trigger.
@@ -228,7 +248,7 @@ function prepareAutoRuleBoards(boards,scenario){
   put(1,"003","front1");put(1,"001","front0");
   for(const p of [0,1]){
     const board=boards[p];
-    const head=board.deck.splice(-(p===1?1:scenario===practiceScenario?9:scenario===levelOneScenario?6:2));
+    const head=board.deck.splice(-(p===1?1:scenario===practiceScenario?9:scenario===levelOneScenario?6:scenario===waitingScenario?4:2));
     const rest=board.deck.filter(c=>c.cx);
     board.deck=board.deck.filter(c=>!c.cx);
     rest.forEach((card,i)=>board.deck.splice(3+i*5,0,card));
@@ -241,6 +261,38 @@ function prepareAutoRuleBoards(boards,scenario){
     const bottom=[true,false,true,false].map(cx=>deck.splice(deck.findIndex(card=>card.cx===cx),1)[0]);
     deck.unshift(...bottom);
   }
+}
+
+let waitingBoard, knownWaiting=[], waitingAbilities=[];
+function autoRuleCollectWaiting(){
+  if(!isAutoRules()||!isMatchActive())return;
+  const current=players.map(board=>new Set(board.waiting.map(card=>card.uid)));
+  if(waitingBoard!==players){
+    waitingBoard=players;
+    waitingAbilities=[];
+  }else{
+    const turn=match.turn?.player??0;
+    for(const p of [turn,1-turn])for(const card of players[p].waiting){
+      if(!knownWaiting[p].has(card.uid)&&botDefinition(card)?.effects?.some(effect=>effect.timing==="on_enter_waiting")){
+        waitingAbilities.push({p,card});
+      }
+    }
+  }
+  knownWaiting=current;
+}
+function autoRuleResolveWaiting(done){
+  autoRuleCollectWaiting();
+  const entry=waitingAbilities.shift();
+  if(!entry||!isMatchActive()){done();return}
+  const {p,card}=entry;
+  resolveBoardRules(p,()=>botDispatch(card,"on_enter_waiting",()=>autoRuleResolveWaiting(done),p));
+}
+function autoRuleStartWaiting(){
+  if(!isAutoRules()||!isMatchActive())return false;
+  autoRuleCollectWaiting();
+  if(ruleBusy||!waitingAbilities.length||document.getElementById("dialog").open)return false;
+  runRuleOperation(autoRuleResolveWaiting);
+  return true;
 }
 
 function autoRuleLog(text){
@@ -457,13 +509,17 @@ function autoRuleAttackAllowed(p,zone,card){
   return card?.faceUp&&card.orientation===0&&zone.startsWith("front")&&botDefinition(card)?.type==="character"&&
     !(match.turn.number===1&&p===match.firstPlayer&&match.bot.attacked);
 }
+function autoRuleAttackTypes(card,target){
+  if(!target)return ["direct"];
+  return botDefinition(card)?.cannotSideAttack?["front"]:["front","side"];
+}
 function autoRuleAskAttack(p,zone,index){
   const card=players[p][zone][index];
   if(!autoRuleAttackAllowed(p,zone,card))return;
   const rival=players[1-p][autoRuleOpposite(zone)].at(-1);
   const body=showResolution("アタックを宣言",[card]);
   setRuleModal(false);
-  for(const type of rival?["front","side"]:["direct"]){
+  for(const type of autoRuleAttackTypes(card,rival)){
     deckButton(body,({front:"フロントアタック",side:"サイドアタック",direct:"ダイレクトアタック"})[type],()=>{
       closeResolution();autoRuleAttack(p,zone,card.uid,type);
     });
@@ -490,9 +546,11 @@ function autoRuleCounter(p,target,done){
   for(const card of candidates)deckButton(body,botCardInfo(card).name+"を使う",()=>{closeResolution();play(card)});
   deckButton(body,"使わない",()=>{closeResolution();done()});
 }
+function hasPracticeTrait(card,trait){
+  return WSEffects.matchTags(botEffectCard(card),"traits",{names:[trait],mode:"any"})===true;
+}
 function matchesPracticeTrait(card,trait){
-  const data=botEffectCard(card);
-  return data.type==="character"&&WSEffects.matchTags(data,"traits",{names:[trait],mode:"any"})===true;
+  return botDefinition(card)?.type==="character"&&hasPracticeTrait(card,trait);
 }
 
 function autoRuleReorderTop(p,done){
@@ -528,11 +586,14 @@ function autoRuleClockSearch(p,card,effect,done){
   deckButton(body,"払わない",()=>{closeResolution();done()});
 }
 function autoRuleLookOnAttack(p,{cxId,max,trait},done){
+  if(!players[p].cx.some(cx=>cx.id===cxId)){done();return}
+  autoRuleLookTop(p,max,"CXコンボ","《"+trait+"》のキャラ",card=>matchesPracticeTrait(card,trait),done);
+}
+function autoRuleLookTop(p,max,label,targetLabel,matches,done){
   const board=players[p];
-  if(!board.cx.some(cx=>cx.id===cxId)){done();return}
   const limit=Math.min(max,board.deck.length);
   if(!limit){done();return}
-  const body=showResolution("CXコンボ・山札を何枚見るか",[]);
+  const body=showResolution(label+"・山札を何枚見るか",[]);
   const count=deckSelect(limit,limit);
   body.append(count);
   deckButton(body,"見ない",()=>{closeResolution();done()});
@@ -541,7 +602,7 @@ function autoRuleLookOnAttack(p,{cxId,max,trait},done){
     closeResolution();
     if(!Number.isInteger(n)||n<1||n>limit){done();return}
     const viewed=board.deck.slice(-n).reverse();
-    const result=showResolution("CXコンボ・《"+trait+"》のキャラを1枚まで選ぶ",viewed);
+    const result=showResolution(label+"・"+targetLabel+"を1枚まで選ぶ",viewed);
     function finish(chosen){
       closeResolution();
       board.deck.splice(-n);
@@ -549,15 +610,37 @@ function autoRuleLookOnAttack(p,{cxId,max,trait},done){
         card.faceUp=true;
         board[card===chosen?"hand":"waiting"].push(card);
       }
-      autoRuleLog("CXコンボで"+n+"枚確認"+(chosen?"・"+botCardInfo(chosen).name+"を手札へ":"・手札に加えない"));
+      autoRuleLog(label+"で"+n+"枚確認"+(chosen?"・"+botCardInfo(chosen).name+"を手札へ":"・手札に加えない"));
       resolveBoardRules(p,done);
     }
-    for(const [index,card] of viewed.entries())if(matchesPracticeTrait(card,trait)){
+    for(const [index,card] of viewed.entries())if(matches(card)){
       deckButton(result,(index+1)+"．"+botCardInfo(card).name+"を手札へ",()=>finish(card));
     }
     deckButton(result,"加えない",()=>finish(null));
   });
 }
+function autoRuleTraitLoot(p,source,effect,done){
+  const board=players[p];
+  resolveBoardRules(p,()=>{
+    const revealed=board.deck.at(-1);
+    if(!revealed){done();return}
+    const matched=hasPracticeTrait(revealed,effect.traitLoot);
+    const body=showResolution(effect.category,[revealed]);
+    deckButton(body,matched?"手札に加えて1枚捨てる":"山札の上に戻す",()=>{
+      closeResolution();
+      if(!matched){done();return}
+      botMove(board,"deck",board.deck.length-1,"hand");
+      resolveBoardRules(p,()=>botGuide(source,{...effect,steps:discardHandSteps()},done,p,false));
+    });
+  });
+}
+function autoRuleDrawAfterCost(p,count,done){
+  if(!count){done();return}
+  botRevealTop(p,card=>{card.faceUp=true;players[p].hand.push(card)},found=>{
+    if(found)autoRuleDrawAfterCost(p,count-1,done);else done();
+  });
+}
+
 function autoRuleMillOnAttack(p,{cxId,count},done){
   if(!players[p].cx.some(cx=>cx.id===cxId)){done();return}
   const target=1-p,board=players[target];
@@ -591,7 +674,7 @@ function autoRuleAttack(p,zone,uid,type){
   const board=players[p],rival=players[1-p],opposite=autoRuleOpposite(zone);
   const attacker=board[zone].at(-1),target=rival[opposite].at(-1);
   if(ruleBusy||attacker?.uid!==uid||!autoRuleAttackAllowed(p,zone,attacker)||
-    !(target?["front","side"]:["direct"]).includes(type))return;
+    !autoRuleAttackTypes(attacker,target).includes(type))return;
   const adjustment=type==="direct"?1:type==="side"?-Math.max(0,botEffectCard(target).level??0):0;
   const targetUid=target?.uid;
   selected=null;attacker.orientation=90;match.bot.attacked=true;

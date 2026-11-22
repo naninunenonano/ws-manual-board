@@ -130,6 +130,7 @@ function showMatchScreen() {
   matchElement("battleSide").value = String(side);
   matchElement("battleSide").disabled=!!(match?.bot||match?.online);
   if (isMatchActive()) {
+    autoRuleCollectWaiting();
     ensureTurn();
     const first = match.firstPlayer;
     matchElement("firstPlayerResult").textContent = "先攻：プレイヤー" + (first + 1) +

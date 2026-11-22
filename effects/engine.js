@@ -280,12 +280,17 @@ const WSEffects = (() => {
       card.uid===ctx.choices.opposingUid&&card.type==="character"&&card.level===p.level),
     ["level"]);
   register(conditions,"zoneCount","領域の枚数条件",
-    p=>ref(p.from)&&(p.min!==undefined||p.max!==undefined)
+    p=>ref(p.from)&&(p.traits===undefined||validFilter(p.traits))&&(p.min!==undefined||p.max!==undefined)
       && (p.min===undefined||count(p.min)) && (p.max===undefined||count(p.max))
       && (p.min??0)<=(p.max??Infinity),
-    p=>zoneLabel(p.from)+"の枚数"+(p.min===undefined?"":" "+p.min+"枚以上")+(p.max===undefined?"":" "+p.max+"枚以下"),
-    (ctx,p)=>{const n=pile(ctx,p.from).length;return n>=(p.min??0)&&n<=(p.max??Infinity);},
-    ["from","min","max"]);
+    p=>zoneLabel(p.from)+(p.traits?"の《"+p.traits.names.join("、")+"》":"")+"の枚数"+(p.min===undefined?"":" "+p.min+"枚以上")+(p.max===undefined?"":" "+p.max+"枚以下"),
+    (ctx,p)=>{
+      const results=pile(ctx,p.from).map(card=>!p.traits||matchTags(card,"traits",p.traits));
+      const known=results.filter(result=>result===true).length;
+      const possible=known+results.filter(result=>result===null).length;
+      return known>=(p.min??0)&&possible<=(p.max??Infinity);
+    },
+    ["from","min","max","traits"]);
 
   const filterLabel = filter=>filter.names.join("、")+"（"+({all:"すべて",any:"いずれか",none:"どれも持たない"})[filter.mode]+"）";
   for(const [id,kind] of [["hasTraits","traits"],["hasKeywords","keywords"]]){
