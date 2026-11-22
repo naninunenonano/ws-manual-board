@@ -9,6 +9,8 @@ const levelOneScenario="practice-level-one";
 const levelOneTitle="仮カード・Lv1効果確認";
 const levelTwoScenario="practice-level-two";
 const levelTwoTitle="仮カード・Lv2応援確認";
+const levelThreeScenario="practice-level-three";
+const levelThreeTitle="仮カード・Lv3ゲート連動確認";
 const practiceTrait="巡遊者";
 const ruleStep=(handler,params)=>({handler,params});
 const rulePower=(amount)=>ruleStep("modifyPower",{selection:"@source",amount});
@@ -70,11 +72,18 @@ const practiceCards={
   "107":{name:"仮キャラ ダブルトリガー",color:"blue",triggers:[],stats:{level:1,cost:0,power:4000,soul:1},
     otherTraitBuff:{trait:practiceTrait,count:2,power:1000},extraTriggerCost:1},
   "108":{name:"仮キャラ レベル応援",color:"red",stats:{level:2,cost:1,power:5000,soul:1},
-    triggers:["ソウル"],assist:{powerPerLevel:500}}
+    triggers:["ソウル"],assist:{powerPerLevel:500}},
+  "109":{name:"仮キャラ ゲート連動",color:"blue",stats:{level:3,cost:2,power:10000,soul:2},
+    triggers:["ソウル"],effects:[
+      ruleEffect("heal-on-play","登場時・クロック回復","from_hand_to_stage",[
+        ruleStep("move",{from:{side:"self",zone:"clock"},to:{side:"self",zone:"waiting"},count:1,end:"top"})
+      ],{conditions:[ruleStep("zoneCount",{from:{side:"self",zone:"clock"},min:1})]})
+    ],millOnAttack:{cxId:"BOT/W000-105",count:4}}
 };
 
 const practiceTitles={
-  [practiceScenario]:practiceTitle,[levelOneScenario]:levelOneTitle,[levelTwoScenario]:levelTwoTitle
+  [practiceScenario]:practiceTitle,[levelOneScenario]:levelOneTitle,[levelTwoScenario]:levelTwoTitle,
+  [levelThreeScenario]:levelThreeTitle
 };
 function isAutoRules(scenario=match?.bot?.scenario){
   return scenario===autoRuleScenario||Object.hasOwn(practiceTitles,scenario);
@@ -82,8 +91,9 @@ function isAutoRules(scenario=match?.bot?.scenario){
 function practiceDeck(deck,scenario){
   // Single specimens for the effect test. The player deck remains independent.
   const replaced=new Set(["007","008","009","012","013"]);
-  if(scenario===levelOneScenario||scenario===levelTwoScenario){replaced.add("010");replaced.add("011")}
-  if(scenario===levelTwoScenario)replaced.add("006");
+  if(scenario!==practiceScenario){replaced.add("010");replaced.add("011")}
+  if(scenario===levelTwoScenario||scenario===levelThreeScenario)replaced.add("006");
+  if(scenario===levelThreeScenario)replaced.add("002");
   const entries=Object.entries(practiceCards).slice(0,replaced.size);
   return {title:practiceTitles[scenario],cards:[
     ...deck.cards.map(card=>({...card,num:card.num-Number(replaced.has(card.id.slice(-3)))})),
@@ -123,6 +133,10 @@ function prepareAutoRuleBoards(boards,scenario){
   }else if(scenario===levelTwoScenario){
     put(0,"101","level");put(0,"108","hand");
     put(0,"001","front0");put(0,"106","front1");
+  }else if(scenario===levelThreeScenario){
+    put(0,"101","level");put(0,"102","level");put(0,"103","clock",1);
+    put(0,"007","clock",1);
+    put(0,"105","hand");put(0,"109","hand");
   }else{
     put(0,"002","hand",2);put(0,"012","hand");put(0,"001","front0");
     // CX placement draws the top card; the next card is a soul trigger.
@@ -136,6 +150,13 @@ function prepareAutoRuleBoards(boards,scenario){
     board.deck=board.deck.filter(c=>!c.cx);
     rest.forEach((card,i)=>board.deck.splice(3+i*5,0,card));
     board.deck.push(...head);
+  }
+  if(scenario===levelThreeScenario){
+    const deck=boards[1].deck;
+    // The combo finds two CXs, and its separate damage has two characters on top.
+    put(1,"007","deck",4);
+    const bottom=[true,false,true,false].map(cx=>deck.splice(deck.findIndex(card=>card.cx===cx),1)[0]);
+    deck.unshift(...bottom);
   }
 }
 
@@ -359,6 +380,25 @@ function autoRuleLookOnAttack(p,{cxId,max,trait},done){
     deckButton(result,"加えない",()=>finish(null));
   });
 }
+function autoRuleMillOnAttack(p,{cxId,count},done){
+  if(!players[p].cx.some(cx=>cx.id===cxId)){done();return}
+  const target=1-p,board=players[target];
+  let moved=0,climaxes=0;
+  function next(){
+    if(moved===count||!board.deck.length||board.level.length>=4){
+      autoRuleLog("ゲートCXコンボ・山札の下から"+moved+"枚／CX "+climaxes+"枚");
+      if(!climaxes||board.level.length>=4){done();return}
+      botDamage(target,climaxes,done);
+      return;
+    }
+    const card=botMove(board,"deck",0,"waiting");
+    moved++;
+    if(card.cx===true)climaxes++;
+    resolveBoardRules(target,next);
+  }
+  resolveBoardRules(target,next);
+}
+
 function autoRuleTriggerCount(p,cost,done){
   if(!cost||players[p].stock.length<cost){done(1);return}
   const body=showResolution(cost+"ストックでトリガーチェックを2回にする？",[]);
@@ -407,8 +447,14 @@ function autoRuleAttack(p,zone,uid,type){
     botDispatch(attacker,"on_attack",()=>{
       const definition=botDefinition(attacker);
       const check=()=>autoRuleTriggerCount(p,definition?.extraTriggerCost,trigger);
-      if(definition?.lookOnAttack)autoRuleLookOnAttack(p,definition.lookOnAttack,check);
-      else check();
+      const afterLook=()=>{
+        if(!definition?.millOnAttack){check();return}
+        autoRuleMillOnAttack(p,definition.millOnAttack,()=>{
+          if(rival.level.length>=4)done();else check();
+        });
+      };
+      if(definition?.lookOnAttack)autoRuleLookOnAttack(p,definition.lookOnAttack,afterLook);
+      else afterLook();
     },p);
   });
 }
