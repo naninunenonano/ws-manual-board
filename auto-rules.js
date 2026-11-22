@@ -15,6 +15,8 @@ const entryScenario="practice-entry";
 const entryTitle="仮カード・Lv0登場時効果確認";
 const stockScenario="practice-stock";
 const stockTitle="仮カード・早出しとストック入れ替え";
+const bondScenario="practice-bond";
+const bondTitle="仮カード・絆とLv3への攻撃";
 const practiceTrait="巡遊者";
 const ruleStep=(handler,params)=>({handler,params});
 const ownZone=zone=>({side:"self",zone});
@@ -52,12 +54,23 @@ function salvageTrigger(name,cardType){
     ruleStep("move",{from:waiting,to:hand,selection:"salvage"})
   ],{type:"trigger"});
 }
+function discardBond(cardNumbers){
+  const waiting=ownZone("waiting"),hand=ownZone("hand");
+  return ruleEffect("discard-bond","絆・手札1枚を捨てて控え室から回収","from_hand_to_stage",[
+    ruleStep("selectCards",{from:waiting,as:"bond",count:1,cardNumbers}),
+    ruleStep("move",{from:waiting,to:hand,selection:"bond"})
+  ],{optional:true,conditions:[ruleStep("zoneCount",{from:hand,min:1})],costs:[
+    ruleStep("selectCards",{from:hand,as:"discard",count:1}),
+    ruleStep("move",{from:hand,to:waiting,selection:"discard"})
+  ]});
+}
 const practiceClimax={
   type:"climax",stats:{level:null,cost:0,power:null,soul:null},
   effects:[ruleEffect("cx-1001","パワー＋1000・ソウル＋1","while_in_cx",[
     ruleStep("continuousCxBuff",{side:"self",power:1000,soul:1})
   ],{type:"continuous"})]
 };
+const bondTargetNumbers=["BOT/W000-114"];
 const practiceCards={
   "101":{name:"仮キャラ 3000",color:"red",stats:{level:0,cost:0,power:3000,soul:1}},
   "102":{name:"仮キャラ 応援",color:"blue",stats:{level:0,cost:0,power:1000,soul:1},assist:{power:500}},
@@ -122,17 +135,29 @@ const practiceCards={
       ruleStep("move",{from:ownZone("hand"),to:ownZone("waiting"),selection:"discard"})
     ]})]},
   "113":{name:"仮イベント 光景",type:"event",color:"blue",
-    stats:{level:2,cost:1,power:null,soul:null},triggers:[],eventEffect:"光景"}
+    stats:{level:2,cost:1,power:null,soul:null},triggers:[],eventEffect:"光景"},
+  "114":{name:"仮キャラ 赤Lv1 5500",color:"red",stats:{level:1,cost:0,power:5500,soul:1},triggers:[]},
+  "115":{name:"仮キャラ 絆・指定キャラ強化",color:"red",stats:{level:0,cost:0,power:500,soul:1},triggers:[],
+    namedStageBuff:{cardNumbers:bondTargetNumbers,power:1000},effects:[discardBond(bondTargetNumbers)]},
+  "116":{name:"仮キャラ Lv3への攻撃",color:"blue",stats:{level:2,cost:1,power:7500,soul:1},triggers:["ソウル"],
+    effects:[ruleEffect("attack-opposing-level","アタック時・正面Lv3ならパワー＋6000","on_attack",[rulePower(6000)],{
+      conditions:[ruleStep("opposingLevel",{level:3})]
+    })]}
 };
 
 const practiceTitles={
   [practiceScenario]:practiceTitle,[levelOneScenario]:levelOneTitle,[levelTwoScenario]:levelTwoTitle,
-  [levelThreeScenario]:levelThreeTitle,[entryScenario]:entryTitle,[stockScenario]:stockTitle
+  [levelThreeScenario]:levelThreeTitle,[entryScenario]:entryTitle,[stockScenario]:stockTitle,[bondScenario]:bondTitle
 };
 function isAutoRules(scenario=match?.bot?.scenario){
   return scenario===autoRuleScenario||Object.hasOwn(practiceTitles,scenario);
 }
 function practiceDeck(deck,scenario){
+  if(scenario===bondScenario){
+    const added=[["114",2],["115",1],["116",2]].map(([number,num])=>({id:"BOT/W000-"+number,num,cx:false}));
+    const replaced=new Set(["005","007","008","009","010"]);
+    return {title:bondTitle,cards:[...deck.cards.map(card=>({...card,num:card.num-Number(replaced.has(card.id.slice(-3)))})),...added]};
+  }
   // Single specimens for the effect test. The player deck remains independent.
   const replaced=new Set(["007","008","009","012","013"]);
   if(scenario!==practiceScenario){replaced.add("010");replaced.add("011")}
@@ -191,6 +216,10 @@ function prepareAutoRuleBoards(boards,scenario){
     put(0,"103","back0");put(0,"106","front1");
     put(0,"112","hand");put(0,"113","hand");
     put(0,"104","waiting");put(0,"105","waiting");
+  }else if(scenario===bondScenario){
+    put(0,"114","level");put(0,"116","clock");put(0,"114","waiting");
+    put(0,"115","hand");put(0,"116","hand");
+    put(1,"109","front2");
   }else{
     put(0,"002","hand",2);put(0,"012","hand");put(0,"001","front0");
     // CX placement draws the top card; the next card is a soul trigger.
@@ -247,6 +276,13 @@ function autoRuleBuff(p,card){
       c.uid!==card.uid&&c.faceUp&&matchesPracticeTrait(c,traitBuff.trait));
     totals.power+=other.length*(traitBuff.powerPerCard??0);
     if(other.length>=(traitBuff.count??0))totals.power+=traitBuff.power??0;
+  }
+  if(botSlots.some(slot=>live[slot].at(-1)?.uid===card.uid)){
+    for(const slot of botSlots){
+      const source=live[slot].at(-1);
+      const buff=source?.faceUp?botDefinition(source)?.namedStageBuff:null;
+      if(buff?.cardNumbers.includes(card.id))totals.power+=buff.power;
+    }
   }
   if(!live.cx.length)return totals;
   const board=botEffectBoard(p);
@@ -597,7 +633,7 @@ function autoRuleAttack(p,zone,uid,type){
       };
       if(definition?.lookOnAttack)autoRuleLookOnAttack(p,definition.lookOnAttack,afterLook);
       else afterLook();
-    },p);
+    },p,{opposingUid:targetUid});
   });
 }
 function autoRuleBotStep(){

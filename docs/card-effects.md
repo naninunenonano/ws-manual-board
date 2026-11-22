@@ -25,9 +25,14 @@ PR #58のブラウザデータとJSON入出力はschemaVersion 1を維持しま�
 
 | 効果名 | 解決する内容 |
 | --- | --- |
+| 手札を捨てる絆 | 手札から舞台に置いた時、任意で手札を1枚捨て、指定カードを控え室から手札へ戻す。 |
 | 光景 | 相手のストックをすべて控え室に置き、相手の山札の上から同じ枚数を相手のストックへ置く。途中で山札が尽きたら、通常のリフレッシュ処理を挟む。 |
 
 Bot戦のイベントを追加するときは、[auto-rules.js](../auto-rules.js) のカード定義に `eventEffect: "光景"` を指定すると登録済みの処理を使えます。レベル、色、プレイコスト、トリガーはカードごとに指定します。
+
+手札を捨てる絆は `discardBond(cardNumbers)` に回収できるカード番号を渡します。指定したキャラの永続強化を併せ持つ場合は、別に `namedStageBuff: {cardNumbers, power}` を指定します。各カード番号は明示的に登録します。
+
+アタック時に正面のキャラのレベルを参照する場合は、条件に `opposingLevel: {level}` を指定します。Bot戦が正面の個体IDを渡し、舞台上のそのキャラの現在レベルを参照します。そのターンのパワー変更は `modifyPower` を組み合わせます。
 
 ## 効果定義
 
@@ -46,7 +51,7 @@ Bot戦のイベントを追加するときは、[auto-rules.js](../auto-rules.js
 | `move` | `from`, `to` と `count` または `selection`（選択ID）。上／下を `end` と `position` で指定でき、既定は両方 `top`。移動する複数枚の並びを維持。 |
 | `draw` | `side`, `count`。山札の上から引いた順に手札へ。 |
 | `payStock` | `side`, `count`。ストックの上から順に控え室へ。 |
-| `selectCards` | `from`, `count`, `as`（選択ID）。実行時の `choices[選択ID]` に個体IDの配列を渡す。 |
+| `selectCards` | `from`, `count`, `as`（選択ID）。`cardNumbers` には対象のカード番号を配列で指定可。実行時の `choices[選択ID]` に個体IDの配列を渡す。 |
 | `modifyPower`, `modifySoul` | `selection`, `amount`。選択した個体の数値を指定した分だけ増減。 |
 | `hasTraits`, `hasKeywords` | 条件用。`uid`、`names`（名前の配列）、`mode`（`any`、`all`、`none`）。 |
 | `zoneCount` | 条件用。`from` と `min` または `max`。両方指定可。 |

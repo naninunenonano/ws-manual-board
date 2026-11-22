@@ -1360,3 +1360,57 @@ test("青Lv2イベント：途中のリフレッシュ後も残りのストッ�
   assert.equal(rival.clock.length,1);
   assert.deepEqual(ruleCounts(saved),[50,50]);
 });
+
+test("絆：手札を1枚捨て、指定カードだけを控え室から回収して舞台で強化する",()=>{
+  const page=launchRules("practice-bond");
+  const play=(number,zone)=>page.run(`autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-${number}").uid,"${zone}")`);
+  const target=snapshot(page).players[0].waiting[0];
+  assert.equal(play("115","back0"),true);
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"仮カウンター");
+  ruleButton(page,"選択を確定");
+  ruleButton(page,"コストを支払う");
+  assert.ok(!page.get("dialogBody").children.some(el=>el.textContent==="仮カウンター"));
+  ruleButton(page,"仮キャラ 赤Lv1 5500");
+  ruleButton(page,"選択を確定");
+  const after=snapshot(page).players[0];
+  assert.ok(after.hand.some(c=>c.uid===target.uid));
+  assert.ok(after.waiting.some(c=>c.id==="BOT/W000-004"));
+  assert.equal(play("114","front1"),true);
+  assert.equal(page.run("botStats(0,players[0].front1[0]).power"),6500);
+  page.run('botMove(players[0],"back0",0,"waiting");updateBoard()');
+  assert.equal(page.run("botStats(0,players[0].front1[0]).power"),5500);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("絆：回収前に中止しても手札コストと控え室のカードはそのまま",()=>{
+  const page=launchRules("practice-bond");
+  const before=snapshot(page).players[0];
+  page.run('autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-115").uid,"back0")');
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"仮カウンター");
+  ruleButton(page,"選択を確定");
+  ruleButton(page,"コストを支払う");
+  ruleButton(page,"効果確認を中止");
+  const after=snapshot(page).players[0];
+  assert.deepEqual(after.hand,before.hand.filter(c=>c.id!=="BOT/W000-115"));
+  assert.deepEqual(after.waiting,before.waiting);
+  assert.equal(after.back0[0].id,"BOT/W000-115");
+});
+
+test("青Lv2：正面がLv3の場合だけ攻撃したターンのパワーが＋6000される",()=>{
+  for(const [lane,type,power] of [["front0","front",13500],["front0","side",13500],["front1","side",7500],["front2","direct",7500]]){
+    const page=launchRules("practice-bond");
+    if(type==="direct")page.run('botMove(players[1],"front0",0,"waiting")');
+    const before=snapshot(page).players[0].stock.length;
+    assert.equal(page.run(`autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-116").uid,"${lane}")`),true);
+    assert.equal(snapshot(page).players[0].stock.length,before-1);
+    assert.equal(page.run(`botStats(0,players[0].${lane}[0]).power`),7500);
+    page.run(`setTurnPhase("attack");autoRuleAttack(0,"${lane}",players[0].${lane}[0].uid,"${type}")`);
+    assert.equal(page.run(`botStats(0,players[0].${lane}[0]).power`),power);
+    if(type==="front")assert.equal(snapshot(page).players[1].front2[0].orientation,180);
+    page.run("botEndTurn(0)");
+    assert.equal(page.run(`botStats(0,players[0].${lane}[0]).power`),7500);
+    assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+  }
+});
