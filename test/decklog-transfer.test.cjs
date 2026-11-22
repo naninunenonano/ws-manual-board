@@ -1414,3 +1414,95 @@ test("青Lv2：正面がLv3の場合だけ攻撃したターンのパワーが�
     assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
   }
 });
+
+test("青Lv0は正面が空いていない場合にサイドアタックを選択できない",()=>{
+  const page=launchRules("practice-waiting");
+  page.run('setTurnPhase("attack");autoRuleAskAttack(0,"front1",0)');
+  assert.ok(page.get("dialogBody").children.some(el=>el.textContent==="フロントアタック"));
+  assert.ok(!page.get("dialogBody").children.some(el=>el.textContent==="サイドアタック"));
+  const pagesBefore=snapshot(page);
+  page.run('autoRuleAttack(0,"front1",players[0].front1[0].uid,"side")');
+  assert.deepEqual(snapshot(page),pagesBefore);
+  page.run('closeResolution();botMove(players[1],"front1",0,"waiting");autoRuleAskAttack(0,"front1",0)');
+  assert.ok(page.get("dialogBody").children.some(el=>el.textContent==="ダイレクトアタック"));
+});
+
+test("青Lv0は舞台と手札の両方から控え室に置かれた時に誘発し、Lv1以上のイベントも選べる",()=>{
+  const page=launchRules("practice-waiting");
+  const before=snapshot(page).players[0];
+  page.run('manualTransfer(0,"front1",0,"waiting")');
+  assert.match(page.get("dialogTitle").textContent,/控え室に置かれた時/);
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"仮カウンター");
+  ruleButton(page,"選択を確定");
+  ruleButton(page,"山札を見る");
+  assert.ok(!page.get("dialogBody").children.some(el=>el.textContent.startsWith("1．")&&el.textContent.endsWith("を手札へ")));
+  ruleButton(page,"3．仮イベント 光景を手札へ");
+  const after=snapshot(page).players[0];
+  assert.equal(after.hand.at(-1).uid,before.deck.at(-3).uid);
+  assert.deepEqual(after.waiting.slice(-3).map(c=>c.uid),[before.deck.at(-1).uid,before.deck.at(-2).uid,before.deck.at(-4).uid]);
+  page.run('manualTransfer(0,"hand",players[0].hand.findIndex(c=>c.id==="BOT/W000-117"),"waiting")');
+  assert.match(page.get("dialogTitle").textContent,/控え室に置かれた時/);
+  ruleButton(page,"使わない");
+  page.run('updateBoard()');
+  assert.equal(page.get("dialog").open,false);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("赤Lv0の2つの登場時能力は順に解決し、2つ目は特徴持ちだけを捨てて引く",()=>{
+  const page=launchRules("practice-waiting");
+  page.run('ruleSampleCards["004"].allTags=false');
+  const before=snapshot(page).players[0];
+  page.run('autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-118").uid,"back0")');
+  assert.match(page.get("dialogTitle").textContent,/公開と手札交換/);
+  ruleButton(page,"手札に加えて1枚捨てる");
+  ruleButton(page,"レベル1の仮キャラ");
+  ruleButton(page,"選択を確定");
+  assert.match(page.get("dialogTitle").textContent,/捨ててドロー/);
+  ruleButton(page,"能力を使う");
+  assert.ok(!page.get("dialogBody").children.some(el=>el.textContent==="仮カウンター"));
+  ruleButton(page,"仮キャラ");
+  ruleButton(page,"選択を確定");
+  const after=snapshot(page).players[0];
+  assert.deepEqual(after.deck.map(c=>c.uid),before.deck.slice(0,-2).map(c=>c.uid));
+  assert.equal(after.hand.at(-1).uid,before.deck.at(-2).uid);
+  assert.equal(after.waiting.at(-1).uid,before.deck.at(-1).uid);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("赤Lv0：山札上に特徴がなければ元に戻し、控え室などからの登場では誘発しない",()=>{
+  const page=launchRules("practice-waiting");
+  page.run('ruleSampleCards["001"]={allTags:false};autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-118").uid,"back0")');
+  const before=page.run("players[0].deck.at(-1).uid");
+  ruleButton(page,"山札の上に戻す");
+  ruleButton(page,"使わない");
+  assert.equal(snapshot(page).players[0].deck.at(-1).uid,before);
+  page.run('manualTransfer(0,"back0",0,"waiting");manualTransfer(0,"waiting",players[0].waiting.length-1,"back0")');
+  assert.equal(page.get("dialog").open,false);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("最後の山札から控え室に置かれた青Lv0はリフレッシュ後も誘発する",()=>{
+  const page=launchRules("practice-waiting");
+  page.run(`runRuleOperation(done=>{
+    const board=players[0];
+    board.waiting.push(...board.deck.splice(0));
+    botMove(board,"hand",board.hand.findIndex(c=>c.id==="BOT/W000-117"),"deck");
+    done();
+  });pullDeck(0,1,"waiting")`);
+  assert.match(page.get("dialogTitle").textContent,/控え室に置かれた時/);
+  ruleButton(page,"使わない");
+  assert.equal(snapshot(page).players[0].clock.length,1);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("赤Lv0：特徴を持つ手札がなければ任意ドローは使えない",()=>{
+  const page=launchRules("practice-waiting");
+  page.run(`for(const number of ["001","003","004"])ruleSampleCards[number]={...ruleSampleCards[number],allTags:false};
+    practiceCards["117"].allTags=false;
+    autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-118").uid,"back0")`);
+  ruleButton(page,"山札の上に戻す");
+  assert.equal(page.get("dialog").open,false);
+  assert.equal(snapshot(page).players[0].waiting.length,0);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
