@@ -37,6 +37,7 @@ function botMove(board,from,index,to,position="top"){
     }
     delete card.markers;
   }
+  autoRuleStageChange(card,from,to,players.indexOf(board));
   if(position==="bottom")board[to].unshift(card);
   else board[to].push(card);
   return card;
@@ -69,10 +70,8 @@ function startBotMatch(deck,scenario){
   if(rules)deck=Object.hasOwn(practiceTitles,scenario)?practiceDeck(botDeck,scenario):{...botDeck,title:"共通ルール確認用デッキ"};
   if(!deck){message("プレイヤー1の使用デッキを選択してください");return}
   if(!rules&&!Object.hasOwn(botScenarioNames,scenario))return;
-  const opponentDeck=scenario===bondScenario?{...botDeck,cards:[
-    ...botDeck.cards.map(card=>({...card,num:card.num-Number(card.id==="BOT/W000-001")})),
-    {id:"BOT/W000-109",num:1,cx:false}
-  ]}:botDeck;
+  const opponentDeck=scenario===bondScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["109",1]],["001"]):
+    scenario===backupScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["120",1]],["009"]):botDeck;
   const boards=[buildMatchBoard(deck,0),buildMatchBoard(opponentDeck,1)];
   const [own,opponent]=boards;
   if(rules){prepareAutoRuleBoards(boards,scenario);}
@@ -105,7 +104,7 @@ function startBotMatch(deck,scenario){
   const opening=scenario==="opening";
   const snapshot={version:1,phase:opening?"mulligan":"active",screen:opening?"mulligan":"battle",
     side:0,firstPlayer:0,mulliganPlayer:0,openingHandDealt:true,decks:[deck,opponentDeck],players:boards,result:null,
-    turn:{player:0,number:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[scenario===waitingScenario?"青Lv0を控え室へ移動して誘発を確認。赤Lv0を出すと公開と任意ドローを順に試せます":scenario===bondScenario?"赤Lv0を出すと絆で控え室の赤Lv1を回収できます。青Lv2を前列①に出すと相手のLv3にアタックできます":scenario===stockScenario?"赤Lv3は控え室のCXが2枚以下ならLv2で登場できます。青のイベントで相手のストックを入れ替えられます":scenario===entryScenario?"手札の青Lv0で山札調整とCX回収、赤Lv0でクロックサーチを確認できます":scenario===levelThreeScenario?"青Lv3を前列①に出し、ゲートCXを置いてアタックできます":scenario===levelTwoScenario?"手札のLv2を後列①に置き、前のLv0とLv1のパワーを確認できます":scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
+    turn:{player:0,number:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[scenario===backupScenario?"赤Lv3を前列①にプレイできます。青Lv2の助太刀は相手のフロントアタック時に使えます":scenario===waitingScenario?"青Lv0を控え室へ移動して誘発を確認。赤Lv0を出すと公開と任意ドローを順に試せます":scenario===bondScenario?"赤Lv0を出すと絆で控え室の赤Lv1を回収できます。青Lv2を前列①に出すと相手のLv3にアタックできます":scenario===stockScenario?"赤Lv3は控え室のCXが2枚以下ならLv2で登場できます。青のイベントで相手のストックを入れ替えられます":scenario===entryScenario?"手札の青Lv0で山札調整とCX回収、赤Lv0でクロックサーチを確認できます":scenario===levelThreeScenario?"青Lv3を前列①に出し、ゲートCXを置いてアタックできます":scenario===levelTwoScenario?"手札のLv2を後列①に置き、前のLv0とLv1のパワーを確認できます":scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
   if(!writeMatch(snapshot))return;
   match=snapshot;players=boards;side=0;selected=null;mulliganSelection=new Set();
   showMatchScreen();
@@ -163,7 +162,10 @@ function botApplyEffect(state,destinations,p){
         delete card.markers;
       }
       const target=zone==="stage"?slots.get(entry.uid):zone;
-      if(old.zone!==target)card.faceUp=!["deck","stock"].includes(target);
+      if(old.zone!==target){
+        card.faceUp=!["deck","stock"].includes(target);
+        autoRuleStageChange(card,old.zone,target,p);
+      }
       next[target].push(card);
     }
   }
@@ -317,6 +319,8 @@ function botEndTurn(p){
       if(card.turnPowerBonus)card.botPower-=card.turnPowerBonus;
       if(card.turnSoulBonus)card.botSoul-=card.turnSoulBonus;
       delete card.turnPowerBonus;delete card.turnSoulBonus;
+      delete card.botBackupReverse;
+      if(card.botEntryBattleBuff?.until<match.turn.number)delete card.botEntryBattleBuff;
     }
   }
   match.bot.uses={};
@@ -367,9 +371,13 @@ function botBattle(p,zone,attackUid,defenceUid,opposite=zone){
     botMessage("パワー未登録のキャラがいるため、バトルのリバースは手動で確認してください");
     return;
   }
+  const reversals=[];
+  if(defence<=attack&&defender.orientation!==180)reversals.push({owner:p,source:attacker,target:defender,slot:opposite});
+  if(attack<=defence&&attacker.orientation!==180)reversals.push({owner:1-p,source:defender,target:attacker,slot:zone});
   if(attack<=defence)attacker.orientation=180;
   if(defence<=attack)defender.orientation=180;
   if(isAutoRules())autoRuleLog("バトル "+attack+" 対 "+defence+(attack===defence?"（両方リバース）":attack<defence?"（攻撃側リバース）":"（防御側リバース）"));
+  return reversals;
 }
 
 function botHumanAttack(p,zone,index){

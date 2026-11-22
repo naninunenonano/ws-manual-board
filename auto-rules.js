@@ -19,6 +19,8 @@ const bondScenario="practice-bond";
 const bondTitle="仮カード・絆とLv3への攻撃";
 const waitingScenario="practice-waiting";
 const waitingTitle="仮カード・控え室誘発と特徴参照";
+const backupScenario="practice-backup";
+const backupTitle="仮カード・早出しと助太刀";
 const practiceTrait="巡遊者";
 const ruleStep=(handler,params)=>({handler,params});
 const ownZone=zone=>({side:"self",zone});
@@ -158,10 +160,16 @@ const practiceCards={
     ruleEffect("trait-discard-draw","登場時・《"+practiceTrait+"》を捨ててドロー","from_hand_to_stage",
       discardHandSteps(practiceTrait),{optional:true,drawAfterCost:1,
         conditions:[ruleStep("zoneCount",{from:ownZone("hand"),min:1,traits:{names:[practiceTrait],mode:"any"}})]})
-  ]}
+  ]},
+  "119":{name:"仮キャラ 早出し・助太刀封じ",color:"red",stats:{level:3,cost:2,power:9000,soul:2},triggers:["ソウル"],
+    handLevelReduction:{stageTrait:practiceTrait,count:4,amount:1},
+    entryBattleBuff:{power:4500,blocksBackup:true,untilOpponentEnd:true},reverseMove:{zone:"clock",stock:1}},
+  "120":{name:"仮キャラ 助太刀3000・思い出送り",color:"blue",stats:{level:2,cost:1,power:2500,soul:1},triggers:["ソウル"],
+    backup:{power:3000,reverseMove:{zone:"memory"}}}
 };
 
 const practiceTitles={
+  [backupScenario]:backupTitle,
   [practiceScenario]:practiceTitle,[levelOneScenario]:levelOneTitle,[levelTwoScenario]:levelTwoTitle,
   [levelThreeScenario]:levelThreeTitle,[entryScenario]:entryTitle,[stockScenario]:stockTitle,[bondScenario]:bondTitle,[waitingScenario]:waitingTitle
 };
@@ -169,11 +177,10 @@ function isAutoRules(scenario=match?.bot?.scenario){
   return scenario===autoRuleScenario||Object.hasOwn(practiceTitles,scenario);
 }
 function practiceDeck(deck,scenario){
+  if(scenario===backupScenario)return practiceDeckWithSpecimens(deck,backupTitle,[["119",1],["120",1],["114",1]],["007","008","009"]);
   if([bondScenario,waitingScenario].includes(scenario)){
     const specimens=scenario===bondScenario?[["114",2],["115",1],["116",2]]:[["117",2],["118",1],["114",1],["113",1]];
-    const added=specimens.map(([number,num])=>({id:"BOT/W000-"+number,num,cx:false}));
-    const replaced=new Set(["005","007","008","009","010"]);
-    return {title:bondTitle,cards:[...deck.cards.map(card=>({...card,num:card.num-Number(replaced.has(card.id.slice(-3)))})),...added]};
+    return practiceDeckWithSpecimens(deck,practiceTitles[scenario],specimens,["005","007","008","009","010"]);
   }
   // Single specimens for the effect test. The player deck remains independent.
   const replaced=new Set(["007","008","009","012","013"]);
@@ -187,6 +194,10 @@ function practiceDeck(deck,scenario){
     ...deck.cards.map(card=>({...card,num:card.num-Number(replaced.has(card.id.slice(-3)))})),
     ...entries.map(([number,card])=>({id:"BOT/W000-"+number,num:1,cx:card.type==="climax"}))
   ]};
+}
+function practiceDeckWithSpecimens(deck,title,specimens,replaced){
+  const added=specimens.map(([number,num])=>({id:"BOT/W000-"+number,num,cx:false}));
+  return {title,cards:[...deck.cards.map(card=>({...card,num:card.num-Number(replaced.includes(card.id.slice(-3)))})),...added]};
 }
 function preparePracticeCards(board){
   function put(number,to){
@@ -240,6 +251,10 @@ function prepareAutoRuleBoards(boards,scenario){
   }else if(scenario===waitingScenario){
     put(0,"117","front1");put(0,"117","hand");put(0,"118","hand");
     for(const n of ["003","113","114","001"])put(0,n,"deck");
+  }else if(scenario===backupScenario){
+    put(0,"114","level");put(1,"007","level");
+    for(const slot of ["front1","front2","back0","back1"])put(0,"007",slot);
+    put(0,"119","hand");put(0,"120","hand");put(1,"120","hand");put(1,"002","front2");
   }else{
     put(0,"002","hand",2);put(0,"012","hand");put(0,"001","front0");
     // CX placement draws the top card; the next card is a soul trigger.
@@ -314,7 +329,7 @@ function autoRuleAddTurnStat(card,stat,amount){
 function autoRuleBuff(p,card){
   const live=players[p];
   const front=[live.front0,live.front1,live.front2].findIndex(zone=>zone.some(c=>c.uid===card.uid));
-  const totals={power:0,soul:0};
+  const totals={power:autoRuleEntryBattleBuff(card)?.power??0,soul:0};
   const level=front<0?0:Math.max(0,botEffectCard(card).level??0);
   for(const [i,slot] of ["back0","back1"].entries()){
     if(front!==i&&front!==i+1)continue;
@@ -356,7 +371,10 @@ function autoRuleBuff(p,card){
 function autoRuleHandLevel(board,definition){
   const level=definition.stats.level;
   const reduction=definition.handLevelReduction;
-  if(!reduction||board.waiting.filter(card=>card.cx===true).length>reduction.maxWaitingCX)return level;
+  if(!reduction)return level;
+  if(reduction.maxWaitingCX!==undefined&&board.waiting.filter(card=>card.cx===true).length>reduction.maxWaitingCX)return level;
+  if(reduction.stageTrait&&botSlots.flatMap(slot=>board[slot]).filter(card=>
+    card.faceUp&&matchesPracticeTrait(card,reduction.stageTrait)).length<reduction.count)return level;
   return Math.max(0,level-reduction.amount);
 }
 function autoRuleLegalPlay(p,card,phase,type){
@@ -526,18 +544,38 @@ function autoRuleAskAttack(p,zone,index){
   }
 }
 
-function autoRuleCounter(p,target,done){
+function autoRuleStageChange(card,from,to,owner){
+  if(!isAutoRules()||isStageZone(from)===isStageZone(to))return;
+  delete card.botEntryBattleBuff;
+  delete card.botBackupReverse;
+  const buff=isStageZone(to)&&botDefinition(card)?.entryBattleBuff;
+  if(buff){
+    const turn=match.turn;
+    const extra=Number(buff.untilOpponentEnd===true&&turn.player===owner);
+    card.botEntryBattleBuff={...buff,until:turn.number+extra};
+  }
+}
+function autoRuleEntryBattleBuff(card){
+  return card?.botEntryBattleBuff?.until>=match.turn.number?card.botEntryBattleBuff:null;
+}
+function autoRuleCounter(p,attacker,target,done){
   const board=players[p];
   const candidates=board.hand.filter(card=>{
     const def=botDefinition(card);
+    if(def?.backup){
+      const blocked=autoRuleEntryBattleBuff(attacker)?.blocksBackup||autoRuleEntryBattleBuff(target)?.blocksBackup;
+      return !blocked&&board.level.length>=def.stats.level&&board.stock.length>=def.stats.cost;
+    }
     return def?.counter&&!autoRuleLegalPlay(p,card,"attack",def.type);
   });
   if(!target||!candidates.length){done();return}
   function play(card){
     autoRulePay(p,botDefinition(card).stats.cost);
     botMove(board,"hand",board.hand.indexOf(card),"waiting");
-    const bonus=botDefinition(card).counter.power;
+    const {backup,counter}=botDefinition(card);
+    const bonus=(backup??counter).power;
     autoRuleAddTurnStat(target,"power",bonus);
+    if(backup?.reverseMove)target.botBackupReverse={...backup.reverseMove,turn:match.turn.number};
     autoRuleLog(botCardInfo(card).name+"を使用（パワー＋"+bonus+"）");
     done();
   }
@@ -670,6 +708,32 @@ function autoRuleTriggerCount(p,cost,done){
   });
   deckButton(body,"払わない",()=>{closeResolution();done(1)});
 }
+function autoRuleResolveReversals(reversals,done){
+  const pending=reversals.flatMap(({owner,source,target,slot})=>{
+    const backup=source.botBackupReverse;
+    const effects=[botDefinition(source)?.reverseMove,backup?.turn===match.turn.number?backup:null];
+    return effects.filter(Boolean).map(effect=>({owner,target,slot,...effect}));
+  });
+  function next(){
+    const effect=pending.shift();
+    if(!effect){done();return}
+    const {owner,target,slot,zone,stock=0}=effect;
+    const rival=players[1-owner];
+    const targetIndex=rival[slot].findIndex(card=>card.uid===target.uid&&card.orientation===180);
+    if(targetIndex<0||players[owner].stock.length<stock){next();return}
+    function moveReversed(){
+      autoRulePay(owner,stock);
+      botMove(rival,slot,targetIndex,zone,"top");
+      autoRuleLog(botCardInfo(target).name+"を"+labels[zone]+"へ"+(stock?"（"+stock+"ストック支払い）":""));
+      resolveBoardRules(owner,()=>resolveBoardRules(1-owner,next));
+    }
+    if(!stock||owner===1){moveReversed();return}
+    const body=showResolution("リバースしたキャラを"+labels[zone]+"へ置く？",[target]);
+    deckButton(body,stock+"ストック払う",()=>{closeResolution();moveReversed()});
+    deckButton(body,"払わない",()=>{closeResolution();next()});
+  }
+  next();
+}
 function autoRuleAttack(p,zone,uid,type){
   const board=players[p],rival=players[1-p],opposite=autoRuleOpposite(zone);
   const attacker=board[zone].at(-1),target=rival[opposite].at(-1);
@@ -689,11 +753,11 @@ function autoRuleAttack(p,zone,uid,type){
       const amount=Math.max(0,botStats(p,active).soul??0);
       autoRuleLog("ソウル "+amount);
       botDamage(1-p,amount,()=>{
-        if(type==="front")botBattle(p,zone,uid,targetUid,opposite);
-        done();
+        if(type==="front")autoRuleResolveReversals(botBattle(p,zone,uid,targetUid,opposite)??[],done);
+        else done();
       });
     }
-    function counter(){if(type==="front")autoRuleCounter(1-p,defender(),damage);else damage()}
+    function counter(){if(type==="front")autoRuleCounter(1-p,current(),defender(),damage);else damage()}
     function trigger(remaining){
       if(!remaining){counter();return}
       let revealed;

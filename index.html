@@ -29,6 +29,7 @@
 <div class="toolbar"><label>パターン <select id="botScenario">
 <option value="practice-stock">仮カード・早出しとストック入れ替え</option>
 <option value="practice-bond">仮カード・絆とLv3への攻撃</option>
+<option value="practice-backup">仮カード・早出しと助太刀</option>
 <option value="practice-waiting">仮カード・控え室誘発と特徴参照</option>
 <option value="practice-entry">仮カード・Lv0登場時効果確認</option>
 <option value="practice-level-three">仮カード・Lv3ゲート連動確認</option>
@@ -144,6 +145,7 @@ function manualTransfer(p,from,index,to,position="top"){
  }
  if(["deck","stock"].includes(to)&&position==="bottom")players[p][to].unshift(card);
  else players[p][to].push(card);
+ autoRuleStageChange(card,from,to,p);
  selected=null;updateBoard();
  if(dispatch)runRuleOperation(done=>botDispatch(card,"from_hand_to_stage",done));
  if(pendingMarkerChoices.length&&!document.getElementById("dialog").open)showPendingMarkerChoices();
@@ -550,6 +552,7 @@ function moveTemporary(p,items,index,to,position="top",target="front0",face="dow
   (owner.markers??=[]).push({card:c,faceUp:face==="up"});
  }else{
   c.faceUp=!["deck","stock"].includes(to);
+  autoRuleStageChange(c,"temporary",to,p);
   if(["deck","stock"].includes(to)&&position==="bottom")players[p][to].unshift(c);
   else players[p][to].push(c);
  }
@@ -1405,6 +1408,7 @@ function resolveEncore(method,hand){
    if(method==="decline"){
      card.orientation=0;
      releaseMarkers(p,card);
+     autoRuleStageChange(card,zone,"waiting",p);
      moveTemporary(p,board[zone],index,"waiting");
    }else card.orientation=90;
    finish();
@@ -1459,8 +1463,8 @@ document.getElementById("clockSkip").onclick=()=>{if(match?.turn?.phase==="clock
 <script src="effects/engine.js?v=8"></script>
 <script src="card-data/load.js?v=2"></script>
 <script src="match-state.js?v=0.53-waiting"></script>
-<script src="auto-rules.js?v=11"></script>
-<script src="bot-match.js?v=10"></script>
+<script src="auto-rules.js?v=12"></script>
+<script src="bot-match.js?v=11"></script>
 <script src="cloud-decks.js?v=0.52"></script>
 <script src="online-match.js?v=0.52-encore"></script>
 <script src="decklog-import.js?v=0.52"></script>
