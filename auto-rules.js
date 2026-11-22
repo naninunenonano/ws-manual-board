@@ -163,7 +163,7 @@ const practiceCards={
   ]},
   "119":{name:"仮キャラ 早出し・助太刀封じ",color:"red",stats:{level:3,cost:2,power:9000,soul:2},triggers:["ソウル"],
     handLevelReduction:{stageTrait:practiceTrait,count:4,amount:1},
-    entryBattleBuff:{power:4500,blocksBackup:true,extraTurns:1},reverseMove:{zone:"clock",stock:1}},
+    entryBattleBuff:{power:4500,blocksBackup:true,untilOpponentEnd:true},reverseMove:{zone:"clock",stock:1}},
   "120":{name:"仮キャラ 助太刀3000・思い出送り",color:"blue",stats:{level:2,cost:1,power:2500,soul:1},triggers:["ソウル"],
     backup:{power:3000,reverseMove:{zone:"memory"}}}
 };
@@ -544,12 +544,16 @@ function autoRuleAskAttack(p,zone,index){
   }
 }
 
-function autoRuleStageChange(card,from,to){
+function autoRuleStageChange(card,from,to,owner){
   if(!isAutoRules()||isStageZone(from)===isStageZone(to))return;
   delete card.botEntryBattleBuff;
   delete card.botBackupReverse;
   const buff=isStageZone(to)&&botDefinition(card)?.entryBattleBuff;
-  if(buff)card.botEntryBattleBuff={...buff,until:match.turn.number+buff.extraTurns};
+  if(buff){
+    const turn=match.turn;
+    const extra=Number(buff.untilOpponentEnd===true&&turn.player===owner);
+    card.botEntryBattleBuff={...buff,until:turn.number+extra};
+  }
 }
 function autoRuleEntryBattleBuff(card){
   return card?.botEntryBattleBuff?.until>=match.turn.number?card.botEntryBattleBuff:null;

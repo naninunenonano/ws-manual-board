@@ -1564,3 +1564,12 @@ test("青Lv2の助太刀は色がなくてもフロントアタック時に1回�
   assert.equal(page.get("dialog").open,false);
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
+
+test("相手ターン中に赤Lv3が舞台へ移動した場合は、その相手ターンの終了時に強化が切れる",()=>{
+  const page=launchRules("practice-backup");
+  page.run(`finishEndTurn();const own=players[0];botMove(own,"hand",own.hand.findIndex(c=>c.id==="BOT/W000-119"),"waiting");
+    manualTransfer(0,"waiting",own.waiting.length-1,"front0")`);
+  assert.equal(page.run('botStats(0,players[0].front0[0]).power'),13500);
+  page.run('finishEndTurn()');
+  assert.equal(page.run('botStats(0,players[0].front0[0]).power'),9000);
+});

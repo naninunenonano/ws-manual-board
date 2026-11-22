@@ -37,7 +37,7 @@ function botMove(board,from,index,to,position="top"){
     }
     delete card.markers;
   }
-  autoRuleStageChange(card,from,to);
+  autoRuleStageChange(card,from,to,players.indexOf(board));
   if(position==="bottom")board[to].unshift(card);
   else board[to].push(card);
   return card;
@@ -164,7 +164,7 @@ function botApplyEffect(state,destinations,p){
       const target=zone==="stage"?slots.get(entry.uid):zone;
       if(old.zone!==target){
         card.faceUp=!["deck","stock"].includes(target);
-        autoRuleStageChange(card,old.zone,target);
+        autoRuleStageChange(card,old.zone,target,p);
       }
       next[target].push(card);
     }

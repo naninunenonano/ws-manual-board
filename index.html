@@ -145,7 +145,7 @@ function manualTransfer(p,from,index,to,position="top"){
  }
  if(["deck","stock"].includes(to)&&position==="bottom")players[p][to].unshift(card);
  else players[p][to].push(card);
- autoRuleStageChange(card,from,to);
+ autoRuleStageChange(card,from,to,p);
  selected=null;updateBoard();
  if(dispatch)runRuleOperation(done=>botDispatch(card,"from_hand_to_stage",done));
  if(pendingMarkerChoices.length&&!document.getElementById("dialog").open)showPendingMarkerChoices();
@@ -552,7 +552,7 @@ function moveTemporary(p,items,index,to,position="top",target="front0",face="dow
   (owner.markers??=[]).push({card:c,faceUp:face==="up"});
  }else{
   c.faceUp=!["deck","stock"].includes(to);
-  autoRuleStageChange(c,"temporary",to);
+  autoRuleStageChange(c,"temporary",to,p);
   if(["deck","stock"].includes(to)&&position==="bottom")players[p][to].unshift(c);
   else players[p][to].push(c);
  }
@@ -1408,7 +1408,7 @@ function resolveEncore(method,hand){
    if(method==="decline"){
      card.orientation=0;
      releaseMarkers(p,card);
-     autoRuleStageChange(card,zone,"waiting");
+     autoRuleStageChange(card,zone,"waiting",p);
      moveTemporary(p,board[zone],index,"waiting");
    }else card.orientation=90;
    finish();

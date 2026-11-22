@@ -44,7 +44,7 @@ Bot戦のイベントを追加するときは、[auto-rules.js](../auto-rules.js
 ### 早出し・助太刀とバトル相手のリバース
 
 - `handLevelReduction: {stageTrait, count, amount}` は、指定特徴の表向きキャラが舞台に必要数以上いる場合の手札レベル修正です。
-- `entryBattleBuff: {power, blocksBackup, extraTurns}` は、舞台に置いたターンから指定数先のターン終了まで有効です。助太刀封じの対象は助太刀で、イベントカウンターは引き続き使用できます。
+- `entryBattleBuff: {power, blocksBackup, untilOpponentEnd}` は、舞台に置いたターンに有効です。`untilOpponentEnd` を指定すると、相手ターンの終了まで有効です。助太刀封じの対象は助太刀で、イベントカウンターは引き続き使用できます。
 - `reverseMove: {zone, stock}` はバトルで新たにリバースさせた相手を指定領域に移動します。`stock` の指定があれば任意の支払いです。
 - `backup: {power, reverseMove}` はフロントアタックのカウンターステップに1枚使用できます。必要レベルとストックコストはカードの `stats` を使います。支払いと自身を控え室に置いた後、防御キャラにそのターン中のパワー修正と、指定があればリバース時の能力を与えます。
 
