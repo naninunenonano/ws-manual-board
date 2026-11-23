@@ -204,16 +204,29 @@ function renderMulligan(){
   const p=match.mulliganPlayer, root=matchElement("mulliganCards");
   matchElement("mulliganProgress").textContent="プレイヤー"+(p+1)+"：交換 "+mulliganSelection.size+"枚";
   root.replaceChildren();
+  root.classList.remove("practice-mulligan");
   match.players[p].hand.forEach((card,i)=>{
     const button=document.createElement("button");
     button.type="button";
     button.style.cssText="width:90px;min-height:140px;border:"+(mulliganSelection.has(i)?"3px solid #f4cf73":"1px solid #6581a5");
     button.setAttribute("aria-pressed",String(mulliganSelection.has(i)));
-    const img=document.createElement("img");
-    const url=officialImageUrl(card.id);
-    if(url){img.src=url;img.alt=cardLabel(card);img.style.cssText="width:75px;height:105px;object-fit:contain";button.append(img);}
-    else button.textContent=cardLabel(card);
+    const details=botCardDetails(card);
+    if(details){
+      button.className="practice-mulligan-card";
+      button.style.cssText="";
+      root.classList.add("practice-mulligan");
+      const name=document.createElement("strong");
+      name.textContent=details.name;
+      button.append(name);
+      appendBotCardDetails(button,details);
+    }else{
+      const img=document.createElement("img");
+      const url=officialImageUrl(card.id);
+      if(url){img.src=url;img.alt=cardLabel(card);img.style.cssText="width:75px;height:105px;object-fit:contain";button.append(img);}
+      else button.textContent=cardLabel(card);
+    }
     const label=document.createElement("span");
+    if(details)label.className="practice-mulligan-status";
     label.textContent=mulliganSelection.has(i)?"交換":"残す";
     button.append(label);
     button.disabled=match.online===true && matchElement("confirmMulligan").disabled;

@@ -243,6 +243,7 @@ async function main() {
     await checkAutoRules(browser,url);
     await checkPracticeCards(browser,url);
     await checkLevelOnePractice(browser,url);
+    await checkPracticeMulligan(browser,url);
   } finally {
     if(browser)await browser.close();
     server.close();
@@ -462,6 +463,34 @@ async function checkLevelOnePractice(browser,url){
   assert.match(await page.locator("#botStatus").innerText(),/CXコンボで4枚確認/);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
   assert.deepEqual(errors,[]);
+  await page.close();
+}
+
+async function checkPracticeMulligan(browser,url){
+  const page=await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
+  await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
+  await page.goto(url);
+  await page.locator("#botSetup summary").tap();
+  await page.locator("#botScenario").selectOption("red-blue-deck");
+  await page.locator("#startBotBattle").tap();
+  const cards=page.locator("#mulliganCards .practice-mulligan-card");
+  assert.equal(await cards.count(),5);
+  for(const card of await cards.all()){
+    assert.match(await card.locator("strong").innerText(),/^仮/);
+    assert.match(await card.locator(".practice-card-stats").innerText(),/トリガー/);
+    assert.ok((await card.locator(".practice-card-effect").first().innerText()).trim());
+  }
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
+  const first=cards.first();
+  await first.tap();
+  assert.equal(await first.getAttribute("aria-pressed"),"true");
+  assert.match(await page.locator("#mulliganProgress").innerText(),/交換 1枚/);
+  await first.tap();
+  assert.equal(await first.getAttribute("aria-pressed"),"false");
+  await page.locator("#confirmMulligan").tap();
+  await page.locator("#boards .player.active .practice-hand-card .card-zoom").first().tap();
+  assert.match(await page.locator("#dialogTitle").innerText(),/^仮/);
+  assert.ok(await page.locator("#dialogBody .practice-card-effect").first().isVisible());
   await page.close();
 }
 

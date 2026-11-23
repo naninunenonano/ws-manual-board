@@ -26,6 +26,33 @@ function botCardInfo(card){
   if(!def)return cardCatalog[card.id]||null;
   return {name:def.name??card.id,level:def.stats?.level,power:def.stats?.power,cost:def.stats?.cost};
 }
+function botCardDetails(card){
+  if(!match?.bot)return null;
+  const def=botDefinition(card);
+  if(!def?.abilityText)return null;
+  const {level,cost,power,soul}=def.stats;
+  const type={character:"キャラ",event:"イベント",climax:"CX"}[def.type];
+  const color={red:"赤",blue:"青"}[def.color]??def.color;
+  const stats=[color,type,level==null?null:"Lv"+level,cost==null||def.type==="climax"?null:"コスト"+cost,
+    power==null?null:"パワー"+power,soul==null?null:"ソウル"+soul,"トリガー "+(def.triggers?.join("・")||"なし")];
+  return {name:def.name,shortName:def.name.replace(/^仮(?:キャラ|イベント|CX) /,""),
+    stats:stats.filter(Boolean).join(" ／ "),abilityText:def.abilityText};
+}
+function appendBotCardDetails(parent,detail){
+  const box=document.createElement("span");
+  box.className="practice-card-detail";
+  const stats=document.createElement("span");
+  stats.className="practice-card-stats";
+  stats.textContent=detail.stats;
+  box.append(stats);
+  for(const line of detail.abilityText){
+    const text=document.createElement("span");
+    text.className="practice-card-effect";
+    text.textContent=line;
+    box.append(text);
+  }
+  parent.append(box);
+}
 function botMove(board,from,index,to,position="top"){
   const card=board[from].splice(index,1)[0];
   if(!card)return null;
@@ -552,7 +579,9 @@ function openBotAbility(){
   const card=selected?.p===0&&isStageZone(selected.z)?players[0][selected.z][selected.index]:null;
   const abilities=botDefinitionForAbilities(card);
   if(!abilities.length)return;
-  const body=showResolution("起動能力",[card]);
+  const details=botCardDetails(card);
+  const body=showResolution(details?details.name+"・起動能力":"起動能力",details?[]:[card]);
+  if(details)appendBotCardDetails(body,details);
   setRuleModal(false);
   for(const ability of abilities)deckButton(body,ability.category??ability.id,()=>{
     closeResolution();
