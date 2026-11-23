@@ -174,7 +174,7 @@ function startBotMatch(deck,scenario){
 function botEffectCard(card){
   const def=botDefinition(card);
   return {uid:card.uid,cardNumber:card.id,name:def?.name??null,type:def?.type??(card.cx?"climax":null),
-    level:card.botLevel??def?.stats?.level??null,power:card.botPower??def?.stats?.power??null,
+    level:card.botLevel??def?.stats?.level??null,cost:def?.stats?.cost??null,power:card.botPower??def?.stats?.power??null,
     soul:card.botSoul??def?.stats?.soul??null,turnLevelBonus:card.turnLevelBonus??0,
     traits:def?.traits??null,keywords:def?.keywords??null,allTags:def?.allTags??false,markers:card.markers??[]};
 }
@@ -244,6 +244,9 @@ function botStats(p,card){
     const bonus=WSEffects.continuousModifiers(botEffectBoard(p),"self",findBotCard).find(entry=>entry.uid===card.uid);
     if(bonus){power=bonus.power;soul=bonus.soul;}
   }
+  if(!isAutoRules()&&power!=null&&botDefinition(card)?.effects?.some(effect=>effect.timing==="on_stage"&&effect.type==="continuous")){
+    power+=WSEffects.continuousStatBonus(botEffectBoard(p),original,"on_stage","power",findBotCard);
+  }
   if(match.turn?.player===p&&power!=null){
     const effect=botDefinition(card)?.effects?.find(item=>item.timing==="own_turn"&&item.type==="continuous");
     const key=effect?.steps?.find(step=>step.handler==="selectCards")?.params.as;
@@ -273,7 +276,7 @@ function botDispatch(card,timing,done,p=0,context={}){
           (botEffectCard(candidate).level??-1)>=minLevel,resume));
       }else if(success&&effect.drawAfterCost)autoRuleDrawAfterCost(p,effect.drawAfterCost,resume);
       else resume();
-    },p,true,context);
+    },p,!effect.steps?.some(step=>step.handler==="chooseBranch"),context);
   }
   next(0);
 }
@@ -282,13 +285,21 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const iterator=WSEffects.guide(ability,botEffectBoard(p),{
     ...context,sourceUid:card.uid,usedThisTurn:match.bot.uses[key]??0
   },findBotCard);
-  function finish(result,destinations=new Map()){
+  function finish(result,destinations=new Map(),entered=[]){
     const success=result.status==="success"&&botApplyEffect(result.state,destinations,p);
     if(success&&ability.limit?.perTurn)match.bot.uses[key]=(match.bot.uses[key]??0)+1;
     const text=success?"解決しました":result.status==="success"?"舞台の空き枠がありません":result.message;
     if(!isAutoRules())botMessage((ability.category??ability.id)+" · "+text);
     else if(result.status!=="condition-not-met")autoRuleLog((ability.category??ability.id)+" · "+text);
-    done?.(success);
+    if(!success||!entered.length){done?.(success);return}
+    function dispatch(index){
+      if(index===entered.length){done?.(true);return}
+      const entry=entered[index];
+      const current=players[p][destinations.get(entry.uid)].find(card=>card.uid===entry.uid);
+      if(current)botDispatch(current,"from_hand_to_stage",()=>dispatch(index+1),p);
+      else dispatch(index+1);
+    }
+    resolveBoardRules(p,()=>dispatch(0));
   }
   function chooseStage(result){
     if(result.status!=="success"){finish(result);return}
@@ -296,24 +307,43 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     const available=botSlots.filter(slot=>!players[p][slot].some(card=>retained.has(card.uid)));
     const staged=new Set(botSlots.flatMap(slot=>players[p][slot].map(card=>card.uid)));
     const entering=result.state.self.stage.filter(card=>!staged.has(card.uid));
-    if(entering.length>available.length){finish(result);return}
+    const replaceable=new Set(result.log.filter(step=>step.replaceStage).flatMap(step=>step.cards));
     const destinations=new Map();
+    function assign(entry,slot){
+      const victims=new Set(players[p][slot].map(card=>card.uid));
+      const displaced=result.state.self.stage.filter(card=>victims.has(card.uid));
+      result.state.self.stage=result.state.self.stage.filter(card=>!victims.has(card.uid));
+      result.state.self.waiting.push(...displaced);
+      destinations.set(entry.uid,slot);
+    }
+    const candidates=entry=>[...new Set(replaceable.has(entry.uid)?[...available,...botSlots]:available)]
+      .filter(slot=>![...destinations.values()].includes(slot));
     if(p===1&&isAutoRules()){
-      entering.forEach((card,i)=>destinations.set(card.uid,available[i]));
-      finish(result,destinations);
+      for(const entry of entering){
+        const slot=candidates(entry)[0];
+        if(!slot){finish(result);return}
+        assign(entry,slot);
+      }
+      finish(result,destinations,entering.filter(entry=>replaceable.has(entry.uid)));
       return;
     }
     function pick(index){
-      if(index===entering.length){finish(result,destinations);return}
+      if(index===entering.length){finish(result,destinations,entering.filter(entry=>replaceable.has(entry.uid)));return}
       const entry=entering[index];
+      const slots=candidates(entry);
+      if(!slots.length){finish(result);return}
       const body=showResolution("登場させる舞台の枠を選ぶ",[{id:entry.cardNumber}]);
-      for(const [i,slot] of available.entries())deckButton(body,labels[slot],()=>{
-        closeResolution();
-        destinations.set(entry.uid,slot);
-        available.splice(i,1);
-        pick(index+1);
-      });
-      deckButton(body,"効果確認を中止",()=>{closeResolution();done?.(false)});
+      for(const slot of slots){
+        const occupant=players[p][slot].at(-1);
+        const replacing=occupant&&result.state.self.stage.some(card=>card.uid===occupant.uid);
+        const label=labels[slot]+(replacing?"（"+(botCardInfo(occupant)?.name??occupant.id)+"を控え室へ）":"");
+        deckButton(body,label,()=>{
+          closeResolution();
+          assign(entry,slot);
+          pick(index+1);
+        });
+      }
+      if(abortable)deckButton(body,"効果確認を中止",()=>{closeResolution();done?.(false)});
     }
     pick(0);
   }
@@ -321,9 +351,15 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     const next=iterator.next(answer);
     if(next.done){chooseStage(next.value);return}
     const prompt=next.value;
+    if(prompt.kind==="deck-empty"){
+      if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
+      resolveBoardRules(p,()=>step(botEffectBoard(p)));
+      return;
+    }
     if(p===1&&isAutoRules()){
       switch(prompt.kind){
-        case "optional":step(true);break;
+        case "optional":case "optional-top":step(true);break;
+        case "branch":step(players[p].clock.length>=5?Math.min(1,prompt.labels.length-1):0);break;
         case "select":{
           const priority=card=>{
             const def=botDefinition({id:card.cardNumber});
@@ -342,7 +378,12 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     const body=showResolution(ability.category??"カード効果",prompt.kind==="reveal"?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
     const add=(label,action)=>deckButton(body,label,()=>{closeResolution();action()});
     const respond=(label,result)=>add(label,()=>step(result));
-    if(prompt.kind==="optional"){
+    if(prompt.kind==="branch"){
+      prompt.labels.forEach((label,index)=>respond(label,index));
+    }else if(prompt.kind==="optional-top"){
+      body.append(document.createTextNode(prompt.label));
+      respond("行う",true);respond("行わない",false);
+    }else if(prompt.kind==="optional"){
       respond("能力を使う",true);respond("使わない",false);
     }else if(prompt.kind==="select"){
       body.append(document.createTextNode(prompt.label+"から選んでください"));

@@ -359,6 +359,9 @@ function autoRuleBuff(p,card){
   const live=players[p];
   const front=[live.front0,live.front1,live.front2].findIndex(zone=>zone.some(c=>c.uid===card.uid));
   const totals={power:autoRuleEntryBattleBuff(card)?.power??0,soul:0};
+  if(botDefinition(card)?.effects?.some(effect=>effect.type==="continuous"&&effect.timing==="on_stage")){
+    totals.power+=WSEffects.continuousStatBonus(botEffectBoard(p),botEffectCard(card),"on_stage","power",findBotCard);
+  }
   const level=front<0?0:Math.max(0,botEffectCard(card).level??0);
   for(const [i,slot] of ["back0","back1"].entries()){
     if(front!==i&&front!==i+1)continue;
@@ -397,8 +400,11 @@ function autoRuleBuff(p,card){
   return totals;
 }
 
-function autoRuleHandLevel(board,definition){
-  const level=definition.stats.level;
+function autoRuleHandLevel(p,card,definition){
+  const board=players[p];
+  const bonus=definition.effects?.some(effect=>effect.type==="continuous"&&effect.timing==="in_hand")
+    ? WSEffects.continuousStatBonus(botEffectBoard(p),botEffectCard(card),"in_hand","level",findBotCard):0;
+  const level=bonus ? definition.stats.level+bonus : definition.stats.level;
   const reduction=definition.handLevelReduction;
   if(!reduction)return level;
   if(reduction.maxWaitingCX!==undefined&&board.waiting.filter(card=>card.cx===true).length>reduction.maxWaitingCX)return level;
@@ -410,7 +416,7 @@ function autoRuleLegalPlay(p,card,phase,type){
   const def=botDefinition(card),board=players[p];
   if(!def||def.type!==type)return "このカードは現在の操作ではプレイできません";
   if(match.turn.phase!==phase||(phase!=="attack"&&match.turn.player!==p))return "現在のフェイズではプレイできません";
-  const level=autoRuleHandLevel(board,def),cost=def.stats.cost;
+  const level=autoRuleHandLevel(p,card,def),cost=def.stats.cost;
   if(!Number.isInteger(cost)||board.stock.length<cost)return "ストックが不足しています（必要 "+cost+"枚）";
   if(level!=null&&board.level.length<level)return "プレイヤーのレベルが不足しています（必要 Lv"+level+"）";
   if(def.color&&(type==="climax"||level>0)&&![...board.level,...board.clock].some(c=>botDefinition(c)?.color===def.color))
@@ -508,7 +514,7 @@ function autoRuleHandMenu(p,index){
   const body=showResolution(botCardInfo(card).name,details?[]:[card]);
   if(details)appendBotCardDetails(body,details);
   setRuleModal(false);
-  const level=autoRuleHandLevel(players[p],definition);
+  const level=autoRuleHandLevel(p,card,definition);
   if(level!==definition.stats.level)body.append(document.createTextNode("手札ではLv"+level));
   const error=autoRuleLegalPlay(p,card,phase,type);
   deckButton(body,"選択解除",()=>{closeResolution();clearCardSelection()});

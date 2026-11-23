@@ -25,7 +25,8 @@ const WSEffects = (() => {
   const typeMatch = (card,type) => type===undefined || card.type===type;
   const levelMatch = (card,maxLevel) => maxLevel===undefined || (integer(card.level) && card.level<=maxLevel);
   const sameNumber = (ctx,left,right) => catalog.sameCardNumber(left,right,ctx.findCard);
-  const matching = (ctx,card,p) => typeMatch(card,p.cardType)&&levelMatch(card,p.maxLevel)
+  const costMatch = (card,maxCost) => maxCost===undefined || (integer(card.cost) && card.cost<=maxCost);
+  const matching = (ctx,card,p) => typeMatch(card,p.cardType)&&levelMatch(card,p.maxLevel)&&costMatch(card,p.maxCost)
     && (!p.cardNumbers || p.cardNumbers.some(number=>sameNumber(ctx,card.cardNumber,number)))
     && (!p.traits || checkTags(card,"traits",p.traits))
     && (!p.keywords || checkTags(card,"keywords",p.keywords))
@@ -137,9 +138,32 @@ const WSEffects = (() => {
   operation("move","カード移動",p=>ref(p.from)&&ref(p.to)
     && (p.from.side!==p.to.side || p.from.zone!==p.to.zone)
     && (word(p.selection)?p.count===undefined&&p.end===undefined:count(p.count)&&p.selection===undefined)
-    && [p.end,p.position].every(v=>v===undefined||end(v)),
+    && [p.end,p.position].every(v=>v===undefined||end(v))
+    && (p.replaceStage===undefined||p.replaceStage===true&&p.to.zone==="stage"&&word(p.selection)),
     p=>zoneLabel(p.from)+"から"+zoneLabel(p.to)+"へ"+(p.selection?"選んだカードを":p.count+"枚を")+"移動",
-    move,["from","to","count","end","position","selection"]);
+    (ctx,p)=>{
+      const cards=move(ctx,p);
+      return p.replaceStage?{cards,replaceStage:true}:cards;
+    },["from","to","count","end","position","selection","replaceStage"]);
+  operation("optionalTopMove","任意で一番上を移動",p=>ref(p.from)&&ref(p.to)&&p.from.side===p.to.side
+    && p.from.zone!==p.to.zone&&word(p.choiceKey)&&word(p.label),
+    p=>p.label,
+    (ctx,p)=>{
+      if(!pile(ctx,p.from).length)return [];
+      const chosen=ctx.choices[p.choiceKey];
+      if(typeof chosen!=="boolean")fail("一番上のカードを移動するか選択してください","needs-choice");
+      return chosen?takeFromTop(ctx,p.from.side,p.from.zone,p.to.zone,1):[];
+    },["from","to","choiceKey","label"]);
+  operation("chooseBranch","実行する効果の選択",p=>word(p.choiceKey)&&Array.isArray(p.branches)&&p.branches.length>=2
+    && p.branches.every(branch=>object(branch)&&word(branch.label)&&Array.isArray(branch.steps)
+      && branch.steps.every(step=>step?.handler!=="chooseBranch")
+      && inspect({optional:false,steps:branch.steps}).issues.length===0),
+    p=>p.branches.map(branch=>branch.label).join(" ／ "),
+    (ctx,p)=>{
+      const index=ctx.choices[p.choiceKey];
+      if(!count(index)||index>=p.branches.length)fail("実行する効果を選んでください","needs-choice");
+      return {branch:index,label:p.branches[index].label};
+    },["choiceKey","branches"]);
   operation("draw","ドロー",p=>knownKey(sides,p.side)&&count(p.count),
     p=>sides[p.side]+"が"+p.count+"枚引く",
     (ctx,p)=>takeFromTop(ctx,p.side,"deck","hand",p.count),["side","count"]);
@@ -151,6 +175,7 @@ const WSEffects = (() => {
     && (p.min===undefined||count(p.min)&&p.min<=p.count)
     && (p.cardType===undefined||["character","event","climax"].includes(p.cardType))
     && (p.maxLevel===undefined||integer(p.maxLevel))
+    && (p.maxCost===undefined||count(p.maxCost))
     && (p.cardNumbers===undefined||names(p.cardNumbers)&&p.cardNumbers.length>0)
     && (p.excludeUid===undefined||word(p.excludeUid))
     && (p.excludeSource===undefined||typeof p.excludeSource==="boolean"),
@@ -170,7 +195,7 @@ const WSEffects = (() => {
       }
       ctx.selections.set(p.as,[...picks]);
       return [...picks];
-    },["from","as","count","min","traits","keywords","cardType","maxLevel","cardNumbers","excludeUid","excludeSource"]);
+    },["from","as","count","min","traits","keywords","cardType","maxLevel","maxCost","cardNumbers","excludeUid","excludeSource"]);
   operation("searchDeck","山札検索",p=>knownKey(sides,p.side)&&word(p.as)&&count(p.max)&&
     (p.cardType===undefined||["character","event","climax"].includes(p.cardType))&&
     (p.maxLevel===undefined||integer(p.maxLevel)),
@@ -221,7 +246,8 @@ const WSEffects = (() => {
       ctx.selections.set(p.as,[...ids]);return [...ids];},["from","as","cardNumber","count"]);
   operation("modifyLevel","レベル増減",p=>word(p.selection)&&integer(p.amount)&&(p.untilTurnEnd===undefined||typeof p.untilTurnEnd==="boolean"),
     p=>"選択したカードのレベルを"+p.amount+"変更",
-    (ctx,p)=>{const ids=ctx.selections.get(p.selection);if(!ids)fail("選択がありません");
+    (ctx,p)=>{const ids=p.selection==="@source"&&ctx.choices.sourceUid?[ctx.choices.sourceUid]:ctx.selections.get(p.selection);
+      if(!ids)fail("選択がありません");
       const found=cardsIn(ctx.board).filter(e=>ids.includes(e.card.uid));if(found.length!==ids.length||found.some(e=>!integer(e.card.level)))fail("レベルを確認してください");
       for(const {card} of found){
         card.level+=p.amount;
@@ -256,11 +282,20 @@ const WSEffects = (() => {
       const [card]=waiting.splice(idx,1);pile(ctx,{side:p.side,zone:"hand"}).push(card);
       return {cards:[card.uid],revealed:[card.uid],stock:ctx.choices.treasureStock?takeFromTop(ctx,p.side,"deck","stock",1):[]};},["side","triggerUid"]);
   register(conditions,"memoryMarkerCount","思い出・マーカー合計",
-    p=>knownKey(sides,p.side)&&count(p.max),
-    p=>"思い出とマーカーの合計が"+p.max+"枚以下",
+    p=>knownKey(sides,p.side)&&(p.min!==undefined||p.max!==undefined)
+      && [p.min,p.max].every(value=>value===undefined||count(value))&&(p.min??0)<=(p.max??Infinity),
+    p=>"思い出とマーカーの合計が"+(p.min==null?p.max+"枚以下":p.max==null?p.min+"枚以上":p.min+"〜"+p.max+"枚"),
     (ctx,p)=>{const n=pile(ctx,{side:p.side,zone:"memory"}).length+
       Object.values(ctx.board[p.side]).flat().reduce((sum,card)=>sum+(card.markers?.length??0),0);
-      return n<=p.max;},["side","max"]);
+      return n>=(p.min??0)&&n<=(p.max??Infinity);},["side","min","max"]);
+  register(conditions,"sourceInZone","このカードの領域",ref, p=>"このカードが"+zoneLabel(p)+"にある",
+    (ctx,p)=>pile(ctx,p).some(card=>card.uid===ctx.choices.sourceUid),["side","zone"]);
+  register(conditions,"sourceMarkerCount","このカードのマーカー枚数",
+    p=>knownKey(sides,p.side)&&count(p.min), p=>"このカードの下にマーカーが"+p.min+"枚以上",
+    (ctx,p)=>{
+      const source=pile(ctx,{side:p.side,zone:"stage"}).find(card=>card.uid===ctx.choices.sourceUid);
+      return !!source&&(source.markers?.length??0)>=p.min;
+    },["side","min"]);
   for (const [id,stat,label] of [["modifyPower","power","パワー"],["modifySoul","soul","ソウル"]]) {
     operation(id,label+"増減",p=>word(p.selection)&&integer(p.amount),
       p=>"選択したカードの"+label+"を"+(p.amount>0?"+":"")+p.amount,
@@ -343,7 +378,7 @@ const WSEffects = (() => {
         if(selections.has(step.params.as))issues.push({status:"invalid",message:at+" の選択IDが重複しています"});
         selections.add(step.params.as);
       }else if (step.params.selection && !selections.has(step.params.selection) &&
-        !(step.params.selection==="@source"&&["modifyPower","modifySoul"].includes(step.handler))){
+        !(step.params.selection==="@source"&&["modifyPower","modifySoul","modifyLevel"].includes(step.handler))){
         issues.push({status:"invalid",message:at+" が未定義の選択 "+step.params.selection+" を参照しています"});
       }
     }
@@ -389,10 +424,16 @@ const WSEffects = (() => {
         if (typeof choices.activate!=="boolean") return result("needs-choice","効果を実行するか選んでください");
         if (!choices.activate) return result("skipped","任意効果を実行しませんでした");
       }
-      for (const entry of entries.filter(entry=>entry.phase!=="conditions")) {
+      const pending=entries.filter(entry=>entry.phase!=="conditions");
+      for(let index=0;index<pending.length;index++){
+        const entry=pending[index];
         at=entry;
         const {handler,params}=entry.step;
         if(guided){
+          if(handler==="chooseBranch")choices[params.choiceKey]=yield {kind:"branch",labels:params.branches.map(branch=>branch.label)};
+          if(handler==="optionalTopMove"&&pile(context,params.from).length){
+            choices[params.choiceKey]=yield {kind:"optional-top",label:params.label};
+          }
           if(handler==="chooseDestination"){
             if(context.selections.get(params.selection)?.length===0)continue;
             choices[params.choiceKey]=yield {kind:"destination",destinations:params.destinations};
@@ -421,6 +462,14 @@ const WSEffects = (() => {
         const details=Array.isArray(outcome)?{cards:outcome}:outcome;
         if(handler==="revealTop"||handler==="revealSelection")details.revealed=details.cards;
         log.push({phase:entry.phase,handler,ok:true,...details});
+        if(handler==="chooseBranch"){
+          const branch=params.branches[details.branch];
+          pending.splice(index+1,0,...instructions({steps:branch.steps}));
+        }
+        if(guided&&handler==="optionalTopMove"&&params.from.zone==="deck"&&details.cards.length&&!pile(context,params.from).length){
+          const refreshed=yield {kind:"deck-empty",state:working};
+          if(refreshed){validateBoard(refreshed);working=context.board=structuredClone(refreshed);}
+        }
         if(guided&&handler!=="treasureTrigger"&&details.revealed?.length){
           const cards=cardsIn(working);
           yield {kind:"reveal",cards:details.revealed.map(uid=>cards.find(entry=>entry.card.uid===uid)?.card).filter(Boolean),
@@ -441,6 +490,22 @@ const WSEffects = (() => {
 
   function guide(effect,board,choices={},findCard) {
     return execute(effect,board,{...choices},true,findCard);
+  }
+
+  function continuousStatBonus(board,card,timing,stat,findCard) {
+    const printed=card?.[stat];
+    if(!integer(printed))return 0;
+    const zone=timing==="in_hand"?"hand":"stage";
+    let bonus=0;
+    for(const effect of findCard(card.cardNumber)?.effects??[]){
+      if(effect.type!=="continuous"||effect.timing!==timing)continue;
+      const result=run(effect,board,{sourceUid:card.uid},findCard);
+      if(result.status==="success"){
+        const value=result.state.self[zone].find(entry=>entry.uid===card.uid)?.[stat];
+        if(integer(value))bonus+=value-printed;
+      }
+    }
+    return bonus;
   }
 
   // Continuous CX modifiers are calculated, never written into printed card stats.
@@ -483,7 +548,7 @@ const WSEffects = (() => {
     return actual.status===expected?.status && equal(actual.state,expected.state);
   }
 
-  return {zones,sides,emptyBoard,validateBoard,cardsIn,effectiveTags,matchTags,inspect,run,guide,compare,continuousModifiers,
+  return {zones,sides,emptyBoard,validateBoard,cardsIn,effectiveTags,matchTags,inspect,run,guide,compare,continuousModifiers,continuousStatBonus,
     describe:(entry)=>entry.implementation?.valid(entry.step.params)
       ? entry.implementation.describe(entry.step.params):String(entry.step?.handler??"未確認"),
     handlers:()=>[...operations,...conditions].map(([id,entry])=>({id,label:entry.label}))};

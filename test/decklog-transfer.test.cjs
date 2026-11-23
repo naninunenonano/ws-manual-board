@@ -1688,3 +1688,45 @@ test("選択解除でカードを動かさず、占有枠は確認するまで�
   assert.equal(own.front0[0].id,"BOT/W000-102");
   assert.equal(own.waiting.at(-1).id,"BOT/W000-101");
 });
+
+test("オトハをLv2でプレイし、登場時のドロー後にリフレッシュを挟んで舞台の枠を選べる",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var testOtohaBoard=players[0];
+    var testOtohaCard=(uid,id)=>({uid,id,faceUp:true,orientation:0,cx:false});
+    for(const zone of zones)testOtohaBoard[zone]=[];
+    testOtohaBoard.hand.push(testOtohaCard("otoha","STS/W140-003"));
+    testOtohaBoard.level.push(testOtohaCard("green","STS/W140-001"),testOtohaCard("level2","BOT/W000-001"));
+    for(const uid of ["stock1","stock2"])testOtohaBoard.stock.push(testOtohaCard(uid,"BOT/W000-006"));
+    for(const uid of ["memory1","memory2"])testOtohaBoard.memory.push(testOtohaCard(uid,"BOT/W000-001"));
+    testOtohaBoard.front1.push({...testOtohaCard("occupied","BOT/W000-001"),
+      markers:[{card:testOtohaCard("marker","BOT/W000-001"),faceUp:false}]});
+    testOtohaBoard.deck.push({...testOtohaCard("drawn","BOT/W000-003"),faceUp:false});
+    testOtohaBoard.waiting.push(testOtohaCard("refresh1","BOT/W000-001"),testOtohaCard("refresh2","BOT/W000-001"));
+  `);
+  assert.equal(page.run('autoRuleHandLevel(0,testOtohaBoard.hand[0],botDefinition(testOtohaBoard.hand[0]))'),2);
+  page.run('cardClick(0,"hand",0)');
+  ruleButton(page,"プレイする");
+  ruleButton(page,"前列①");
+  assert.equal(page.run("testOtohaBoard.stock.length"),0);
+  page.run('testOtohaBoard.front0[0].markers=[{card:testOtohaCard("own-marker","BOT/W000-001"),faceUp:false}]');
+  assert.equal(page.run("botStats(0,testOtohaBoard.front0[0]).power"),11000);
+  page.run("delete testOtohaBoard.front0[0].markers");
+  assert.equal(page.run("botStats(0,testOtohaBoard.front0[0]).power"),6000);
+  ruleButton(page,"1枚まで引き、コスト1以下のキャラを舞台へ");
+  ruleButton(page,"行う");
+  assert.equal(page.run("testOtohaBoard.clock.length"),1);
+  assert.equal(page.run("testOtohaBoard.deck.length"),3);
+  ruleButton(page,"レベル1の仮キャラ");
+  ruleButton(page,"選択を確定");
+  const replace=page.get("dialogBody").children.find(el=>el.textContent?.startsWith("前列②（"));
+  assert.ok(replace);
+  replace.onclick();
+  assert.equal(page.run("testOtohaBoard.front1[0].uid"),"drawn");
+  assert.equal(page.run("testOtohaBoard.front1.length"),1);
+  assert.equal(page.run("testOtohaBoard.waiting.some(c=>c.uid==='occupied')"),true);
+  assert.equal(page.run("testOtohaBoard.waiting.some(c=>c.uid==='marker'&&c.faceUp)"),true);
+  assert.equal(page.run("testOtohaBoard.stock.length"),0);
+  assert.equal(page.run("ruleBusy"),false);
+});

@@ -62,7 +62,7 @@
     el.append(node("strong",name(entry)));
     const powerShown=entry.shownPower??entry.power;
     const soulShown=entry.shownSoul??entry.soul;
-    const details=[entry.name&&entry.cardNumber,typeNames[entry.type],entry.level!=null?"Lv "+entry.level:"",
+    const details=[entry.name&&entry.cardNumber,typeNames[entry.type],entry.level!=null?"Lv "+(entry.shownLevel??entry.level):"",
       entry.cost!=null?"コスト "+entry.cost:"",powerShown!=null?"パワー "+powerShown:"",soulShown!=null?"ソウル "+soulShown:"",
       entry.triggers?.length?"トリガー "+entry.triggers.join("、"):""].filter(Boolean);
     if(details.length) el.append(node("small",details.join(" ／ ")));
@@ -74,15 +74,20 @@
   }
 
   function displayedCard(entry,side,zone,modifiers){
-    if(zone!=="stage"||entry.type!=="character")return entry;
+    if(entry.type!=="character"||!["hand","stage"].includes(zone))return entry;
+    const relativeBoard=side==="self"?board:{self:board.opponent,opponent:board.self};
+    if(zone==="hand"){
+      const bonus=WSEffects.continuousStatBonus(relativeBoard,entry,"in_hand","level",findFormalCard);
+      return bonus?{...entry,shownLevel:entry.level+bonus}:entry;
+    }
     const cx=modifiers.get(entry.uid);
     let power=cx?.power??entry.power;
+    if(power!=null)power+=WSEffects.continuousStatBonus(relativeBoard,entry,"on_stage","power",findFormalCard);
     const definition=catalog&&WSFormalCards.find(catalog,entry.cardNumber);
     if(practiceSide===side&&power!=null){
       for(const ability of definition?.effects?.filter(item=>item.type==="continuous"&&item.timing==="own_turn")??[]){
         const selection=ability.steps.find(step=>step.handler==="selectCards")?.params.as;
         if(!selection)continue;
-        const relativeBoard=side==="self"?board:{self:board.opponent,opponent:board.self};
         const result=WSEffects.run(ability,relativeBoard,{sourceUid:entry.uid,[selection]:[entry.uid]},findFormalCard);
         if(result.status==="success")power+=result.state.self.stage.find(card=>card.uid===entry.uid).power-entry.power;
       }
@@ -158,7 +163,7 @@
     const spent=usage.filter(entry=>(used.get(usageKey(entry.card.uid))??0)>=ability.limit.perTurn).length;
     $("turnUsed").textContent=ability?.limit?.perTurn?"ターン"+ability.limit.perTurn+"回 ／ 使用済み "+spent+"枚":"";
     $("undoBoard").disabled=!undo||!!session;
-    for(const id of ["nextTurn","resetEffectTest","loadPractice","loadFiren","loadSample","testEffect","testCard","testProduct"])$(id).disabled=!!session||(id==="testEffect"&&!ability);
+    for(const id of ["nextTurn","resetEffectTest","loadPractice","loadFiren","loadOtoha","loadSample","testEffect","testCard","testProduct"])$(id).disabled=!!session||(id==="testEffect"&&!ability);
     $("placeCard").querySelectorAll("input,select,button").forEach(el=>el.disabled=!!session);
     $("cancelEffect").hidden=!session;
     $("restoreStart").hidden=!lastStart||!!session;
@@ -310,6 +315,7 @@
     if(entry.effects?.some(item=>item.id===abilityId))$("testEffect").value=abilityId;
     $("testCardStatus").textContent=entry.cardNumber+" ／ "+(entry.name??"名称未確認")+(sample?" ／ 架空のテスト例":"");
     $("loadPractice").hidden=entry.cardNumber!=="STS/W140-001";
+    $("loadOtoha").hidden=entry.cardNumber!=="STS/W140-003";
     readEffect();
   }
   function productCards(){
@@ -357,6 +363,25 @@
     $("boardStatus").textContent="手札のフィレンから舞台へ。凱旋歌をCX置場に出したら、舞台のフィレンでアタックできます。";
     $("testBoardHeading").tabIndex=-1;
     $("testBoardHeading").focus();
+    clearResults();
+  };
+  $("loadOtoha").onclick=()=>{
+    if(session||card?.cardNumber!=="STS/W140-003")return;
+    firenPractice=false;practiceSide="self";
+    changeBoard(()=>{
+      board=WSEffects.emptyBoard();used.clear();turn=1;selected=null;
+      const stageCard=formalCard(card);
+      stageCard.markers=[temporaryCard({name:"パワー確認用のマーカー"})];
+      board.self.stage.push(stageCard);
+      board.self.hand.push(formalCard(card),temporaryCard({name:"コスト1のキャラ",cost:1}));
+      board.self.memory.push(temporaryCard({name:"思い出①"}),temporaryCard({name:"思い出②"}));
+      board.self.deck.push(temporaryCard({name:"ドロー用・コスト0のキャラ",cost:0}));
+      board.self.clock.push(temporaryCard({name:"クロックの下"}),temporaryCard({name:"クロックの上"}));
+    });
+    for(const zone of ["hand","stage","memory","markers","clock"]){
+      $("boardEditor").querySelector('[data-key="self.'+zone+'"]').open=true;
+    }
+    $("boardStatus").textContent="手札のオトハはLv2、舞台のオトハはパワー11000です。登場時・選択効果を選び、テスト開始を押すと二択を確認できます。";
     clearResults();
   };
   $("loadPractice").onclick=()=>{
@@ -439,7 +464,7 @@
       const resolved=session;
       session=null;
       if(next.value.status==="success"){
-        board=next.value.state;
+        if(!["in_hand","on_stage"].includes(resolved.ability.timing))board=next.value.state;
         if(resolved.ability.limit?.perTurn){
           const key=usageKey(resolved.uid,resolved.ability);
           used.set(key,(used.get(key)??0)+1);
@@ -454,6 +479,16 @@
     }
     const step=next.value;
     focusOperation();
+    if(step.kind==="deck-empty"){advance();return}
+    if(step.kind==="branch"){
+      panel.append(node("p","行う効果を1つ選んでください。"),
+        ...step.labels.map((text,index)=>button(text,()=>advance(index))));
+      return;
+    }
+    if(step.kind==="optional-top"){
+      panel.append(node("p",step.label),button("行う",()=>advance(true)),button("行わない",()=>advance(false)));
+      return;
+    }
     if(step.kind==="select"){
       chooseCards(step,ids=>{
         session.chosen[step.from.zone]=ids;
@@ -557,8 +592,9 @@
     const ability=effect();
     if(!ability||session)return;
     if(WSFormalCards.review(ability).status!=="ready"){begin(null);return}
-    if(sample||ability.timing==="manual"||!isOnPlay(ability)&&ability.type!=="activated"){begin(null);return}
-    const entering=isOnPlay(ability),zone=entering?"hand":"stage";
+    const ongoing=["in_hand","on_stage"].includes(ability.timing);
+    if(sample||ability.timing==="manual"||!isOnPlay(ability)&&ability.type!=="activated"&&!ongoing){begin(null);return}
+    const entering=isOnPlay(ability),zone=entering||ability.timing==="in_hand"?"hand":"stage";
     const candidates=board.self[zone].filter(matches);
     if(!candidates.length){
       $("effectChoices").replaceChildren(node("p","自分の"+zones[zone]+"にテスト対象のカードを配置してください。"));return;
