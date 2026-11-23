@@ -1664,3 +1664,27 @@ test("赤青同士の自分のトリガーを確認するまでストックに�
   assert.equal(snapshot(page).players[0].stock.at(-1).id,"BOT/W000-104");
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
+
+test("選択解除でカードを動かさず、占有枠は確認するまで入れ替えない",()=>{
+  const page=launchRules("red-blue-deck");
+  page.click("confirmMulligan");
+  page.run(`setTurnPhase("main");const own=players[0];
+    while(own.hand.length)botMove(own,"hand",0,"deck");
+    const put=(id,zone)=>botMove(own,"deck",own.deck.findIndex(c=>c.id.endsWith(id)),zone);
+    put("101","front0");put("102","hand");selected={p:0,z:"hand",index:0};renderTurnControls()`);
+  assert.equal(page.get("clearSelection").hidden,false);
+  page.click("clearSelection");
+  assert.equal(page.run("selected"),null);
+  const before=snapshot(page);
+  page.run('selected={p:0,z:"hand",index:0};zoneClick(0,"front0")');
+  assert.match(page.get("dialogTitle").textContent,/入れ替えますか/);
+  assert.deepEqual(snapshot(page),before);
+  ruleButton(page,"キャンセル");
+  assert.equal(page.run("selected"),null);
+  assert.deepEqual(snapshot(page),before);
+  page.run('selected={p:0,z:"hand",index:0};zoneClick(0,"front0")');
+  ruleButton(page,"入れ替える");
+  const own=snapshot(page).players[0];
+  assert.equal(own.front0[0].id,"BOT/W000-102");
+  assert.equal(own.waiting.at(-1).id,"BOT/W000-101");
+});
