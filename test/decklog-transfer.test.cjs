@@ -1766,3 +1766,35 @@ test("ナツカのCXコンボとCXトリガー時の回復をアタック中に�
   page.run('botEndTurn(0)');
   assert.equal(page.run("natsukaBoard.front0[0].gainedAbilities"),undefined);
 });
+
+test("コゼットが付与した能力は自分がリバースした時にバトル相手とクロック上を入れ替える",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var drinkBoard=players[0],drinkRival=players[1];
+    var drinkCard=(uid,id="BOT/W000-001")=>({uid,id,faceUp:true,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    drinkBoard.front0.push(drinkCard("cosette","STS/W140-023"));
+    drinkBoard.back0.push(drinkCard("ally"));
+    drinkRival.front2.push(drinkCard("target","STS/W140-004"));
+    drinkRival.level.push(drinkCard("level"));
+    drinkRival.clock.push(drinkCard("older"),drinkCard("top"));
+    drinkRival.deck.push(drinkCard("deck"));
+    runRuleOperation(done=>botDispatch(drinkBoard.front0[0],"from_hand_to_stage",done));
+  `);
+  ruleButton(page,"ドリンクの誘惑 コゼット");
+  ruleButton(page,"仮キャラ");
+  ruleButton(page,"選択を確定");
+  assert.equal(page.run("drinkBoard.back0[0].gainedAbilities.length"),1);
+  page.run(`
+    runRuleOperation(done=>autoRuleResolveReversals(botBattle(0,"front0","cosette","target","front2"),done));
+  `);
+  assert.equal(page.run("drinkBoard.front0[0].orientation"),180);
+  assert.equal(page.run("drinkRival.front2[0].orientation"),0);
+  ruleButton(page,"クロックを入れ替える");
+  assert.equal(page.run("drinkRival.waiting[0].uid"),"top");
+  assert.equal(page.run("drinkRival.clock.map(c=>c.uid).join()"),"older,target");
+  assert.equal(page.run("drinkRival.front2.length"),0);
+  page.run("botEndTurn(0)");
+  assert.equal(page.run("drinkBoard.back0[0].gainedAbilities"),undefined);
+});

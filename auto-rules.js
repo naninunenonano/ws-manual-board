@@ -772,16 +772,36 @@ function autoRuleTriggerCount(p,cost,done){
   deckButton(body,"払わない",()=>{closeResolution();done(1)});
 }
 function autoRuleResolveReversals(reversals,done){
-  const pending=reversals.flatMap(({owner,source,target,slot})=>{
+  const pending=reversals.flatMap(({owner,source,target,slot,sourceSlot})=>{
     const backup=source.botBackupReverse;
-    const effects=[botDefinition(source)?.reverseMove,backup?.turn===match.turn.number?backup:null];
-    return effects.filter(Boolean).map(effect=>({owner,target,slot,...effect}));
+    const effects=isAutoRules()?[botDefinition(source)?.reverseMove,backup?.turn===match.turn.number?backup:null]:[];
+    const granted=(target.gainedAbilities??[]).filter(id=>id==="STS/W140-023:clock-swap");
+    return [
+      ...effects.filter(Boolean).map(effect=>({owner,target,slot,...effect})),
+      ...granted.map(()=>({owner:1-owner,target:source,slot:sourceSlot,clockSwap:true}))
+    ];
   });
   function next(){
     const effect=pending.shift();
     if(!effect){done();return}
     const {owner,target,slot,zone,stock=0}=effect;
     const rival=players[1-owner];
+    if(effect.clockSwap){
+      const index=rival[slot].findIndex(card=>card.uid===target.uid);
+      const level=index<0?null:botEffectCard(rival[slot][index]).level;
+      if(level==null||level<=rival.level.length||!rival.clock.length){next();return}
+      function swapClock(){
+        botMove(rival,"clock",rival.clock.length-1,"waiting");
+        botMove(rival,slot,index,"clock");
+        autoRuleLog(botCardInfo(target).name+"を相手のクロックへ");
+        resolveBoardRules(1-owner,next);
+      }
+      if(owner===1){swapClock();return}
+      const body=showResolution("相手のクロックの一番上を控え室に置き、バトル相手をクロックに置く？",[rival.clock.at(-1),target]);
+      deckButton(body,"クロックを入れ替える",()=>{closeResolution();swapClock()});
+      deckButton(body,"使わない",()=>{closeResolution();next()});
+      return;
+    }
     const targetIndex=rival[slot].findIndex(card=>card.uid===target.uid&&card.orientation===180);
     if(targetIndex<0||players[owner].stock.length<stock){next();return}
     function moveReversed(){

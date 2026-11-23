@@ -518,8 +518,8 @@ function botBattle(p,zone,attackUid,defenceUid,opposite=zone){
     return;
   }
   const reversals=[];
-  if(defence<=attack&&defender.orientation!==180)reversals.push({owner:p,source:attacker,target:defender,slot:opposite});
-  if(attack<=defence&&attacker.orientation!==180)reversals.push({owner:1-p,source:defender,target:attacker,slot:zone});
+  if(defence<=attack&&defender.orientation!==180)reversals.push({owner:p,source:attacker,target:defender,slot:opposite,sourceSlot:zone});
+  if(attack<=defence&&attacker.orientation!==180)reversals.push({owner:1-p,source:defender,target:attacker,slot:zone,sourceSlot:opposite});
   if(attack<=defence)attacker.orientation=180;
   if(defence<=attack)defender.orientation=180;
   if(isAutoRules())autoRuleLog("バトル "+attack+" 対 "+defence+(attack===defence?"（両方リバース）":attack<defence?"（攻撃側リバース）":"（防御側リバース）"));
@@ -546,8 +546,7 @@ function botHumanAttack(p,zone,index){
         deckButton(body,"ダメージを与える",()=>{
           closeResolution();
           botDamage(1-p,Number(amount.value),()=>{
-            botBattle(p,zone,uid,defender?.uid);
-            done();
+            autoRuleResolveReversals(botBattle(p,zone,uid,defender?.uid)??[],done);
           });
         });
       }
@@ -590,8 +589,7 @@ function botAttack(zone){
     botRevealTop(1,card=>{card.faceUp=false;players[1].stock.push(card)},()=>{
       const amount=(botStats(1,attacker).soul??1)+(defender?0:1);
       botDamage(0,amount,()=>{
-        botBattle(1,zone,attacker.uid,defender?.uid);
-        done();
+        autoRuleResolveReversals(botBattle(1,zone,attacker.uid,defender?.uid)??[],done);
       });
     });
   });
