@@ -12,6 +12,7 @@
   const solo=params.get("mode")==="solo";
   let firenPractice=false, practiceSide="self";
   let catalog, card, sample;
+  const findFormalCard=number=>catalog&&WSFormalCards.find(catalog,number);
   let board = WSEffects.emptyBoard(), turn = 1, used = new Map(), serial = 0, selected = null;
   let undo = null, lastStart = null, session = null;
 
@@ -82,7 +83,7 @@
         const selection=ability.steps.find(step=>step.handler==="selectCards")?.params.as;
         if(!selection)continue;
         const relativeBoard=side==="self"?board:{self:board.opponent,opponent:board.self};
-        const result=WSEffects.run(ability,relativeBoard,{sourceUid:entry.uid,[selection]:[entry.uid]});
+        const result=WSEffects.run(ability,relativeBoard,{sourceUid:entry.uid,[selection]:[entry.uid]},findFormalCard);
         if(result.status==="success")power+=result.state.self.stage.find(card=>card.uid===entry.uid).power-entry.power;
       }
     }
@@ -96,7 +97,7 @@
     for(const [side,sideName] of Object.entries(sides)){
       if(firenPractice&&side==="opponent")continue;
       const section=node("section");section.className="effect";
-      const modifiers=new Map(WSEffects.continuousModifiers(board,side,number=>catalog&&WSFormalCards.find(catalog,number)).map(stat=>[stat.uid,stat]));
+      const modifiers=new Map(WSEffects.continuousModifiers(board,side,findFormalCard).map(stat=>[stat.uid,stat]));
       section.append(node("h3",sideName));
       for(const [zone,title] of Object.entries(displayZones)){
         const entries=zone==="markers"?allCards(board).filter(x=>x.side===side&&x.zone===zone).reverse():
@@ -181,7 +182,7 @@
 
   function isOnPlay(ability){return ability?.timing==="from_hand_to_stage"}
   function matches(entry){
-    return !!card&&(entry.cardNumber===card.cardNumber||CardCatalog.cardNumbers(card).includes(entry.cardNumber));
+    return !!card&&CardCatalog.sameCardNumber(entry.cardNumber,card.cardNumber,findFormalCard);
   }
   function changeBoard(next){
     undo=snapshot();
@@ -424,7 +425,7 @@
     }
     clearResults();
     lastStart={state:start,uid,entered};
-    session={iterator:WSEffects.guide(ability,board,{sourceUid:uid,usedThisTurn:used.get(usageKey(uid))??0}),
+    session={iterator:WSEffects.guide(ability,board,{sourceUid:uid,usedThisTurn:used.get(usageKey(uid))??0},findFormalCard),
       before:copy(board),uid,ability,chosen:{}};
     render();
     focusOperation();

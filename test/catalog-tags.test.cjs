@@ -19,7 +19,7 @@ test("products come from the catalog and alias searches return each definition o
   assert.deepEqual(C.selectCards([a,b,c],{product:"商品A"}),[a,b]);
   assert.deepEqual(C.selectCards([a,b,c],{product:"新商品",number:"test/s001"}),[]);
   assert.equal(C.findCard([a,b,c]," test/s001-001sp "),a);
-  assert.equal(C.findCard([a,b,c],"TEST/S001-001S"),undefined);
+  assert.equal(C.findCard([a,b,c],"TEST/S001-001S"),a);
   assert.deepEqual(C.selectCards([a,b,c],{number:"test/s001-001"}),[a]);
 });
 

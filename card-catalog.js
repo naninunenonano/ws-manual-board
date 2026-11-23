@@ -12,6 +12,7 @@ const CardCatalog = (() => {
   const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
   const nonempty = value => typeof value === "string" && value.trim().length > 0;
   const normalizeNumber = value => typeof value === "string" ? value.trim().toUpperCase() : "";
+  const baseNumber = value => normalizeNumber(value).replace(/^([A-Z0-9]+\/[A-Z0-9]+-[A-Z]*\d+)(?:SSP|SP|S|R)$/, "$1");
   const validNumber = number => /^[A-Z0-9]+\/[A-Z0-9]+-[A-Z0-9][A-Z0-9_+.*-]*$/.test(number);
   const empty = () => ({schemaVersion,cards:[]});
 
@@ -212,7 +213,19 @@ const CardCatalog = (() => {
 
   function findCard(cards,number) {
     const id=normalizeNumber(number);
-    return id ? cards.find(card=>cardNumbers(card).includes(id)) : undefined;
+    if (!id) return undefined;
+    const base=baseNumber(id);
+    return cards.find(card=>cardNumbers(card).includes(id))
+      ?? (base!==id ? cards.find(card=>cardNumbers(card).includes(base)) : undefined);
+  }
+
+  function sameCardNumber(left,right,find) {
+    const a=normalizeNumber(left), b=normalizeNumber(right);
+    if (!a || !b) return false;
+    if (a===b) return true;
+    const first=find?.(a), second=find?.(b);
+    if (first || second) return (first?.cardNumber??a)===(second?.cardNumber??b);
+    return baseNumber(a)===baseNumber(b);
   }
 
   function products(cards) {
@@ -221,7 +234,8 @@ const CardCatalog = (() => {
 
   function selectCards(cards,{number="",name="",title=null,product=null} = {}) {
     const id=normalizeNumber(number), byName=name.trim().toLocaleLowerCase();
-    return cards.filter(card => (!id || cardNumbers(card).some(number=>number.includes(id)))
+    const exact=findCard(cards,id);
+    return cards.filter(card => (!id || (exact?card===exact:cardNumbers(card).some(number=>number.includes(id))))
       && (typeof card.name==="string"?card.name:"").toLocaleLowerCase().includes(byName)
       && (title === null || title === (card.title ?? ""))
       && (product === null || product === (card.product ?? "")));
@@ -233,7 +247,7 @@ const CardCatalog = (() => {
   }
 
   return {empty,types,requiredStats,statNames,normalizeNumber,validNumber,parseJson,
-    validateCard,validateCatalog,checked,mergeCatalog,cardNumbers,findCard,products,selectCards,template};
+    validateCard,validateCatalog,checked,mergeCatalog,cardNumbers,findCard,sameCardNumber,products,selectCards,template};
 })();
 
 if (typeof module === "object") module.exports = CardCatalog;

@@ -45,8 +45,8 @@ test("Both Treasure CXs grant the same bonus, but only the song satisfies Firen'
   const CardCatalog=require("../card-catalog.js");
   const find=number=>CardCatalog.findCard(cards,number);
   const ability=firen.effects.find(effect=>effect.timing==="on_attack");
-  const songIds=["031","031R"];
-  for(const [side,number] of [...songIds,"032","032R"].entries()){
+  const songIds=["031","031R","031S","031SP","031SSP"];
+  for(const [side,number] of [...songIds,"032","032R","032SP"].entries()){
     const board=WSEffects.emptyBoard();
     const player=side%2===0?"self":"opponent";
     const cardNumber="STS/W140-"+number;
@@ -61,7 +61,7 @@ test("Both Treasure CXs grant the same bonus, but only the song satisfies Firen'
     assert.equal(bonus.soul,ally.soul+1);
     const relative=player==="self"?board:{self:board.opponent,opponent:board.self};
     relative.self.waiting.push(makeCard("target",firen));
-    const combo=WSEffects.guide(ability,relative).next();
+    const combo=WSEffects.guide(ability,relative,{},find).next();
     assert.equal(combo.done,!songIds.includes(number));
     if(combo.done)assert.equal(combo.value.status,"condition-not-met");
     else assert.equal(combo.value.kind,"select");
