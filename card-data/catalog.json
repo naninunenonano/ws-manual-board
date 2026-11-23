@@ -956,6 +956,132 @@
           "implementationStatus": "implemented"
         }
       ]
+    },
+    {
+      "cardNumber": "STS/W140-076",
+      "name": "知識の力 アヤメ",
+      "reading": "チシキノチカラ アヤメ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "R",
+      "side": "W",
+      "type": "character",
+      "color": "青",
+      "stats": {
+        "level": 3,
+        "cost": 2,
+        "power": 10000,
+        "soul": 2
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "巡遊者",
+        "空白旅団"
+      ],
+      "keywords": [],
+      "flavorText": "このバッグの重さは、すなわちこれまで詰め込んできた知識の重さなんです",
+      "effects": [
+        {
+          "id": "on-play-order-and-stock",
+          "category": "登場時・山札確認とストック入れ替え",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "【自】 このカードが手札から舞台に置かれた時、次の2つの効果を1回ずつ行う。『あなたは自分の山札を上から2枚まで見て、カードを2枚まで選び、山札の上に好きな順番で置き、残りのカードを控え室に置く。』『相手は自分のストックすべてを、山札に戻し、その山札をシャッフルし、自分の山札の上から同じ枚数をストック置場に置く。』",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "lookAndOrderTop",
+              "params": {
+                "side": "self",
+                "max": 2
+              }
+            },
+            {
+              "handler": "shuffleStockIntoDeck",
+              "params": {
+                "side": "opponent"
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "on-attack-double-trigger",
+          "category": "アタック時・トリガーチェック2回",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": true,
+          "sourceText": "【自】［手札を1枚控え室に置く］ このカードがアタックした時、あなたはコストを払ってよい。そうしたら、そのアタック中、あなたはトリガーステップにトリガーチェックを2回行う。",
+          "conditions": [
+            {
+              "handler": "zoneCount",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "min": 1
+              }
+            }
+          ],
+          "costs": [
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "as": "discard",
+                "count": 1
+              }
+            },
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "selection": "discard"
+              }
+            }
+          ],
+          "target": null,
+          "steps": [
+            {
+              "handler": "setAttackTriggerChecks",
+              "params": {
+                "count": 2
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        }
+      ]
     }
   ]
 }

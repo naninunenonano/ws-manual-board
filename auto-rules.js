@@ -845,10 +845,11 @@ function autoRuleAttack(p,zone,uid,type){
         deckButton(body,"確認して進む",()=>{closeResolution();resolve()});
       });
     }
+    let triggerChecks;
     botDispatch(attacker,"on_attack",()=>{
       if(rival.level.length>=4||board.level.length>=4){done();return}
       const definition=botDefinition(attacker);
-      const check=()=>autoRuleTriggerCount(p,definition?.extraTriggerCost,trigger);
+      const check=()=>triggerChecks?trigger(triggerChecks):autoRuleTriggerCount(p,definition?.extraTriggerCost,trigger);
       const afterLook=()=>{
         if(!definition?.millOnAttack){check();return}
         autoRuleMillOnAttack(p,definition.millOnAttack,()=>{
@@ -857,7 +858,7 @@ function autoRuleAttack(p,zone,uid,type){
       };
       if(definition?.lookOnAttack)autoRuleLookOnAttack(p,definition.lookOnAttack,afterLook);
       else afterLook();
-    },p,{opposingUid:targetUid});
+    },p,{opposingUid:targetUid,setTriggerChecks:n=>{triggerChecks=n}});
   });
 }
 function autoRuleBotMain(p,done){
