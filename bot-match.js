@@ -176,7 +176,7 @@ function botEffectCard(card){
   return {uid:card.uid,cardNumber:card.id,name:def?.name??null,type:def?.type??(card.cx?"climax":null),
     level:card.botLevel??def?.stats?.level??null,cost:def?.stats?.cost??null,power:card.botPower??def?.stats?.power??null,
     soul:card.botSoul??def?.stats?.soul??null,turnLevelBonus:card.turnLevelBonus??0,
-    traits:def?.traits??null,keywords:def?.keywords??null,allTags:def?.allTags??false,markers:card.markers??[]};
+    traits:def?.traits??null,keywords:def?.keywords??null,allTags:def?.allTags??false,markers:card.markers??[],gainedAbilities:card.gainedAbilities??[]};
 }
 function botEffectBoard(p){
   const result=WSEffects.emptyBoard();
@@ -211,6 +211,8 @@ function botApplyEffect(state,destinations,p){
       const old=all.get(entry.uid);
       if(!old)return false;
       const card={...old.card,botPower:entry.power,botSoul:entry.soul,botLevel:entry.level,turnLevelBonus:entry.turnLevelBonus};
+      if(zone==="stage"&&entry.gainedAbilities?.length)card.gainedAbilities=entry.gainedAbilities;
+      else delete card.gainedAbilities;
       if(isAutoRules()){
         card.turnPowerBonus=(card.turnPowerBonus??0)+(entry.power??0)-(autoRuleStat(old.card,"power")??0);
         card.turnSoulBonus=(card.turnSoulBonus??0)+(entry.soul??0)-(autoRuleStat(old.card,"soul")??0);
@@ -262,7 +264,8 @@ function botStats(p,card){
 }
 
 function botDispatch(card,timing,done,p=0,context={}){
-  const effects=botDefinition(card)?.effects?.filter(item=>item.timing===timing&&item.type==="auto")??[];
+  const effects=botDefinition(card)?.effects?.filter(item=>item.timing===timing&&item.type==="auto"
+    &&(timing!=="on_own_climax_trigger"||card.gainedAbilities?.includes(item.id)))??[];
   function next(i){
     if(i===effects.length){done?.();return}
     const effect=effects[i],resume=()=>next(i+1);
@@ -280,6 +283,14 @@ function botDispatch(card,timing,done,p=0,context={}){
   }
   next(0);
 }
+function botResolveAttackTrigger(p,trigger,attacker,done){
+  botTriggerEffect(p,trigger,()=>{
+    const source=attacker();
+    if(trigger.cx!==true||!source){done();return}
+    botDispatch(source,"on_own_climax_trigger",done,p,{triggerClimax:true});
+  });
+}
+
 function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const key=card.uid+":"+ability.id;
   const iterator=WSEffects.guide(ability,botEffectBoard(p),{
@@ -351,6 +362,13 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     const next=iterator.next(answer);
     if(next.done){chooseStage(next.value);return}
     const prompt=next.value;
+    if(prompt.kind==="damage"){
+      if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
+      abortable=false;
+      const target=prompt.side==="self"?p:1-p;
+      botDamage(target,prompt.amount,damage=>step({state:botEffectBoard(p),damage}));
+      return;
+    }
     if(prompt.kind==="deck-empty"){
       if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
       resolveBoardRules(p,()=>step(botEffectBoard(p)));
@@ -369,6 +387,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
           step(candidates.slice(0,prompt.max).map(card=>card.uid));
           break;
         }
+        case "heal":step(prompt.max);break;
         case "destination":step(prompt.destinations[0]);break;
         case "treasure":step(prompt.canStock);break;
         default:step();break;
@@ -380,6 +399,8 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     const respond=(label,result)=>add(label,()=>step(result));
     if(prompt.kind==="branch"){
       prompt.labels.forEach((label,index)=>respond(label,index));
+    }else if(prompt.kind==="heal"){
+      for(let n=0;n<=prompt.max;n++)respond(n===0?"回復しない":n+"枚回復",n);
     }else if(prompt.kind==="optional-top"){
       body.append(document.createTextNode(prompt.label));
       respond("行う",true);respond("行わない",false);
@@ -431,8 +452,9 @@ function botCheckEnd(){
 }
 function botEndTurn(p){
   for(const board of players)for(const zone of zones){
-    for(const card of board[zone])if(card.turnLevelBonus){
-      card.botLevel-=card.turnLevelBonus;delete card.turnLevelBonus;
+    for(const card of board[zone]){
+      delete card.gainedAbilities;
+      if(card.turnLevelBonus){card.botLevel-=card.turnLevelBonus;delete card.turnLevelBonus}
     }
   }
   while(players[p].cx.length)botMove(players[p],"cx",0,"waiting");
@@ -460,20 +482,21 @@ function botDamage(target,amount,done){
   const board=players[target],revealed=[];
   function finish(cancel){
     const destination=cancel?"waiting":"clock";
+    const damage={cards:revealed.map(card=>card.uid),cancelled:cancel};
     const result=cancel?"CXでダメージをキャンセル":"ダメージ "+revealed.length+"枚";
     if(isAutoRules()){
       autoRuleLog(result+(revealed.length?"（"+revealed.map(c=>botCardInfo(c).name).join("、")+"）":""));
       revealed.forEach(card=>{card.faceUp=true;board[destination].push(card)});
-      resolveBoardRules(target,done);
+      resolveBoardRules(target,()=>done(damage));
       return;
     }
     botMessage(result);
-    if(!revealed.length){resolveBoardRules(target,done);return}
+    if(!revealed.length){resolveBoardRules(target,()=>done(damage));return}
     const body=showResolution(result,revealed);
     deckButton(body,cancel?"控え室へ":"クロックへ",()=>{
       closeResolution();
       for(const card of revealed){card.faceUp=true;board[destination].push(card)}
-      resolveBoardRules(target,done);
+      resolveBoardRules(target,()=>done(damage));
     });
   }
   function next(){
@@ -531,7 +554,7 @@ function botHumanAttack(p,zone,index){
       let trigger;
       botRevealTop(p,card=>{trigger=card},found=>{
         if(!found){damage();return}
-        botTriggerEffect(p,trigger,damage);
+        botResolveAttackTrigger(p,trigger,()=>board[zone].find(c=>c.uid===uid),damage);
       });
     }
     botDispatch(board[zone][index],"on_attack",afterEffects);

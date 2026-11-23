@@ -174,6 +174,37 @@ async function checkProducts(browser,url) {
   console.log("Catalog: product generation and filter, explicit variants, original source, keyword test state and pending effect passed");
 }
 
+async function checkNatsuka(browser,url){
+  const page=await browser.newPage(devices["iPhone 13"]);
+  const $=id=>page.locator("#"+id);
+  await page.goto(url+"/card-effect-test.html?card=STS%2FW140-004");
+  await $("testCardStatus").getByText(/爽風の才媛 ナツカ/).waitFor();
+  await $("loadNatsuka").click();
+  await $("runEffectTest").click();
+  const panel=$("effectChoices");
+  const choose=label=>panel.getByRole("button",{name:label,exact:typeof label==="string"}).click();
+  await choose("能力を使用する");
+  await choose(/CXコンボの手札コスト/);
+  await choose("選択を確定");
+  await choose("コストを支払う");
+  await choose("処理を続ける");
+  await $("effectResult").getByText("解決",{exact:true}).waitFor();
+  await $("boardEditor").locator("section").nth(1).getByText("クロック （2枚）",{exact:true}).waitFor();
+  await $("testEffect").selectOption("cx-trigger-damage-or-heal");
+  await $("runEffectTest").click();
+  await choose("クロックの上から2枚まで回復");
+  await choose("2枚回復");
+  await $("effectResult").getByText("解決",{exact:true}).waitFor();
+  await $("boardEditor").locator("section").first().getByText("クロック （0枚）",{exact:true}).waitFor();
+  await $("runEffectTest").click();
+  await $("effectResult").getByText(/使用回数上限/).waitFor();
+  await $("nextTurn").click();
+  await $("runEffectTest").click();
+  await $("effectResult").getByText(/条件を満たしていません/).waitFor();
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.close();
+}
+
 async function checkOtoha(browser,url){
   const page=await browser.newPage(devices["iPhone 13"]);
   const $=id=>page.locator("#"+id);
@@ -302,6 +333,7 @@ async function main() {
     await checkEffects(browser,url);
     await checkProducts(browser,url);
     await checkOtoha(browser,url);
+    await checkNatsuka(browser,url);
     await checkSoloBoard(browser,url);
     await checkFirenPractice(browser,url);
     const page = await browser.newPage({...devices["iPhone 13"],acceptDownloads:true});

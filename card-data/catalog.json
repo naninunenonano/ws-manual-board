@@ -604,6 +604,224 @@
       ]
     },
     {
+      "cardNumber": "STS/W140-004",
+      "name": "爽風の才媛 ナツカ",
+      "reading": "ソウフウノサイエン ナツカ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "RR",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 3,
+        "cost": 2,
+        "power": 9500,
+        "soul": 2
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "巡遊者",
+        "花咲旅団"
+      ],
+      "keywords": [],
+      "flavorText": "追い風に乗って進みましょう",
+      "effects": [
+        {
+          "id": "on-play-heal",
+          "category": "登場時・回復",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "【自】 このカードが手札から舞台に置かれた時、あなたは自分のクロックの上から1枚を、控え室に置いてよい。",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "optionalTopMove",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "clock"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "choiceKey": "heal",
+                "label": "クロックの上から1枚を控え室へ置く"
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "on-attack-dream-combo",
+          "category": "夢の先へ・CXコンボ",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": true,
+          "sourceText": "【自】【CXコンボ】［手札を1枚控え室に置く］ このカードがアタックした時、CX置場に「夢の先へ」があり、他のあなたの、《巡遊者》か《魔王》のキャラがいるなら、あなたはコストを払ってよい。そうしたら、相手に2ダメージを与え、このカードの下にマーカーがあるなら、そのターン中、このカードは次の能力を得る。『【自】【ターン1】 このカードのトリガーチェックでCXがでた時、あなたは相手に2ダメージを与えるか、自分のクロックの上から2枚までを、控え室に置く。』（ダメージキャンセルは発生する）",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            },
+            {
+              "handler": "cxName",
+              "params": {
+                "side": "self",
+                "name": "夢の先へ",
+                "cardNumbers": [
+                  "STS/W140-032"
+                ]
+              }
+            },
+            {
+              "handler": "otherStageTraitCount",
+              "params": {
+                "side": "self",
+                "min": 1,
+                "traits": {
+                  "mode": "any",
+                  "names": [
+                    "巡遊者",
+                    "魔王"
+                  ]
+                }
+              }
+            }
+          ],
+          "costs": [
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "as": "discard",
+                "count": 1
+              }
+            },
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "selection": "discard"
+              }
+            }
+          ],
+          "target": null,
+          "steps": [
+            {
+              "handler": "dealDamage",
+              "params": {
+                "side": "opponent",
+                "count": 2
+              }
+            },
+            {
+              "handler": "grantStageAbility",
+              "params": {
+                "side": "self",
+                "abilityId": "cx-trigger-damage-or-heal",
+                "minMarkers": 1
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "cx-trigger-damage-or-heal",
+          "category": "CXトリガー時・2ダメージか回復",
+          "type": "auto",
+          "timing": "on_own_climax_trigger",
+          "optional": false,
+          "sourceText": "【自】【ターン1】 このカードのトリガーチェックでCXがでた時、あなたは相手に2ダメージを与えるか、自分のクロックの上から2枚までを、控え室に置く。（ダメージキャンセルは発生する）",
+          "conditions": [
+            {
+              "handler": "ownClimaxTrigger",
+              "params": {
+                "side": "self",
+                "abilityId": "cx-trigger-damage-or-heal"
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "chooseBranch",
+              "params": {
+                "choiceKey": "triggerMode",
+                "branches": [
+                  {
+                    "label": "相手に2ダメージ",
+                    "steps": [
+                      {
+                        "handler": "dealDamage",
+                        "params": {
+                          "side": "opponent",
+                          "count": 2
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "label": "クロックの上から2枚まで回復",
+                    "steps": [
+                      {
+                        "handler": "healUpTo",
+                        "params": {
+                          "side": "self",
+                          "max": 2,
+                          "choiceKey": "healCount"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "duration": null,
+          "limit": {
+            "perTurn": 1
+          },
+          "choices": [],
+          "stateRefs": []
+        }
+      ]
+    },
+    {
       "cardNumber": "STS/W140-031",
       "variants": [
         "STS/W140-031",

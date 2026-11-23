@@ -154,6 +154,38 @@ const WSEffects = (() => {
       if(typeof chosen!=="boolean")fail("一番上のカードを移動するか選択してください","needs-choice");
       return chosen?takeFromTop(ctx,p.from.side,p.from.zone,p.to.zone,1):[];
     },["from","to","choiceKey","label"]);
+  operation("healUpTo","クロックの上から任意枚数を回復",p=>knownKey(sides,p.side)&&count(p.max)&&p.max>0&&word(p.choiceKey),
+    p=>sides[p.side]+"のクロックの上から"+p.max+"枚まで控え室に置く",
+    (ctx,p)=>{
+      const max=Math.min(p.max,pile(ctx,{side:p.side,zone:"clock"}).length);
+      const amount=max?ctx.choices[p.choiceKey]:0;
+      if(!count(amount)||amount>max)fail("回復する枚数を選んでください","needs-choice");
+      return takeFromTop(ctx,p.side,"clock","waiting",amount);
+    },["side","max","choiceKey"]);
+  operation("dealDamage","ダメージ",p=>knownKey(sides,p.side)&&count(p.count)&&p.count>0,
+    p=>sides[p.side]+"に"+p.count+"ダメージ",
+    (ctx,p)=>{
+      const deck=pile(ctx,{side:p.side,zone:"deck"}), revealed=[];
+      while(revealed.length<p.count&&deck.length){
+        revealed.push(deck.pop());
+        if(revealed.at(-1).type==="climax")break;
+      }
+      const cancelled=revealed.at(-1)?.type==="climax";
+      pile(ctx,{side:p.side,zone:cancelled?"waiting":"clock"}).push(...revealed);
+      return {cards:revealed.map(card=>card.uid),revealed:revealed.map(card=>card.uid),cancelled};
+    },["side","count"]);
+  operation("grantStageAbility","ターン中の能力獲得",p=>knownKey(sides,p.side)&&word(p.abilityId)&&count(p.minMarkers),
+    p=>"このカードの下にマーカーが"+p.minMarkers+"枚以上なら、ターン中に能力を得る",
+    (ctx,p)=>{
+      const card=pile(ctx,{side:p.side,zone:"stage"}).find(entry=>entry.uid===ctx.choices.sourceUid);
+      if(!card||(card.markers?.length??0)<p.minMarkers)return [];
+      card.gainedAbilities=[...new Set([...(card.gainedAbilities??[]),p.abilityId])];
+      return [card.uid];
+    },["side","abilityId","minMarkers"]);
+  register(conditions,"ownClimaxTrigger","このカードがCXをトリガー",
+    p=>knownKey(sides,p.side)&&word(p.abilityId),p=>"このカードが得た能力を持ち、トリガーチェックでCXが出た",
+    (ctx,p)=>ctx.choices.triggerClimax===true&&pile(ctx,{side:p.side,zone:"stage"})
+      .some(card=>card.uid===ctx.choices.sourceUid&&card.gainedAbilities?.includes(p.abilityId)),["side","abilityId"]);
   operation("chooseBranch","実行する効果の選択",p=>word(p.choiceKey)&&Array.isArray(p.branches)&&p.branches.length>=2
     && p.branches.every(branch=>object(branch)&&word(branch.label)&&Array.isArray(branch.steps)
       && branch.steps.every(step=>step?.handler!=="chooseBranch")
@@ -430,6 +462,10 @@ const WSEffects = (() => {
         at=entry;
         const {handler,params}=entry.step;
         if(guided){
+          if(handler==="healUpTo"){
+            const max=Math.min(params.max,pile(context,{side:params.side,zone:"clock"}).length);
+            if(max)choices[params.choiceKey]=yield {kind:"heal",max};
+          }
           if(handler==="chooseBranch")choices[params.choiceKey]=yield {kind:"branch",labels:params.branches.map(branch=>branch.label)};
           if(handler==="optionalTopMove"&&pile(context,params.from).length){
             choices[params.choiceKey]=yield {kind:"optional-top",label:params.label};
@@ -458,7 +494,16 @@ const WSEffects = (() => {
             yield {kind:"cost",text:entry.implementation.describe(params)};
           }
         }
-        const outcome=entry.implementation.run(context,params);
+        let outcome;
+        if(guided&&handler==="dealDamage"){
+          const resolved=yield {kind:"damage",state:working,side:params.side,amount:params.count};
+          if(resolved){
+            validateBoard(resolved.state);
+            working=context.board=structuredClone(resolved.state);
+            outcome=resolved.damage;
+          }
+        }
+        outcome??=entry.implementation.run(context,params);
         const details=Array.isArray(outcome)?{cards:outcome}:outcome;
         if(handler==="revealTop"||handler==="revealSelection")details.revealed=details.cards;
         log.push({phase:entry.phase,handler,ok:true,...details});
