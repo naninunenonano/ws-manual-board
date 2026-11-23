@@ -12,7 +12,7 @@ const CardCatalog = (() => {
   const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
   const nonempty = value => typeof value === "string" && value.trim().length > 0;
   const normalizeNumber = value => typeof value === "string" ? value.trim().toUpperCase() : "";
-  const baseNumber = value => normalizeNumber(value).replace(/^([A-Z0-9]+\/[A-Z0-9]+-[A-Z]*\d+)(?:SSP|SP|S|R)$/, "$1");
+  const baseNumber = value => normalizeNumber(value).replace(/^([A-Z0-9]+\/[A-Z0-9]+-[A-Z0-9]*\d)[A-Z]+$/, "$1");
   const validNumber = number => /^[A-Z0-9]+\/[A-Z0-9]+-[A-Z0-9][A-Z0-9_+.*-]*$/.test(number);
   const empty = () => ({schemaVersion,cards:[]});
 

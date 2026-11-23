@@ -71,13 +71,15 @@ test("number, title and product filters are independent and group JSON preserves
 test("rarity suffixes share definitions and search results while image URLs keep the printing",()=>{
   const {officialImageUrl}=require("../card-images.js");
   const basic={cardNumber:"STS/W140-T03"}, other={cardNumber:"STS/W140-T04"};
-  for(const suffix of ["R","S","SP","SSP"]){
+  for(const suffix of ["R","S","SP","SSP","RRR","OFR","SEC","A"]){
     const print=basic.cardNumber+suffix;
     assert.equal(C.findCard([basic,other],print.toLowerCase()),basic);
     assert.deepEqual(C.selectCards([basic,other],{number:print}),[basic]);
     assert.match(officialImageUrl(print),new RegExp("_t03"+suffix.toLowerCase()+"\\.png$"));
   }
-  assert.equal(C.findCard([basic,other],basic.cardNumber+"A"),undefined);
+  const internal={cardNumber:"TEST/S001-1A02"};
+  assert.equal(C.findCard([internal],"TEST/S001-1A02SEC"),internal);
+  assert.equal(C.findCard([basic,other],basic.cardNumber+"A1"),undefined);
   assert.equal(C.findCard([other],basic.cardNumber+"R"),undefined);
   const explicit={cardNumber:basic.cardNumber+"SP"};
   const alias={...other,variants:[basic.cardNumber+"SSP"]};
