@@ -544,6 +544,17 @@
       panel.append(node("p","この能力を使いますか？"),button("能力を使用する",()=>advance(true)),button("能力を使用しない",()=>advance(false)));
       return;
     }
+    if(step.kind==="private-look-count"){
+      panel.append(node("p","相手の山札を上から何枚見るか選んでください。"),
+        ...Array.from({length:step.max+1},(_,n)=>button(n?n+"枚見る":"見ない",()=>advance(n))));
+      return;
+    }
+    if(step.kind==="private-look"){
+      const list=node("ol");
+      for(const entry of step.cards)list.append(node("li",name(entry)));
+      panel.append(list,button("元の順番で戻す",()=>advance()));
+      return;
+    }
     if(step.kind==="reveal"){
       const list=node("ul");
       for(const entry of step.cards)list.append(node("li",name(entry)+(step.returned.includes(entry.uid)?" ／ 山札に戻す":"")));

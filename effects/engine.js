@@ -105,7 +105,7 @@ const WSEffects = (() => {
     if (source===destination) fail("同じ領域への移動は指定できません");
     let moving;
     if (selection) {
-      const uids = context.selections.get(selection);
+      const uids = selection==="@source"&&context.choices.sourceUid?[context.choices.sourceUid]:context.selections.get(selection);
       if (!uids) fail("選択「"+selection+"」がありません");
       moving = source.filter(card=>uids.includes(card.uid));
       if (moving.length!==uids.length) fail("選んだカードが指定元の領域にありません");
@@ -196,6 +196,26 @@ const WSEffects = (() => {
       if(!count(index)||index>=p.branches.length)fail("実行する効果を選んでください","needs-choice");
       return {branch:index,label:p.branches[index].label};
     },["choiceKey","branches"]);
+  const frontBounceTargets=ctx=>pile(ctx,{side:"opponent",zone:"stage"}).filter(card=>
+    card.row==="front"&&card.faceUp!==false&&matching(ctx,card,{cardType:"character",maxLevel:3}));
+  operation("lookOpponentTop","相手の山札を非公開で確認",p=>p.max===2,
+    ()=>"相手の山札の上を2枚まで見て、元の順番のまま戻す",()=>[],["max"]);
+  operation("millDeckTop","山札の上を控え室へ",p=>knownKey(sides,p.side)&&p.count===2,
+    p=>sides[p.side]+"の山札の上から2枚を控え室へ",
+    (ctx,p)=>{
+      const deck=pile(ctx,{side:p.side,zone:"deck"}), amount=Math.min(deck.length,p.count);
+      const climax=deck.slice(deck.length-amount).some(card=>card.type==="climax");
+      return {cards:takeFromTop(ctx,p.side,"deck","waiting",amount),climax};
+    },["side","count"]);
+  operation("bounceFrontAfterMill","CXが落ちた場合に前列を手札へ",p=>p.max===2,
+    ()=>"落としたカードにCXがあれば、相手前列のレベル3以下を2枚まで手札へ戻す",
+    (ctx,p)=>{
+      const targets=frontBounceTargets(ctx), picks=ctx.choices.frontBounce??[];
+      if(!Array.isArray(picks)||picks.length>p.max||new Set(picks).size!==picks.length||
+        !picks.every(uid=>targets.some(card=>card.uid===uid)))fail("相手前列の対象を選んでください","needs-choice");
+      ctx.selections.set("frontBounce",picks);
+      return move(ctx,{from:{side:"opponent",zone:"stage"},to:{side:"opponent",zone:"hand"},selection:"frontBounce"});
+    },["max"]);
   operation("draw","ドロー",p=>knownKey(sides,p.side)&&count(p.count),
     p=>sides[p.side]+"が"+p.count+"枚引く",
     (ctx,p)=>takeFromTop(ctx,p.side,"deck","hand",p.count),["side","count"]);
@@ -410,7 +430,7 @@ const WSEffects = (() => {
         if(selections.has(step.params.as))issues.push({status:"invalid",message:at+" の選択IDが重複しています"});
         selections.add(step.params.as);
       }else if (step.params.selection && !selections.has(step.params.selection) &&
-        !(step.params.selection==="@source"&&["modifyPower","modifySoul","modifyLevel"].includes(step.handler))){
+        !(step.params.selection==="@source"&&["move","modifyPower","modifySoul","modifyLevel"].includes(step.handler))){
         issues.push({status:"invalid",message:at+" が未定義の選択 "+step.params.selection+" を参照しています"});
       }
     }
@@ -461,7 +481,21 @@ const WSEffects = (() => {
         const entry=pending[index];
         at=entry;
         const {handler,params}=entry.step;
+        if(handler==="bounceFrontAfterMill"&&!log.some(step=>step.handler==="millDeckTop"&&step.climax))continue;
         if(guided){
+          if(handler==="lookOpponentTop"){
+            const deck=pile(context,{side:"opponent",zone:"deck"}),max=Math.min(deck.length,params.max);
+            if(max){
+              const n=yield {kind:"private-look-count",max};
+              if(!count(n)||n>max)fail("見る枚数を選んでください","needs-choice");
+              if(n)yield {kind:"private-look",cards:deck.slice(-n).reverse()};
+            }
+          }
+          if(handler==="bounceFrontAfterMill"){
+            const candidates=frontBounceTargets(context);
+            choices.frontBounce=candidates.length?yield {kind:"select",label:"相手の前列",from:{side:"opponent",zone:"stage"},
+              candidates,min:0,max:Math.min(candidates.length,params.max),phase:entry.phase,committedState:working}:[];
+          }
           if(handler==="healUpTo"){
             const max=Math.min(params.max,pile(context,{side:params.side,zone:"clock"}).length);
             if(max)choices[params.choiceKey]=yield {kind:"heal",max};
@@ -502,6 +536,21 @@ const WSEffects = (() => {
             working=context.board=structuredClone(resolved.state);
             outcome=resolved.damage;
           }
+        }
+        if(guided&&handler==="millDeckTop"){
+          const cards=[];
+          let climax=false;
+          const deck=()=>pile(context,{side:params.side,zone:"deck"});
+          for(let i=0;i<=params.count;i++){
+            if(!deck().length){
+              const refreshed=yield {kind:"deck-empty",state:working,side:params.side,bothSides:true};
+              if(refreshed){validateBoard(refreshed);working=context.board=structuredClone(refreshed);}
+            }
+            if(i===params.count||!deck().length)break;
+            climax ||= deck().at(-1).type==="climax";
+            cards.push(...takeFromTop(context,params.side,"deck","waiting",1));
+          }
+          outcome={cards,climax};
         }
         outcome??=entry.implementation.run(context,params);
         const details=Array.isArray(outcome)?{cards:outcome}:outcome;
