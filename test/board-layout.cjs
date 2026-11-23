@@ -491,6 +491,30 @@ async function checkPracticeMulligan(browser,url){
   await page.locator("#boards .player.active .practice-hand-card .card-zoom").first().tap();
   assert.match(await page.locator("#dialogTitle").innerText(),/^仮/);
   assert.ok(await page.locator("#dialogBody .practice-card-effect").first().isVisible());
+  await page.locator("#close").tap();
+  await page.evaluate(()=>{
+    const [own,rival]=players;
+    for(const board of players)while(board.hand.length)botMove(board,"hand",0,"deck");
+    const put=(board,id,to)=>botMove(board,"deck",board.deck.findIndex(c=>c.id.endsWith(id)),to);
+    put(own,"101","front0");put(own,"104","deck");
+    put(rival,"119","clock");put(rival,"120","clock");
+    setTurnPhase("attack");
+  });
+  const clock=page.locator('#boards .zone[data-p="1"][data-z="clock"]');
+  assert.equal(await clock.locator(".practice-card-face").count(),2);
+  await clock.locator(".clock-actions").getByRole("button",{name:"一覧"}).tap();
+  assert.equal(await page.locator("#dialogBody .practice-card-face").count(),2);
+  await page.locator("#close").tap();
+  await page.locator('#boards .zone[data-p="0"][data-z="front0"]').tap({position:{x:14,y:10}});
+  await page.locator("#autoAttack").tap();
+  await page.getByRole("button",{name:"ダイレクトアタック",exact:true}).tap();
+  assert.equal(await page.locator("#dialogTitle").innerText(),"自分のトリガーチェック");
+  assert.equal(await page.locator("#dialogBody .practice-card-face").getAttribute("data-card-number"),"104");
+  assert.match(await page.locator(".trigger-icons").innerText(),/カムバック/);
+  assert.equal(await page.evaluate(()=>players[0].stock.length),0);
+  await page.getByRole("button",{name:"確認して進む",exact:true}).tap();
+  await page.getByRole("button",{name:"選ばず進む",exact:true}).tap();
+  assert.equal(await page.evaluate(()=>players[0].stock.at(-1).id),"BOT/W000-104");
   await page.close();
 }
 

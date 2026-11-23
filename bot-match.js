@@ -38,6 +38,29 @@ function botCardDetails(card){
   return {name:def.name,shortName:def.name.replace(/^仮(?:キャラ|イベント|CX) /,""),
     stats:stats.filter(Boolean).join(" ／ "),abilityText:def.abilityText};
 }
+const practiceCardMarks={
+  "101":"⚔","102":"⚑","103":"◎","104":"↶","105":"⌂","106":"◆","107":"Ⅱ","108":"↟","109":"✦","110":"⇅",
+  "111":"⌕","112":"↑","113":"⇄","114":"⬟","115":"∞","116":"⚡","117":"▤","118":"↔","119":"♛","120":"⛨"
+};
+function appendPracticeCardFace(parent,card){
+  const detail=botCardDetails(card);
+  if(!detail)return false;
+  const def=botDefinition(card);
+  const number=card.id.slice(-3);
+  const face=document.createElement("span");
+  face.className="practice-card-face";
+  face.dataset.color=def.color;
+  face.dataset.cardNumber=number;
+  face.setAttribute("role","img");
+  face.setAttribute("aria-label",detail.name+" ／ "+detail.stats);
+  const rank=document.createElement("span"),mark=document.createElement("span"),code=document.createElement("span");
+  rank.className="practice-face-rank";rank.textContent=def.type==="climax"?"CX":def.type==="event"?"E"+def.stats.level:"L"+def.stats.level;
+  mark.className="practice-face-mark";mark.textContent=practiceCardMarks[number];
+  code.className="practice-face-code";code.textContent=number;
+  face.append(rank,mark,code);
+  parent.append(face);
+  return true;
+}
 function appendBotCardDetails(parent,detail){
   const box=document.createElement("span");
   box.className="practice-card-detail";
