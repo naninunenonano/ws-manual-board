@@ -136,8 +136,9 @@ function stageAvailable(p,z){
 function releaseMarkers(p,card){
  for(const marker of card.markers||[]){
    marker.card.faceUp=true;
-   players[p].waiting.push(marker.card);
-   pendingMarkerChoices.push({p,card:marker.card});
+   const zone=botMarkerExitZone(marker);
+   players[p][zone].push(marker.card);
+   if(zone==="waiting")pendingMarkerChoices.push({p,card:marker.card});
  }
  card.markers=[];
 }
@@ -145,7 +146,7 @@ function manualTransfer(p,from,index,to,position="top"){
  const a=players[p][from],card=a?.[index];
  if(isAutoRules()&&card&&from==="hand"&&(isStageZone(to)||to==="cx"))return autoRulePlace(p,card.uid,to);
  if(!card||!stageAvailable(p,to))return false;
- const dispatch=match?.bot&&p===0&&from==="hand"&&isStageZone(to)&&!ruleBusy;
+ const dispatch=match?.bot&&p===0&&!isStageZone(from)&&isStageZone(to)&&!ruleBusy;
  a.splice(index,1);card.faceUp=!["deck","stock"].includes(to);
  if(isStageZone(from)&&!isStageZone(to)){
    card.orientation=0;
@@ -155,7 +156,7 @@ function manualTransfer(p,from,index,to,position="top"){
  else players[p][to].push(card);
  autoRuleStageChange(card,from,to,p);
  selected=null;updateBoard();
- if(dispatch)runRuleOperation(done=>botDispatch(card,"from_hand_to_stage",done));
+ if(dispatch)runRuleOperation(done=>botStageEntry(p,card,from,done));
  if(pendingMarkerChoices.length&&!document.getElementById("dialog").open)showPendingMarkerChoices();
  return true;
 }
@@ -234,7 +235,8 @@ function manualDestination(p,from,index,markerOwner){
   if(markerOwner){
    const marker=markerOwner.markers[index];
    if(!marker)return;
-   if(!moveTemporary(p,[marker.card],0,sel.value,pos.value,target.value,face.value))return;
+   const destination=botMarkerExitZone(marker)==="memory"?"memory":sel.value;
+   if(!moveTemporary(p,[marker.card],0,destination,pos.value,target.value,face.value))return;
    markerOwner.markers.splice(index,1);
    d.close();selected=null;updateBoard();return;
   }
@@ -535,8 +537,9 @@ function pullDeck(p,count,to,interrupt=true,fromBottom=false,after,revealed){
      board[to].push(card);
      if(revealed)revealed.push(card);
      moved++;
-     if(interrupt)resolveBoardRules(p,next);
-     else next();
+     const resume=()=>{if(interrupt)resolveBoardRules(p,next);else next()};
+     if(match?.bot&&isStageZone(to))botStageEntry(p,card,"deck",resume);
+     else resume();
    }
    if(interrupt && !board.deck.length)resolveBoardRules(p,next);
    else next();
@@ -576,7 +579,17 @@ function openDeckTemporary(p,mode,count,fromBottom=false,serverRevealed=false){
    return;
  }
  ruleBusy=true;setRuleModal(true);
- const finishTemporary=()=>{onlineMatch?.closeTemporary();ruleBusy=false;updateBoard()};
+ const stageEntries=[];
+ const finishTemporary=()=>{
+   onlineMatch?.closeTemporary();
+   function next(){
+     const card=stageEntries.shift();
+     if(card){botStageEntry(p,card,"deck",next);return}
+     ruleBusy=false;
+     updateBoard();
+   }
+   next();
+ };
  const b=players[p],privateView=mode==="inspect",items=[];
  for(let i=0;i<count&&b.deck.length;i++)items.push(fromBottom?b.deck.shift():b.deck.pop());
  // Do not refresh here: these cards are treated as part of the deck until resolution.
@@ -611,7 +624,11 @@ function openDeckTemporary(p,mode,count,fromBottom=false,serverRevealed=false){
      for(const [v,label] of [["down","裏向き"],["up","表向き"]]){const o=document.createElement("option");o.value=v;o.textContent=label;face.append(o)}
      dest.onchange=()=>{pos.hidden=!["deck","stock"].includes(dest.value);target.hidden=face.hidden=dest.value!=="marker"};dest.onchange();
      wrap.append(dest,pos,target,face);
-     deckButton(wrap,"移動",()=>{if(moveTemporary(p,items,i,dest.value,pos.value,target.value,face.value)){updateBoard();renderTemp()}});
+     deckButton(wrap,"移動",()=>{
+       if(!moveTemporary(p,items,i,dest.value,pos.value,target.value,face.value))return;
+       if(match?.bot&&isStageZone(dest.value))stageEntries.push(c);
+       updateBoard();renderTemp();
+     });
      deckButton(wrap,"↑",()=>{if(i>0){[items[i-1],items[i]]=[items[i],items[i-1]];renderTemp()}});
      deckButton(wrap,"↓",()=>{if(i<items.length-1){[items[i+1],items[i]]=[items[i],items[i+1]];renderTemp()}});
      list.append(wrap);
@@ -1490,11 +1507,11 @@ document.getElementById("clockSkip").onclick=()=>{if(match?.turn?.phase==="clock
 
 </script>
 <script src="card-catalog.js?v=5"></script>
-<script src="effects/engine.js?v=12"></script>
+<script src="effects/engine.js?v=12-kanache"></script>
 <script src="card-data/load.js?v=2"></script>
 <script src="match-state.js?v=practice-mulligan"></script>
-<script src="auto-rules.js?v=20"></script>
-<script src="bot-match.js?v=20"></script>
+<script src="auto-rules.js?v=20-kanache"></script>
+<script src="bot-match.js?v=20-kanache"></script>
 <script src="cloud-decks.js?v=0.52"></script>
 <script src="online-match.js?v=0.52-encore"></script>
 <script src="decklog-import.js?v=0.52"></script>

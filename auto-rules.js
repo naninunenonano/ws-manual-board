@@ -456,7 +456,9 @@ function autoRuleResolvePlay(p,index,zone,done){
   if(board[zone].length)botMove(board,zone,0,"waiting");
   botMove(board,"hand",index,zone);
   autoRuleLog(botCardInfo(card).name+"をプレイ"+(cost?"（ストック−"+cost+"）":""));
-  botDispatch(card,zone==="cx"?"on_cx_play":"from_hand_to_stage",()=>resolveBoardRules(p,done),p);
+  const finish=()=>resolveBoardRules(p,done);
+  if(zone==="cx")botDispatch(card,"on_cx_play",finish,p);
+  else botStageEntry(p,card,"hand",finish);
 }
 const autoRuleEventEffects=Object.freeze({"光景":resolveKoukei});
 function autoRuleEventEffect(definition){
@@ -645,23 +647,29 @@ function matchesPracticeTrait(card,trait){
   return botDefinition(card)?.type==="character"&&hasPracticeTrait(card,trait);
 }
 
-function autoRuleReorderTop(p,done){
+function autoRuleReorderTop(p,done,chooseCount=false){
   const deck=players[p].deck;
   if(!deck.length){done();return}
-  const top=deck.slice(-2).reverse();
   if(p===1){done();return}
-  const body=showResolution("山札の上"+top.length+"枚（1番が一番上）",top);
-  function finish(swap){
-    closeResolution();
-    if(swap){
-      const last=deck.length-1;
-      [deck[last],deck[last-1]]=[deck[last-1],deck[last]];
+  function look(count){
+    const top=deck.slice(-count).reverse();
+    const body=showResolution("山札の上"+top.length+"枚（1番が一番上）",top);
+    function finish(swap){
+      closeResolution();
+      if(swap){
+        const last=deck.length-1;
+        [deck[last],deck[last-1]]=[deck[last-1],deck[last]];
+      }
+      autoRuleLog("山札上"+top.length+"枚を確認"+(swap?"して入れ替え":""));
+      done();
     }
-    autoRuleLog("山札上"+top.length+"枚を確認"+(swap?"して入れ替え":""));
-    done();
+    deckButton(body,"この順番にする",()=>finish(false));
+    if(top.length===2)deckButton(body,"上下を入れ替える",()=>finish(true));
   }
-  deckButton(body,"この順番にする",()=>finish(false));
-  if(top.length===2)deckButton(body,"上下を入れ替える",()=>finish(true));
+  if(!chooseCount){look(2);return}
+  const body=showResolution("回想・自分の山札を上から何枚見るか",[]);
+  for(let n=1;n<=Math.min(2,deck.length);n++)deckButton(body,n+"枚見る",()=>{closeResolution();look(n)});
+  deckButton(body,"見ない",()=>{closeResolution();done()});
 }
 function autoRuleClockSearch(p,card,effect,done){
   const board=players[p],stock=effect.clockSearchCost;
@@ -920,7 +928,8 @@ function autoRuleBotStep(){
         if(i<0)break;
         if(board[slot].length)continue;
         autoRulePay(p,botDefinition(board.hand[i]).stats.cost);
-        botMove(board,"hand",i,slot);
+        const entrant=botMove(board,"hand",i,slot);
+        botResolveRecall(p,entrant,()=>{});
       }
       setTurnPhase("climax");break;
     }

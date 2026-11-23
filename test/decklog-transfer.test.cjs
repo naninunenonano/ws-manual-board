@@ -1766,3 +1766,41 @@ test("ナツカのCXコンボとCXトリガー時の回復をアタック中に�
   page.run('botEndTurn(0)');
   assert.equal(page.run("natsukaBoard.front0[0].gainedAbilities"),undefined);
 });
+
+test("カナーチェは思い出に移って回収し、登場したキャラのマーカーになり、離れると思い出に戻る",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var kaBoard=players[0],kaCard=(uid,id="STS/W140-001")=>({uid,id,faceUp:true,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    kaBoard.front0.push(kaCard("ka","STS/W140-024"));
+    kaBoard.waiting.push(kaCard("salvage"));
+    selected={p:0,z:"front0",index:0};
+    openBotAbility();
+  `);
+  ruleButton(page,"起動・思い出にしてキャラを回収");
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"コストを支払う");
+  assert.equal(page.run("kaBoard.memory[0].uid"),"ka");
+  const eligible=page.get("dialogBody").children.find(el=>el.textContent.includes("レイス")&&el.onclick);
+  assert.ok(eligible);
+  eligible.onclick();
+  ruleButton(page,"選択を確定");
+  assert.equal(page.run("kaBoard.hand[0].uid"),"salvage");
+  page.run(`
+    kaBoard.waiting.push(kaCard("host"));
+    manualTransfer(0,"waiting",0,"front0");
+  `);
+  ruleButton(page,"思い出の1枚目をマーカーにする");
+  assert.equal(page.run("kaBoard.front0[0].markers[0].faceUp"),true);
+  page.run(`
+    kaBoard.deck.push(kaCard("second"),kaCard("first"));
+    runRuleOperation(done=>botDispatch(kaBoard.front0[0],"on_attack",done,0));
+  `);
+  ruleButton(page,"2枚見る");
+  ruleButton(page,"上下を入れ替える");
+  assert.equal(page.run("kaBoard.deck.map(c=>c.uid).join()"),"first,second");
+  page.run('botMove(kaBoard,"front0",0,"waiting")');
+  assert.equal(page.run("kaBoard.memory[0].uid"),"ka");
+  assert.equal(page.run("kaBoard.waiting[0].uid"),"host");
+});
