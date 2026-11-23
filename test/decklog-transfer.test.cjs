@@ -1766,3 +1766,72 @@ test("ナツカのCXコンボとCXトリガー時の回復をアタック中に�
   page.run('botEndTurn(0)');
   assert.equal(page.run("natsukaBoard.front0[0].gainedAbilities"),undefined);
 });
+
+test("コゼットは相手の山札上を非公開で確認し、順番を変えない",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var coBoard=players[0], coRival=players[1];
+    var coCard=(uid,id="BOT/W000-001",cx=false)=>({uid,id,faceUp:true,cx,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    coBoard.front0.push(coCard("co","STS/W140-013"));
+    coRival.deck.push(coCard("bottom"),coCard("second"),coCard("first"));
+    runRuleOperation(done=>botDispatch(coBoard.front0[0],"from_hand_to_stage",done,0));
+  `);
+  ruleButton(page,"2枚見る");
+  ruleButton(page,"元の順番で戻す");
+  assert.equal(page.run("coRival.deck.map(c=>c.uid).join()"),"bottom,second,first");
+  assert.equal(page.run("ruleBusy"),false);
+});
+
+test("コゼットは自身を控え室に置き、双方から2枚落とし、相手の前列だけを戻せる",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var coBoard=players[0], coRival=players[1];
+    var coCard=(uid,id="BOT/W000-001",cx=false)=>({uid,id,faceUp:true,cx,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    coBoard.front0.push(coCard("co","STS/W140-013"));
+    coBoard.deck.push(coCard("a0"),coCard("a1"),coCard("a2"));
+    coRival.deck.push(coCard("b0"),coCard("b1"),coCard("b2","BOT/W000-012",true));
+    coRival.front0.push(coCard("target","STS/W140-004"));
+    coRival.back0.push(coCard("back","STS/W140-013"));
+    selected={p:0,z:"front0",index:0};
+    openBotAbility();
+  `);
+  ruleButton(page,"起動・双方の山札を落として前列を戻す");
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"コストを支払う");
+  assert.equal(page.run("coBoard.waiting.map(c=>c.uid).join()"),"co,a2,a1");
+  assert.equal(page.run("coRival.waiting.map(c=>c.uid).join()"),"b2,b1");
+  ruleButton(page,"爽風の才媛 ナツカ");
+  ruleButton(page,"選択を確定");
+  assert.equal(page.run("coRival.hand[0].uid"),"target");
+  assert.equal(page.run("coRival.back0[0].uid"),"back");
+  assert.equal(page.run("ruleBusy"),false);
+});
+
+test("コゼットは山札切れでリフレッシュを挟み、CXがなければ対象を選ばない",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var coBoard=players[0], coRival=players[1];
+    var coCard=(uid,id="BOT/W000-001")=>({uid,id,faceUp:true,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    coBoard.front0.push(coCard("co","STS/W140-013"));
+    coBoard.waiting.push(coCard("w1"),coCard("w2"),coCard("w3"));
+    coBoard.deck.push(coCard("a2"));
+    coRival.deck.push(coCard("b0"),coCard("b1"),coCard("b2"));
+    coRival.front0.push(coCard("target","STS/W140-004"));
+    selected={p:0,z:"front0",index:0};
+    openBotAbility();
+  `);
+  ruleButton(page,"起動・双方の山札を落として前列を戻す");
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"コストを支払う");
+  assert.equal(page.run("coBoard.clock.length"),1);
+  assert.equal(page.run("coBoard.waiting.length"),1);
+  assert.equal(page.run("coRival.waiting.length"),2);
+  assert.equal(page.run("coRival.front0[0].uid"),"target");
+  assert.equal(page.run("ruleBusy"),false);
+});

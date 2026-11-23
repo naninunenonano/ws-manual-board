@@ -183,8 +183,9 @@ function botEffectBoard(p){
   for(const [label,owner] of [["self",p],["opponent",1-p]]){
     const board=players[owner];
     for(const zone of Object.keys(result[label])){
-      const cards=zone==="stage"?botSlots.flatMap(slot=>board[slot]):board[zone];
-      result[label][zone]=cards.map(botEffectCard);
+      result[label][zone]=zone==="stage"?botSlots.flatMap(slot=>board[slot].map(card=>({
+        ...botEffectCard(card),row:slot.startsWith("front")?"front":"back",faceUp:card.faceUp
+      }))):board[zone].map(botEffectCard);
     }
   }
   return result;
@@ -296,8 +297,12 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const iterator=WSEffects.guide(ability,botEffectBoard(p),{
     ...context,sourceUid:card.uid,usedThisTurn:match.bot.uses[key]??0
   },findBotCard);
+  function apply(state,destinations,bothSides){
+    return botApplyEffect(state,destinations,p)&&(!bothSides||botApplyEffect({self:state.opponent},new Map(),1-p));
+  }
   function finish(result,destinations=new Map(),entered=[]){
-    const success=result.status==="success"&&botApplyEffect(result.state,destinations,p);
+    const bothSides=result.log.some(step=>step.handler==="millDeckTop"&&step.ok);
+    const success=result.status==="success"&&apply(result.state,destinations,bothSides);
     if(success&&ability.limit?.perTurn)match.bot.uses[key]=(match.bot.uses[key]??0)+1;
     const text=success?"解決しました":result.status==="success"?"舞台の空き枠がありません":result.message;
     if(!isAutoRules())botMessage((ability.category??ability.id)+" · "+text);
@@ -370,9 +375,19 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       return;
     }
     if(prompt.kind==="deck-empty"){
-      if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
-      resolveBoardRules(p,()=>step(botEffectBoard(p)));
+      if(!apply(prompt.state,new Map(),prompt.bothSides)){done?.(false);return}
+      abortable=false;
+      const target=prompt.side==="opponent"?1-p:p;
+      resolveBoardRules(target,()=>{
+        if(players[target].level.length>=4){done?.(false);return}
+        step(botEffectBoard(p));
+      });
       return;
+    }
+    if(prompt.committedState){
+      if(!apply(prompt.committedState,new Map(),true)){done?.(false);return}
+      abortable=false;
+      render();
     }
     if(p===1&&isAutoRules()){
       switch(prompt.kind){
@@ -387,18 +402,23 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
           step(candidates.slice(0,prompt.max).map(card=>card.uid));
           break;
         }
-        case "heal":step(prompt.max);break;
+        case "private-look-count":case "heal":step(prompt.max);break;
         case "destination":step(prompt.destinations[0]);break;
         case "treasure":step(prompt.canStock);break;
         default:step();break;
       }
       return;
     }
-    const body=showResolution(ability.category??"カード効果",prompt.kind==="reveal"?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
+    const body=showResolution(ability.category??"カード効果",prompt.committedState?prompt.candidates.map(c=>({id:c.cardNumber})):["reveal","private-look"].includes(prompt.kind)?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
     const add=(label,action)=>deckButton(body,label,()=>{closeResolution();action()});
     const respond=(label,result)=>add(label,()=>step(result));
     if(prompt.kind==="branch"){
       prompt.labels.forEach((label,index)=>respond(label,index));
+    }else if(prompt.kind==="private-look-count"){
+      body.append(document.createTextNode("相手の山札を上から何枚見るか選んでください。"));
+      for(let n=0;n<=prompt.max;n++)respond(n?n+"枚見る":"見ない",n);
+    }else if(prompt.kind==="private-look"){
+      respond("元の順番で戻す");
     }else if(prompt.kind==="heal"){
       for(let n=0;n<=prompt.max;n++)respond(n===0?"回復しない":n+"枚回復",n);
     }else if(prompt.kind==="optional-top"){

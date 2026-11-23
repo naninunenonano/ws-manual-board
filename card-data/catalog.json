@@ -956,6 +956,122 @@
           "implementationStatus": "implemented"
         }
       ]
+    },
+    {
+      "cardNumber": "STS/W140-013",
+      "name": "ムーンシャドウ コゼット",
+      "reading": "ムーンシャドウ コゼット",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "R",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 2,
+        "cost": 1,
+        "power": 8500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者"
+      ],
+      "keywords": [],
+      "flavorText": "永夜の始末屋の力…甘く見てるとケガするよ？",
+      "effects": [
+        {
+          "id": "on-play-peek",
+          "category": "登場時・相手の山札上を確認",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "【自】 このカードが手札から舞台に置かれた時、あなたは相手の山札を上から2枚まで見て、山札の上に元の順番で置く。",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "lookOpponentTop",
+              "params": {
+                "max": 2
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "mill-and-bounce",
+          "category": "起動・双方の山札を落として前列を戻す",
+          "type": "activated",
+          "timing": "main",
+          "optional": true,
+          "sourceText": "【起】［このカードを控え室に置く］ すべてのプレイヤーは自分の山札の上から2枚を、控え室に置く。それらのカードにCXがあるなら、あなたは相手の前列のレベル3以下のキャラを2枚まで選び、手札に戻す。",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "stage"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "selection": "@source"
+              }
+            }
+          ],
+          "target": null,
+          "steps": [
+            {
+              "handler": "millDeckTop",
+              "params": {
+                "side": "self",
+                "count": 2
+              }
+            },
+            {
+              "handler": "millDeckTop",
+              "params": {
+                "side": "opponent",
+                "count": 2
+              }
+            },
+            {
+              "handler": "bounceFrontAfterMill",
+              "params": {
+                "max": 2
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        }
+      ]
     }
   ]
 }
