@@ -244,6 +244,7 @@ async function main() {
     await checkPracticeCards(browser,url);
     await checkLevelOnePractice(browser,url);
     await checkPracticeMulligan(browser,url);
+    await checkMirrorAutoplay(browser,url);
   } finally {
     if(browser)await browser.close();
     server.close();
@@ -515,6 +516,30 @@ async function checkPracticeMulligan(browser,url){
   await page.getByRole("button",{name:"確認して進む",exact:true}).tap();
   await page.getByRole("button",{name:"選ばず進む",exact:true}).tap();
   assert.equal(await page.evaluate(()=>players[0].stock.at(-1).id),"BOT/W000-104");
+  await page.close();
+}
+
+async function checkMirrorAutoplay(browser,url){
+  const page=await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
+  await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
+  await page.goto(url);
+  await page.locator("#botSetup summary").tap();
+  await page.locator("#botScenario").selectOption("red-blue-deck");
+  await page.locator("#startBotBattle").tap();
+  await page.locator("#confirmMulligan").tap();
+  await page.evaluate(()=>{
+    const b=players[1];
+    while(b.hand.length)botMove(b,"hand",0,"deck");
+    botMove(b,"deck",b.deck.findIndex(c=>c.id.endsWith("-101")),"front0");
+    finishEndTurn();
+    setTurnPhase("attack");
+  });
+  assert.equal(await page.locator("#botStep").isVisible(),false);
+  await page.locator("#dialogTitle").filter({hasText:"Botのトリガーチェック"}).waitFor();
+  assert.equal(await page.evaluate(()=>players[1].stock.length),0);
+  await page.getByRole("button",{name:"確認して進む",exact:true}).tap();
+  await page.waitForFunction(()=>match.turn.player===0);
+  assert.equal(await page.evaluate(()=>players[1].stock.length),1);
   await page.close();
 }
 

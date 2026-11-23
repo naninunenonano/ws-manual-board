@@ -536,11 +536,28 @@ function botCanStep(){
     match.encore?.step==="complete"&&match.turn.player===1;
   return match.turn.player===1;
 }
+let botTurnTimer=null;
+function scheduleBotTurn(){
+  if(match?.bot?.scenario!==redBlueScenario||!botCanStep()){
+    if(botTurnTimer!==null)clearTimeout(botTurnTimer);
+    botTurnTimer=null;
+    return;
+  }
+  if(botTurnTimer!==null)return;
+  const scheduledMatch=match;
+  botTurnTimer=setTimeout(()=>{
+    botTurnTimer=null;
+    if(match===scheduledMatch)runBotTurnStep();
+    scheduleBotTurn();
+  },350);
+}
 function renderBotControls(){
   document.getElementById("botControls").hidden=false;
   document.getElementById("botModeName").textContent="Bot戦 · "+((match.bot.scenario===redBlueScenario?redBlueDeck.title:practiceTitles[match.bot.scenario])??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
   const button=document.getElementById("botStep");
+  button.hidden=match.bot.scenario===redBlueScenario;
   button.disabled=!botCanStep();
+  scheduleBotTurn();
   const phase=match.turn.phase;
   if(isAutoRules()&&match.bot.log)botMessage(match.bot.log.join(" ／ "));
   const steps={stand:"Botのドロー",draw:isAutoRules()?"Botのクロックへ":"Botがキャラを出す",clock:"Botのメインへ",climax:"Botのアタックへ",main:isAutoRules()?"Botがキャラを出す":"Botのアタックへ",

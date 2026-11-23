@@ -421,7 +421,7 @@ function autoRulePay(p,cost){
   const board=players[p];
   for(let i=0;i<cost;i++)botMove(board,"stock",board.stock.length-1,"waiting");
 }
-function autoRulePlace(p,uid,zone){
+function autoRulePlace(p,uid,zone,confirmedOccupant){
   if(ruleBusy||p!==side)return false;
   const board=players[p],index=board.hand.findIndex(card=>card.uid===uid),card=board.hand[index];
   if(!card)return false;
@@ -429,6 +429,17 @@ function autoRulePlace(p,uid,zone){
   if(!climax&&!isStageZone(zone))return false;
   const error=autoRuleLegalPlay(p,card,climax?"climax":"main",climax?"climax":"character");
   if(error||climax&&board.cx.length){message(error||"すでにCXをプレイしています");return false}
+  if(!climax){
+    const occupant=board[zone].at(-1);
+    if(confirmedOccupant!==undefined&&occupant?.uid!==confirmedOccupant)return false;
+    if(occupant&&confirmedOccupant===undefined){
+      const body=showResolution("舞台のキャラを入れ替えますか？",[occupant,card]);
+      body.append(document.createTextNode(botCardInfo(occupant).name+"を控え室に置き、"+botCardInfo(card).name+"を登場させます。"));
+      deckButton(body,"キャンセル",()=>{closeResolution();clearCardSelection()});
+      deckButton(body,"入れ替える",()=>{closeResolution();autoRulePlace(p,uid,zone,occupant.uid)});
+      return true;
+    }
+  }
   selected=null;
   runRuleOperation(done=>autoRuleResolvePlay(p,index,zone,done));
   return true;
@@ -500,6 +511,7 @@ function autoRuleHandMenu(p,index){
   const level=autoRuleHandLevel(players[p],definition);
   if(level!==definition.stats.level)body.append(document.createTextNode("手札ではLv"+level));
   const error=autoRuleLegalPlay(p,card,phase,type);
+  deckButton(body,"選択解除",()=>{closeResolution();clearCardSelection()});
   if(error){body.append(document.createTextNode(error));return true}
   deckButton(body,"プレイする",()=>{
     closeResolution();
@@ -507,6 +519,7 @@ function autoRuleHandMenu(p,index){
     if(playableEvent){autoRulePlayEvent(p,card.uid);return}
     const targets=showResolution("登場させる枠",[card]);
     setRuleModal(false);
+    deckButton(targets,"選択解除",()=>{closeResolution();clearCardSelection()});
     for(const slot of botSlots){
       const occupied=players[p][slot].length>0;
       deckButton(targets,labels[slot]+(occupied?"（入れ替え）":""),()=>{
