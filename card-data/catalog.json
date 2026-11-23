@@ -956,6 +956,237 @@
           "implementationStatus": "implemented"
         }
       ]
+    },
+    {
+      "cardNumber": "STS/W140-094",
+      "name": "巡遊者 グレイ",
+      "reading": "ジュンユウシャ グレイ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "C",
+      "side": "W",
+      "type": "character",
+      "color": "青",
+      "stats": {
+        "level": 3,
+        "cost": 2,
+        "power": 6500,
+        "soul": 2
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "巡遊者",
+        "恩恵意志"
+      ],
+      "keywords": [],
+      "flavorText": "はじめまして。ワタシは恩恵意志のグレイ。この心の渇きを潤してくれるならアナタに『特別』なものを見せてあげる。でもあんまり待たせちゃダメよ？",
+      "effects": [
+        {
+          "id": "trait-count-early-play",
+          "category": "特徴4枚・早出し",
+          "type": "continuous",
+          "timing": "in_hand",
+          "optional": false,
+          "sourceText": "【永】 あなたの、《巡遊者》か《魔王》のキャラが4枚以上なら、あなたの手札のこのカードのレベルを－1。",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "hand"
+              }
+            },
+            {
+              "handler": "stageTraitCount",
+              "params": {
+                "side": "self",
+                "min": 4,
+                "traits": {
+                  "mode": "any",
+                  "names": [
+                    "巡遊者",
+                    "魔王"
+                  ]
+                }
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "modifyLevel",
+              "params": {
+                "selection": "@source",
+                "amount": -1
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "marker-power",
+          "category": "マーカー参照・パワー＋3500",
+          "type": "continuous",
+          "timing": "on_stage",
+          "optional": false,
+          "sourceText": "【永】 このカードの下にマーカーがあるなら、このカードのパワーを＋3500し、このカードは次の能力を得る。『【自】［(1) 手札を1枚控え室に置く］ このカードがアタックした時、あなたはコストを払ってよい。そうしたら、相手に1ダメージを与える。』（ダメージキャンセルは発生する）",
+          "conditions": [
+            {
+              "handler": "sourceMarkerCount",
+              "params": {
+                "side": "self",
+                "min": 1
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "modifyPower",
+              "params": {
+                "selection": "@source",
+                "amount": 3500
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "marker-attack-damage",
+          "category": "マーカー付き・アタック時1ダメージ",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": true,
+          "sourceText": "【自】［(1) 手札を1枚控え室に置く］ このカードがアタックした時、あなたはコストを払ってよい。そうしたら、相手に1ダメージを与える。（ダメージキャンセルは発生する）",
+          "conditions": [
+            {
+              "handler": "sourceMarkerCount",
+              "params": {
+                "side": "self",
+                "min": 1
+              }
+            },
+            {
+              "handler": "zoneCount",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "stock"
+                },
+                "min": 1
+              }
+            },
+            {
+              "handler": "zoneCount",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "min": 1
+              }
+            }
+          ],
+          "costs": [
+            {
+              "handler": "payStock",
+              "params": {
+                "side": "self",
+                "count": 1
+              }
+            },
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "as": "discard",
+                "count": 1
+              }
+            },
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "selection": "discard"
+              }
+            }
+          ],
+          "target": null,
+          "steps": [
+            {
+              "handler": "dealDamage",
+              "params": {
+                "side": "opponent",
+                "count": 1
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "on-play-trait-look",
+          "category": "登場時・山札確認",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "【自】 このカードが手札から舞台に置かれた時、あなたは自分の山札を上からＸ枚まで見て、カードを1枚まで選び、手札に加え、残りのカードを控え室に置く。Ｘはあなたの、《巡遊者》か《魔王》のキャラの枚数に等しい。",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "lookTopByStageTraits",
+              "params": {
+                "side": "self",
+                "traits": {
+                  "mode": "any",
+                  "names": [
+                    "巡遊者",
+                    "魔王"
+                  ]
+                },
+                "amountKey": "lookCount",
+                "pickKey": "lookPick"
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        }
+      ]
     }
   ]
 }

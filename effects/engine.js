@@ -290,11 +290,33 @@ const WSEffects = (() => {
     p=>"選択したカードの移動先を選ぶ",
     (ctx,p)=>{const destination=ctx.choices[p.choiceKey];if(!p.destinations.some(d=>d.side===destination?.side&&d.zone===destination?.zone))fail("移動先を選んでください","needs-choice");
       return move(ctx,{from:p.from,to:destination,selection:p.selection});},["from","destinations","selection","choiceKey"]);
+  function stageTraitCount(ctx,p,excludedUid,exact=true) {
+    return pile(ctx,{side:p.side,zone:"stage"}).filter(card=>card.uid!==excludedUid
+      &&card.faceUp!==false&&card.type==="character"&&(exact?checkTags(card,"traits",p.traits):matchTags(card,"traits",p.traits)===true)).length;
+  }
+  const validStageTraitCount=p=>knownKey(sides,p.side)&&count(p.min)&&validFilter(p.traits);
+  register(conditions,"stageTraitCount","舞台の特徴枚数条件",
+    validStageTraitCount, p=>"舞台に条件を満たすキャラが"+p.min+"枚以上",
+    (ctx,p)=>stageTraitCount(ctx,p,undefined,false)>=p.min,["side","min","traits"]);
   register(conditions,"otherStageTraitCount","他の舞台の特徴枚数条件",
-    p=>knownKey(sides,p.side)&&count(p.min)&&validFilter(p.traits),
-    p=>"他の舞台に条件を満たすキャラが"+p.min+"枚以上",
-    (ctx,p)=>pile(ctx,{side:p.side,zone:"stage"}).filter(c=>c.uid!==ctx.choices.sourceUid&&c.type==="character"&&checkTags(c,"traits",p.traits)).length>=p.min,
-    ["side","min","traits"]);
+    validStageTraitCount, p=>"他の舞台に条件を満たすキャラが"+p.min+"枚以上",
+    (ctx,p)=>stageTraitCount(ctx,p,ctx.choices.sourceUid)>=p.min,["side","min","traits"]);
+  const lookLimit=(ctx,p)=>Math.min(stageTraitCount(ctx,p,undefined,false),pile(ctx,{side:p.side,zone:"deck"}).length);
+  operation("lookTopByStageTraits","舞台の特徴枚数まで山札を確認",p=>knownKey(sides,p.side)&&validFilter(p.traits)
+    &&word(p.amountKey)&&word(p.pickKey)&&p.amountKey!==p.pickKey,
+    p=>sides[p.side]+"の舞台の《"+p.traits.names.join("》・《")+"》の条件に合うキャラの数まで山札を見て、1枚まで手札に加え、残りを控え室へ",
+    (ctx,p)=>{
+      const deck=pile(ctx,{side:p.side,zone:"deck"}), limit=lookLimit(ctx,p);
+      const amount=limit?ctx.choices[p.amountKey]:0;
+      if(!count(amount)||amount>limit)fail("山札を見る枚数を選んでください","needs-choice");
+      if(!amount)return [];
+      const viewed=deck.slice(-amount).reverse(), picks=ctx.choices[p.pickKey];
+      if(!Array.isArray(picks)||picks.length>1||picks.some(uid=>!viewed.some(card=>card.uid===uid)))
+        fail("見たカードから手札に加えるカードを1枚まで選んでください","needs-choice");
+      deck.splice(-amount);
+      for(const card of viewed)pile(ctx,{side:p.side,zone:picks.includes(card.uid)?"hand":"waiting"}).push(card);
+      return {cards:viewed.map(card=>card.uid),added:picks};
+    },["side","traits","amountKey","pickKey"]);
   register(conditions,"cxName","CX置場のカード名",
     p=>knownKey(sides,p.side)&&word(p.name)&&(p.cardNumbers===undefined||(Array.isArray(p.cardNumbers)&&p.cardNumbers.length>0&&p.cardNumbers.every(word))),
     p=>"CX置場に「"+p.name+"」がある",
@@ -462,6 +484,19 @@ const WSEffects = (() => {
         at=entry;
         const {handler,params}=entry.step;
         if(guided){
+          if(handler==="lookTopByStageTraits"){
+            const max=lookLimit(context,params);
+            if(max){
+              const amount=yield {kind:"look-count",max};
+              if(!count(amount)||amount>max)fail("山札を見る枚数を選んでください","needs-choice");
+              choices[params.amountKey]=amount;
+              if(amount){
+                const from={side:params.side,zone:"deck"};
+                choices[params.pickKey]=yield {kind:"select",label:"見たカード",from,
+                  candidates:pile(context,from).slice(-amount).reverse(),min:0,max:1,phase:entry.phase,privateLook:true};
+              }
+            }
+          }
           if(handler==="healUpTo"){
             const max=Math.min(params.max,pile(context,{side:params.side,zone:"clock"}).length);
             if(max)choices[params.choiceKey]=yield {kind:"heal",max};
@@ -511,7 +546,9 @@ const WSEffects = (() => {
           const branch=params.branches[details.branch];
           pending.splice(index+1,0,...instructions({steps:branch.steps}));
         }
-        if(guided&&handler==="optionalTopMove"&&params.from.zone==="deck"&&details.cards.length&&!pile(context,params.from).length){
+        const movedFromDeck=handler==="lookTopByStageTraits"?{side:params.side,zone:"deck"}
+          :handler==="optionalTopMove"&&params.from.zone==="deck"?params.from:null;
+        if(guided&&movedFromDeck&&details.cards.length&&!pile(context,movedFromDeck).length){
           const refreshed=yield {kind:"deck-empty",state:working};
           if(refreshed){validateBoard(refreshed);working=context.board=structuredClone(refreshed);}
         }

@@ -173,7 +173,7 @@ function startBotMatch(deck,scenario){
 
 function botEffectCard(card){
   const def=botDefinition(card);
-  return {uid:card.uid,cardNumber:card.id,name:def?.name??null,type:def?.type??(card.cx?"climax":null),
+  return {uid:card.uid,cardNumber:card.id,faceUp:card.faceUp,name:def?.name??null,type:def?.type??(card.cx?"climax":null),
     level:card.botLevel??def?.stats?.level??null,cost:def?.stats?.cost??null,power:card.botPower??def?.stats?.power??null,
     soul:card.botSoul??def?.stats?.soul??null,turnLevelBonus:card.turnLevelBonus??0,
     traits:def?.traits??null,keywords:def?.keywords??null,allTags:def?.allTags??false,markers:card.markers??[],gainedAbilities:card.gainedAbilities??[]};
@@ -371,6 +371,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     }
     if(prompt.kind==="deck-empty"){
       if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
+      abortable=false;
       resolveBoardRules(p,()=>step(botEffectBoard(p)));
       return;
     }
@@ -387,18 +388,24 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
           step(candidates.slice(0,prompt.max).map(card=>card.uid));
           break;
         }
-        case "heal":step(prompt.max);break;
+        case "heal":case "look-count":step(prompt.max);break;
         case "destination":step(prompt.destinations[0]);break;
         case "treasure":step(prompt.canStock);break;
         default:step();break;
       }
       return;
     }
-    const body=showResolution(ability.category??"カード効果",prompt.kind==="reveal"?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
+    const body=showResolution(ability.category??"カード効果",prompt.privateLook?prompt.candidates.map(c=>({id:c.cardNumber})):prompt.kind==="reveal"?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
     const add=(label,action)=>deckButton(body,label,()=>{closeResolution();action()});
     const respond=(label,result)=>add(label,()=>step(result));
     if(prompt.kind==="branch"){
       prompt.labels.forEach((label,index)=>respond(label,index));
+    }else if(prompt.kind==="look-count"){
+      body.append(document.createTextNode("山札を上から何枚見るか選んでください。"));
+      const amount=deckSelect(prompt.max,prompt.max);
+      body.append(amount);
+      add("山札を見る",()=>step(Number(amount.value)));
+      respond("見ない",0);
     }else if(prompt.kind==="heal"){
       for(let n=0;n<=prompt.max;n++)respond(n===0?"回復しない":n+"枚回復",n);
     }else if(prompt.kind==="optional-top"){
@@ -410,9 +417,9 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       body.append(document.createTextNode(prompt.label+"から選んでください"));
       const picks=new Set();
       const confirm=add("選択を確定",()=>step([...picks]));confirm.disabled=prompt.min>0;
-      for(const entry of prompt.candidates){
+      for(const [index,entry] of prompt.candidates.entries()){
         const actual={id:entry.cardNumber};
-        const b=deckButton(body,botCardInfo(actual)?.name??entry.cardNumber,()=>{
+        const b=deckButton(body,(prompt.privateLook?(index+1)+"．":"")+(botCardInfo(actual)?.name??entry.cardNumber),()=>{
           if(picks.has(entry.uid))picks.delete(entry.uid);
           else if(picks.size<prompt.max)picks.add(entry.uid);
           b.setAttribute("aria-pressed",String(picks.has(entry.uid)));

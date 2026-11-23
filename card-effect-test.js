@@ -163,7 +163,7 @@
     const spent=usage.filter(entry=>(used.get(usageKey(entry.card.uid))??0)>=ability.limit.perTurn).length;
     $("turnUsed").textContent=ability?.limit?.perTurn?"ターン"+ability.limit.perTurn+"回 ／ 使用済み "+spent+"枚":"";
     $("undoBoard").disabled=!undo||!!session;
-    for(const id of ["nextTurn","resetEffectTest","loadPractice","loadFiren","loadOtoha","loadNatsuka","loadSample","testEffect","testCard","testProduct"])$(id).disabled=!!session||(id==="testEffect"&&!ability);
+    for(const id of ["nextTurn","resetEffectTest","loadPractice","loadFiren","loadOtoha","loadNatsuka","loadGray","loadSample","testEffect","testCard","testProduct"])$(id).disabled=!!session||(id==="testEffect"&&!ability);
     $("placeCard").querySelectorAll("input,select,button").forEach(el=>el.disabled=!!session);
     $("cancelEffect").hidden=!session;
     $("restoreStart").hidden=!lastStart||!!session;
@@ -318,6 +318,7 @@
     if(entry.effects?.some(item=>item.id===abilityId))$("testEffect").value=abilityId;
     $("testCardStatus").textContent=entry.cardNumber+" ／ "+(entry.name??"名称未確認")+(sample?" ／ 架空のテスト例":"");
     $("loadPractice").hidden=entry.cardNumber!=="STS/W140-001";
+    $("loadGray").hidden=entry.cardNumber!=="STS/W140-094";
     $("loadNatsuka").hidden=entry.cardNumber!=="STS/W140-004";
     $("loadOtoha").hidden=entry.cardNumber!=="STS/W140-003";
     readEffect();
@@ -367,6 +368,28 @@
     $("boardStatus").textContent="手札のフィレンから舞台へ。凱旋歌をCX置場に出したら、舞台のフィレンでアタックできます。";
     $("testBoardHeading").tabIndex=-1;
     $("testBoardHeading").focus();
+    clearResults();
+  };
+  $("loadGray").onclick=()=>{
+    if(session||card?.cardNumber!=="STS/W140-094")return;
+    firenPractice=false;practiceSide="self";
+    changeBoard(()=>{
+      board=WSEffects.emptyBoard();used.clear();turn=1;selected=null;
+      const stageCard=formalCard(card);
+      stageCard.markers=[temporaryCard({name:"グレイのマーカー"})];
+      board.self.stage.push(stageCard);
+      for(const trait of ["巡遊者","魔王","巡遊者"])board.self.stage.push(temporaryCard({name:"《"+trait+"》のキャラ",traits:[trait]}));
+      board.self.hand.push(formalCard(card),temporaryCard({name:"アタック時の手札コスト"}));
+      board.self.stock.push(temporaryCard({name:"支払い用ストック"}));
+      for(let i=5;i>=1;i--)board.self.deck.push(temporaryCard({name:"山札の上から"+i+"枚目"}));
+      board.opponent.deck.push(temporaryCard({name:"相手の山札上"}));
+    });
+    for(const zone of ["hand","stage","stock"]){
+      $("boardEditor").querySelector('[data-key="self.'+zone+'"]').open=true;
+    }
+    $("testEffect").value="on-play-trait-look";
+    readEffect();
+    $("boardStatus").textContent="手札のグレイはLv2、舞台のグレイはパワー10000です。登場時は自身を含む5枚を上限に山札を確認できます。";
     clearResults();
   };
   $("loadNatsuka").onclick=()=>{
@@ -508,6 +531,11 @@
     const step=next.value;
     focusOperation();
     if(step.kind==="deck-empty"||step.kind==="damage"){advance();return}
+    if(step.kind==="look-count"){
+      panel.append(node("p","山札を上から何枚見るか選んでください。"),
+        ...Array.from({length:step.max+1},(_,n)=>button(n?n+"枚見る":"見ない",()=>advance(n))));
+      return;
+    }
     if(step.kind==="heal"){
       panel.append(node("p","クロックの上から回復する枚数を選んでください。"),
         ...Array.from({length:step.max+1},(_,n)=>button(n?n+"枚回復":"回復しない",()=>advance(n))));
