@@ -40,3 +40,36 @@ test("Treasure moves the revealed CX to hand regardless of the stock choice",()=
     assert.equal(done.value.state.self.deck.length,takeStock?0:1);
   }
 });
+
+test("Both Treasure CXs grant the same bonus, but only the song satisfies Firen's named combo",()=>{
+  const CardCatalog=require("../card-catalog.js");
+  const find=number=>CardCatalog.findCard(cards,number);
+  const ability=firen.effects.find(effect=>effect.timing==="on_attack");
+  const songIds=["031","031R"];
+  for(const [side,number] of [...songIds,"032","032R"].entries()){
+    const board=WSEffects.emptyBoard();
+    const player=side%2===0?"self":"opponent";
+    const cardNumber="STS/W140-"+number;
+    const definition=find(cardNumber);
+    assert.equal(definition.name,songIds.includes(number)?"黎明告げる凱旋歌":"夢の先へ");
+    assert.deepEqual(definition.triggers,["トレジャー"]);
+    const ally=makeCard("ally",firen);
+    board[player].stage.push(ally);
+    board[player].cx.push({...makeCard("cx",definition),cardNumber});
+    const [bonus]=WSEffects.continuousModifiers(board,player,find);
+    assert.equal(bonus.power,ally.power+1000);
+    assert.equal(bonus.soul,ally.soul+1);
+    const relative=player==="self"?board:{self:board.opponent,opponent:board.self};
+    relative.self.waiting.push(makeCard("target",firen));
+    const combo=WSEffects.guide(ability,relative).next();
+    assert.equal(combo.done,!songIds.includes(number));
+    if(combo.done)assert.equal(combo.value.status,"condition-not-met");
+    else assert.equal(combo.value.kind,"select");
+
+    relative.self.waiting.push(relative.self.cx.pop());
+    const treasure=definition.effects.find(effect=>effect.timing==="on_trigger");
+    const result=WSEffects.run(treasure,relative,{sourceUid:"cx",treasureStock:false});
+    assert.equal(result.status,"success");
+    assert.equal(result.state.self.hand.at(-1).cardNumber,cardNumber);
+  }
+});

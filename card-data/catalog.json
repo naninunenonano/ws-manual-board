@@ -467,6 +467,74 @@
           "implementationStatus": "implemented"
         }
       ]
+    },
+    {
+      "cardNumber": "STS/W140-032",
+      "variants": [
+        "STS/W140-032",
+        "STS/W140-032R"
+      ],
+      "name": "夢の先へ",
+      "reading": "ユメノサキヘ",
+      "product": "ブースターパック ステラソラ",
+      "type": "climax",
+      "color": "緑",
+      "stats": {
+        "level": null,
+        "cost": null,
+        "power": null,
+        "soul": null
+      },
+      "triggers": [
+        "トレジャー"
+      ],
+      "traits": [],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "beyond-the-dream-continuous",
+          "category": "CX永続",
+          "type": "continuous",
+          "timing": "while_in_cx",
+          "optional": false,
+          "description": "CX置場にある間、自分のすべてのキャラにパワー＋1000、ソウル＋1。",
+          "sourceText": "【永】 あなたのキャラすべてに、パワーを＋1000し、ソウルを＋1。",
+          "conditions": [],
+          "costs": [],
+          "steps": [
+            {
+              "handler": "continuousCxBuff",
+              "params": {
+                "side": "self",
+                "power": 1000,
+                "soul": 1
+              }
+            }
+          ],
+          "implementationStatus": "implemented"
+        },
+        {
+          "id": "beyond-the-dream-treasure",
+          "category": "トレジャー",
+          "type": "trigger",
+          "timing": "on_trigger",
+          "optional": false,
+          "description": "トリガーしたこのCXを手札に戻し、山札の上から1枚をストックに置いてよい。",
+          "sourceText": "（トレジャー：このカードがトリガーした時、あなたはこのカードを手札に戻す。あなたは自分の山札の上から1枚を、ストック置場に置いてよい）",
+          "conditions": [],
+          "costs": [],
+          "steps": [
+            {
+              "handler": "treasureTrigger",
+              "params": {
+                "side": "self",
+                "triggerUid": "@source"
+              }
+            }
+          ],
+          "implementationStatus": "implemented"
+        }
+      ]
     }
   ]
 }

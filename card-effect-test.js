@@ -96,7 +96,7 @@
     for(const [side,sideName] of Object.entries(sides)){
       if(firenPractice&&side==="opponent")continue;
       const section=node("section");section.className="effect";
-      const modifiers=new Map(WSEffects.continuousModifiers(board,side).map(stat=>[stat.uid,stat]));
+      const modifiers=new Map(WSEffects.continuousModifiers(board,side,number=>catalog&&WSFormalCards.find(catalog,number)).map(stat=>[stat.uid,stat]));
       section.append(node("h3",sideName));
       for(const [zone,title] of Object.entries(displayZones)){
         const entries=zone==="markers"?allCards(board).filter(x=>x.side===side&&x.zone===zone).reverse():
