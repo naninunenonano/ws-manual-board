@@ -31,6 +31,8 @@ const WSEffects = (() => {
     && (!p.traits || checkTags(card,"traits",p.traits))
     && (!p.keywords || checkTags(card,"keywords",p.keywords))
     && (!p.excludeUid || card.uid!==p.excludeUid);
+  const canChoose=(from,card)=>from.side!=="opponent"||from.zone!=="stage"||
+    matchTags(card,"keywords",{mode:"any",names:["相手の効果に選ばれない"]})!==true;
   function effectiveTags(card, kind) {
     const [field,off]=tagFields[kind];
     if (card[kind]==null)return null;
@@ -105,9 +107,9 @@ const WSEffects = (() => {
     if (source===destination) fail("同じ領域への移動は指定できません");
     let moving;
     if (selection) {
-      const uids = context.selections.get(selection);
+      const uids = selection==="@source"&&context.choices.sourceUid?[context.choices.sourceUid]:context.selections.get(selection);
       if (!uids) fail("選択「"+selection+"」がありません");
-      moving = source.filter(card=>uids.includes(card.uid));
+      moving = source.filter(card=>uids.includes(card.uid)&&canChoose(from,card));
       if (moving.length!==uids.length) fail("選んだカードが指定元の領域にありません");
     } else {
       if (source.length<amount) fail(zoneLabel(from)+"のカードが不足しています");
@@ -182,6 +184,16 @@ const WSEffects = (() => {
       card.gainedAbilities=[...new Set([...(card.gainedAbilities??[]),p.abilityId])];
       return [card.uid];
     },["side","abilityId","minMarkers"]);
+  operation("grantSelectedStageAbility","選んだキャラにターン中の能力を付与",
+    p=>word(p.selection)&&word(p.abilityId),
+    ()=>"選んだキャラにターン中の能力を与える",
+    (ctx,p)=>{
+      const ids=ctx.selections.get(p.selection);
+      const targets=pile(ctx,{side:"self",zone:"stage"}).filter(card=>ids?.includes(card.uid));
+      if(!ids||targets.length!==ids.length)fail("舞台のキャラを確認してください","needs-choice");
+      for(const card of targets)(card.gainedAbilities??=[]).push(p.abilityId);
+      return ids;
+    },["selection","abilityId"]);
   register(conditions,"ownClimaxTrigger","このカードがCXをトリガー",
     p=>knownKey(sides,p.side)&&word(p.abilityId),p=>"このカードが得た能力を持ち、トリガーチェックでCXが出た",
     (ctx,p)=>ctx.choices.triggerClimax===true&&pile(ctx,{side:p.side,zone:"stage"})
@@ -196,6 +208,26 @@ const WSEffects = (() => {
       if(!count(index)||index>=p.branches.length)fail("実行する効果を選んでください","needs-choice");
       return {branch:index,label:p.branches[index].label};
     },["choiceKey","branches"]);
+  const frontBounceTargets=ctx=>pile(ctx,{side:"opponent",zone:"stage"}).filter(card=>
+    card.row==="front"&&card.faceUp!==false&&matching(ctx,card,{cardType:"character",maxLevel:3}));
+  operation("lookOpponentTop","相手の山札を非公開で確認",p=>p.max===2,
+    ()=>"相手の山札の上を2枚まで見て、元の順番のまま戻す",()=>[],["max"]);
+  operation("millDeckTop","山札の上を控え室へ",p=>knownKey(sides,p.side)&&p.count===2,
+    p=>sides[p.side]+"の山札の上から2枚を控え室へ",
+    (ctx,p)=>{
+      const deck=pile(ctx,{side:p.side,zone:"deck"}), amount=Math.min(deck.length,p.count);
+      const climax=deck.slice(deck.length-amount).some(card=>card.type==="climax");
+      return {cards:takeFromTop(ctx,p.side,"deck","waiting",amount),climax};
+    },["side","count"]);
+  operation("bounceFrontAfterMill","CXが落ちた場合に前列を手札へ",p=>p.max===2,
+    ()=>"落としたカードにCXがあれば、相手前列のレベル3以下を2枚まで手札へ戻す",
+    (ctx,p)=>{
+      const targets=frontBounceTargets(ctx), picks=ctx.choices.frontBounce??[];
+      if(!Array.isArray(picks)||picks.length>p.max||new Set(picks).size!==picks.length||
+        !picks.every(uid=>targets.some(card=>card.uid===uid)))fail("相手前列の対象を選んでください","needs-choice");
+      ctx.selections.set("frontBounce",picks);
+      return move(ctx,{from:{side:"opponent",zone:"stage"},to:{side:"opponent",zone:"hand"},selection:"frontBounce"});
+    },["max"]);
   operation("draw","ドロー",p=>knownKey(sides,p.side)&&count(p.count),
     p=>sides[p.side]+"が"+p.count+"枚引く",
     (ctx,p)=>takeFromTop(ctx,p.side,"deck","hand",p.count),["side","count"]);
@@ -210,14 +242,15 @@ const WSEffects = (() => {
     && (p.maxCost===undefined||count(p.maxCost))
     && (p.cardNumbers===undefined||names(p.cardNumbers)&&p.cardNumbers.length>0)
     && (p.excludeUid===undefined||word(p.excludeUid))
-    && (p.excludeSource===undefined||typeof p.excludeSource==="boolean"),
+    && (p.excludeSource===undefined||typeof p.excludeSource==="boolean")
+    && (p.allowNoTarget===undefined||p.allowNoTarget===true&&p.count===1),
     p=>zoneLabel(p.from)+"から"+p.count+"枚を選ぶ（"+(p.cardNumbers?.join("、")??p.as)+"）"+
       ["traits","keywords"].filter(kind=>p[kind]).map(kind=>" ／ "+tagFields[kind][2]+" "+filterLabel(p[kind])).join(""),
     (ctx,p)=>{
-      const picks = Object.hasOwn(ctx.choices,p.as) ? ctx.choices[p.as] : (p.count===0 ? [] : undefined);
-      if (picks===undefined) fail("選択「"+p.as+"」に"+p.count+"枚指定してください","needs-choice");
-      const available = new Map(pile(ctx,p.from).map(card=>[card.uid,card]));
-      if (!Array.isArray(picks) || picks.length>(p.count) || picks.length<(p.min??p.count) || new Set(picks).size!==picks.length
+      const available = new Map(pile(ctx,p.from).filter(card=>canChoose(p.from,card)).map(card=>[card.uid,card]));
+      const minimum=p.allowNoTarget?selectionRequest(ctx,{step:{handler:"selectCards",params:p}}).min:p.min??p.count;
+      const picks=ctx.choices[p.as]??(minimum===0&&p.allowNoTarget||p.count===0?[]:undefined);
+      if (!Array.isArray(picks) || picks.length>(p.count) || picks.length<minimum || new Set(picks).size!==picks.length
           || !picks.every(id=>available.has(id))) fail("選択「"+p.as+"」の枚数・対象を確認してください","needs-choice");
       for(const uid of picks){
         if(!matching(ctx,available.get(uid),{...p,excludeUid:p.excludeUid==="@source"||p.excludeSource?ctx.choices.sourceUid:p.excludeUid}))fail("選択「"+p.as+"」はカード条件に合いません","needs-choice");
@@ -227,7 +260,7 @@ const WSEffects = (() => {
       }
       ctx.selections.set(p.as,[...picks]);
       return [...picks];
-    },["from","as","count","min","traits","keywords","cardType","maxLevel","maxCost","cardNumbers","excludeUid","excludeSource"]);
+    },["from","as","count","min","traits","keywords","cardType","maxLevel","maxCost","cardNumbers","excludeUid","excludeSource","allowNoTarget"]);
   operation("searchDeck","山札検索",p=>knownKey(sides,p.side)&&word(p.as)&&count(p.max)&&
     (p.cardType===undefined||["character","event","climax"].includes(p.cardType))&&
     (p.maxLevel===undefined||integer(p.maxLevel)),
@@ -266,14 +299,45 @@ const WSEffects = (() => {
   operation("revealSelection","選択カード公開",p=>word(p.selection),
     p=>"選択カードを公開", (ctx,p)=>{const ids=ctx.selections.get(p.selection);
       if(!ids)fail("選択がありません");return [...ids];},["selection"]);
+  function shuffleEffectDeck(deck){
+    for(let i=deck.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]];}
+    return deck.map(card=>card.uid);
+  }
   operation("shuffleDeck","山札シャッフル",p=>knownKey(sides,p.side),
     p=>sides[p.side]+"の山札をシャッフル",
-    (ctx,p)=>{const deck=pile(ctx,{side:p.side,zone:"deck"});
-      for(let i=deck.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]];}
-      return deck.map(c=>c.uid);},["side"]);
+    (ctx,p)=>shuffleEffectDeck(pile(ctx,{side:p.side,zone:"deck"})),["side"]);
+  operation("shuffleStockIntoDeck","ストックを山札に戻して入れ替え",p=>p.side==="opponent",
+    ()=>"相手のストックを山札に戻してシャッフルし、同じ枚数をストックに置く",
+    (ctx,p)=>{
+      const stock=pile(ctx,{side:p.side,zone:"stock"}),deck=pile(ctx,{side:p.side,zone:"deck"});
+      const amount=stock.length;
+      deck.push(...stock.splice(0));
+      shuffleEffectDeck(deck);
+      return {cards:takeFromTop(ctx,p.side,"deck","stock",amount)};
+    },["side"]);
+  operation("setAttackTriggerChecks","アタック中のトリガーチェック回数",p=>p.count===2,
+    ()=>"このアタックのトリガーチェックを2回行う",
+    (ctx,p)=>({triggerChecks:p.count}),["count"]);
+  operation("lookAndOrderTop","山札上の非公開確認と並べ替え",p=>p.side==="self"&&p.max===2,
+    ()=>"山札を上から2枚まで見て、選んだカードを好きな順で上に戻し、残りを控え室に置く",
+    (ctx,p)=>{
+      const deck=pile(ctx,{side:p.side,zone:"deck"}),limit=Math.min(p.max,deck.length);
+      if(!limit)return [];
+      const n=ctx.choices.lookCount,ids=ctx.choices.topOrder;
+      if(!count(n)||n>limit)fail("見る枚数を選んでください","needs-choice");
+      if(!n)return [];
+      const seen=deck.slice(-n).reverse(),byUid=new Map(seen.map(card=>[card.uid,card]));
+      if(!Array.isArray(ids)||new Set(ids).size!==ids.length||ids.some(id=>!byUid.has(id)))
+        fail("見たカードから山札の上に戻すカードを選んでください","needs-choice");
+      deck.splice(-n);
+      deck.push(...ids.slice().reverse().map(id=>byUid.get(id)));
+      const discarded=seen.filter(card=>!ids.includes(card.uid));
+      pile(ctx,{side:p.side,zone:"waiting"}).push(...discarded);
+      return {cards:discarded.map(card=>card.uid)};
+    },["side","max"]);
   operation("selectNamed","同名カード選択",p=>ref(p.from)&&word(p.as)&&word(p.cardNumber)&&count(p.count)&&p.count>0,
     p=>zoneLabel(p.from)+"から指定カードを"+p.count+"枚選ぶ",
-    (ctx,p)=>{const ids=ctx.choices[p.as],available=new Map(pile(ctx,p.from).filter(c=>sameNumber(ctx,c.cardNumber,p.cardNumber)).map(c=>[c.uid,c]));
+    (ctx,p)=>{const ids=ctx.choices[p.as],available=new Map(pile(ctx,p.from).filter(c=>canChoose(p.from,c)&&sameNumber(ctx,c.cardNumber,p.cardNumber)).map(c=>[c.uid,c]));
       if(!Array.isArray(ids)||ids.length!==p.count||new Set(ids).size!==ids.length||!ids.every(id=>available.has(id)))fail("同名カードを選択してください","needs-choice");
       ctx.selections.set(p.as,[...ids]);return [...ids];},["from","as","cardNumber","count"]);
   operation("modifyLevel","レベル増減",p=>word(p.selection)&&integer(p.amount)&&(p.untilTurnEnd===undefined||typeof p.untilTurnEnd==="boolean"),
@@ -290,11 +354,33 @@ const WSEffects = (() => {
     p=>"選択したカードの移動先を選ぶ",
     (ctx,p)=>{const destination=ctx.choices[p.choiceKey];if(!p.destinations.some(d=>d.side===destination?.side&&d.zone===destination?.zone))fail("移動先を選んでください","needs-choice");
       return move(ctx,{from:p.from,to:destination,selection:p.selection});},["from","destinations","selection","choiceKey"]);
+  function stageTraitCount(ctx,p,excludedUid,exact=true) {
+    return pile(ctx,{side:p.side,zone:"stage"}).filter(card=>card.uid!==excludedUid
+      &&card.faceUp!==false&&card.type==="character"&&(exact?checkTags(card,"traits",p.traits):matchTags(card,"traits",p.traits)===true)).length;
+  }
+  const validStageTraitCount=p=>knownKey(sides,p.side)&&count(p.min)&&validFilter(p.traits);
+  register(conditions,"stageTraitCount","舞台の特徴枚数条件",
+    validStageTraitCount, p=>"舞台に条件を満たすキャラが"+p.min+"枚以上",
+    (ctx,p)=>stageTraitCount(ctx,p,undefined,false)>=p.min,["side","min","traits"]);
   register(conditions,"otherStageTraitCount","他の舞台の特徴枚数条件",
-    p=>knownKey(sides,p.side)&&count(p.min)&&validFilter(p.traits),
-    p=>"他の舞台に条件を満たすキャラが"+p.min+"枚以上",
-    (ctx,p)=>pile(ctx,{side:p.side,zone:"stage"}).filter(c=>c.uid!==ctx.choices.sourceUid&&c.type==="character"&&checkTags(c,"traits",p.traits)).length>=p.min,
-    ["side","min","traits"]);
+    validStageTraitCount, p=>"他の舞台に条件を満たすキャラが"+p.min+"枚以上",
+    (ctx,p)=>stageTraitCount(ctx,p,ctx.choices.sourceUid)>=p.min,["side","min","traits"]);
+  const lookLimit=(ctx,p)=>Math.min(stageTraitCount(ctx,p,undefined,false),pile(ctx,{side:p.side,zone:"deck"}).length);
+  operation("lookTopByStageTraits","舞台の特徴枚数まで山札を確認",p=>knownKey(sides,p.side)&&validFilter(p.traits)
+    &&word(p.amountKey)&&word(p.pickKey)&&p.amountKey!==p.pickKey,
+    p=>sides[p.side]+"の舞台の《"+p.traits.names.join("》・《")+"》の条件に合うキャラの数まで山札を見て、1枚まで手札に加え、残りを控え室へ",
+    (ctx,p)=>{
+      const deck=pile(ctx,{side:p.side,zone:"deck"}), limit=lookLimit(ctx,p);
+      const amount=limit?ctx.choices[p.amountKey]:0;
+      if(!count(amount)||amount>limit)fail("山札を見る枚数を選んでください","needs-choice");
+      if(!amount)return [];
+      const viewed=deck.slice(-amount).reverse(), picks=ctx.choices[p.pickKey];
+      if(!Array.isArray(picks)||picks.length>1||picks.some(uid=>!viewed.some(card=>card.uid===uid)))
+        fail("見たカードから手札に加えるカードを1枚まで選んでください","needs-choice");
+      deck.splice(-amount);
+      for(const card of viewed)pile(ctx,{side:p.side,zone:picks.includes(card.uid)?"hand":"waiting"}).push(card);
+      return {cards:viewed.map(card=>card.uid),added:picks};
+    },["side","traits","amountKey","pickKey"]);
   register(conditions,"cxName","CX置場のカード名",
     p=>knownKey(sides,p.side)&&word(p.name)&&(p.cardNumbers===undefined||(Array.isArray(p.cardNumbers)&&p.cardNumbers.length>0&&p.cardNumbers.every(word))),
     p=>"CX置場に「"+p.name+"」がある",
@@ -322,6 +408,9 @@ const WSEffects = (() => {
       return n>=(p.min??0)&&n<=(p.max??Infinity);},["side","min","max"]);
   register(conditions,"sourceInZone","このカードの領域",ref, p=>"このカードが"+zoneLabel(p)+"にある",
     (ctx,p)=>pile(ctx,p).some(card=>card.uid===ctx.choices.sourceUid),["side","zone"]);
+  register(conditions,"sourceStanding","このカードがスタンド",p=>knownKey(sides,p.side),()=>"このカードがスタンドしている",
+    (ctx,p)=>pile(ctx,{side:p.side,zone:"stage"}).some(card=>card.uid===ctx.choices.sourceUid&&
+      card.faceUp!==false&&(card.orientation??0)===0),["side"]);
   register(conditions,"sourceMarkerCount","このカードのマーカー枚数",
     p=>knownKey(sides,p.side)&&count(p.min), p=>"このカードの下にマーカーが"+p.min+"枚以上",
     (ctx,p)=>{
@@ -410,7 +499,7 @@ const WSEffects = (() => {
         if(selections.has(step.params.as))issues.push({status:"invalid",message:at+" の選択IDが重複しています"});
         selections.add(step.params.as);
       }else if (step.params.selection && !selections.has(step.params.selection) &&
-        !(step.params.selection==="@source"&&["modifyPower","modifySoul","modifyLevel"].includes(step.handler))){
+        !(step.params.selection==="@source"&&["move","modifyPower","modifySoul","modifyLevel"].includes(step.handler))){
         issues.push({status:"invalid",message:at+" が未定義の選択 "+step.params.selection+" を参照しています"});
       }
     }
@@ -423,9 +512,9 @@ const WSEffects = (() => {
     const from=params.from??{side:params.side,zone:"deck"};
     const filter={...params,excludeUid:params.excludeUid==="@source"||params.excludeSource?context.choices.sourceUid:params.excludeUid};
     const candidates=pile(context,from).filter(card=>{
-      try{return matching(context,card,filter)&&(handler!=="selectNamed"||sameNumber(context,card.cardNumber,params.cardNumber))}catch(error){if(error.status==="unconfirmed")return false;throw error}
+      try{return canChoose(from,card)&&matching(context,card,filter)&&(handler!=="selectNamed"||sameNumber(context,card.cardNumber,params.cardNumber))}catch(error){if(error.status==="unconfirmed")return false;throw error}
     });
-    return {kind:"select",label:zoneLabel(from),from,candidates,min:handler==="searchDeck"?0:params.min??params.count,
+    return {kind:"select",label:zoneLabel(from),from,candidates,min:handler==="searchDeck"||params.allowNoTarget&&!candidates.length?0:params.min??params.count,
       max:params.max??params.count,phase:entry.phase};
   }
 
@@ -461,7 +550,46 @@ const WSEffects = (() => {
         const entry=pending[index];
         at=entry;
         const {handler,params}=entry.step;
+        if(handler==="bounceFrontAfterMill"&&!log.some(step=>step.handler==="millDeckTop"&&step.climax))continue;
         if(guided){
+          if(handler==="lookOpponentTop"){
+            const deck=pile(context,{side:"opponent",zone:"deck"}),max=Math.min(deck.length,params.max);
+            if(max){
+              const n=yield {kind:"private-look-count",max};
+              if(!count(n)||n>max)fail("見る枚数を選んでください","needs-choice");
+              if(n)yield {kind:"private-look",cards:deck.slice(-n).reverse()};
+            }
+          }
+          if(handler==="bounceFrontAfterMill"){
+            const candidates=frontBounceTargets(context);
+            choices.frontBounce=candidates.length?yield {kind:"select",label:"相手の前列",from:{side:"opponent",zone:"stage"},
+              candidates,min:0,max:Math.min(candidates.length,params.max),phase:entry.phase,committedState:working}:[];
+          }
+          if(handler==="lookAndOrderTop"){
+            const from={side:params.side,zone:"deck"},deck=pile(context,from);
+            const max=Math.min(params.max,deck.length);
+            if(max){
+              const n=yield {kind:"look-count",max};
+              if(!count(n)||n>max)fail("見る枚数を選んでください","needs-choice");
+              choices.lookCount=n;
+              if(n)choices.topOrder=yield {kind:"select",label:"見たカード",from,
+                candidates:deck.slice(-n).reverse(),min:0,max:n,topOrder:true,
+                text:"山札の上に戻すカードを、一番上に置くものから順に選んでください。残りは控え室に置きます。"};
+            }
+          }
+          if(handler==="lookTopByStageTraits"){
+            const max=lookLimit(context,params);
+            if(max){
+              const amount=yield {kind:"look-count",max};
+              if(!count(amount)||amount>max)fail("山札を見る枚数を選んでください","needs-choice");
+              choices[params.amountKey]=amount;
+              if(amount){
+                const from={side:params.side,zone:"deck"};
+                choices[params.pickKey]=yield {kind:"select",label:"見たカード",from,
+                  candidates:pile(context,from).slice(-amount).reverse(),min:0,max:1,phase:entry.phase,privateLook:true};
+              }
+            }
+          }
           if(handler==="healUpTo"){
             const max=Math.min(params.max,pile(context,{side:params.side,zone:"clock"}).length);
             if(max)choices[params.choiceKey]=yield {kind:"heal",max};
@@ -484,7 +612,7 @@ const WSEffects = (() => {
           if(request){
             if(request.candidates.length<request.min)
               fail(request.label+"に条件を満たすカードが"+request.min+"枚必要です","condition-not-met");
-            const picks=yield request;
+            const picks=params.allowNoTarget&&!request.candidates.length?[]:yield request;
             if(!Array.isArray(picks)||!picks.every(uid=>request.candidates.some(card=>card.uid===uid)))
               fail("有効なカードを選んでください","needs-choice");
             Object.defineProperty(choices,params.as,{value:picks,configurable:true,writable:true,enumerable:true});
@@ -503,16 +631,37 @@ const WSEffects = (() => {
             outcome=resolved.damage;
           }
         }
+        if(guided&&handler==="millDeckTop"){
+          const cards=[];
+          let climax=false;
+          const deck=()=>pile(context,{side:params.side,zone:"deck"});
+          for(let i=0;i<=params.count;i++){
+            if(!deck().length){
+              const refreshed=yield {kind:"deck-empty",state:working,side:params.side,bothSides:true};
+              if(refreshed){validateBoard(refreshed);working=context.board=structuredClone(refreshed);}
+            }
+            if(i===params.count||!deck().length)break;
+            climax ||= deck().at(-1).type==="climax";
+            cards.push(...takeFromTop(context,params.side,"deck","waiting",1));
+          }
+          outcome={cards,climax};
+        }
         outcome??=entry.implementation.run(context,params);
         const details=Array.isArray(outcome)?{cards:outcome}:outcome;
         if(handler==="revealTop"||handler==="revealSelection")details.revealed=details.cards;
         log.push({phase:entry.phase,handler,ok:true,...details});
+        if(guided&&entry.phase==="costs"&&handler==="move"&&params.selection==="@source"&&params.from.zone==="stage"){
+          const applied=yield {kind:"commit-cost",state:working};
+          if(applied){validateBoard(applied);working=context.board=structuredClone(applied);}
+        }
         if(handler==="chooseBranch"){
           const branch=params.branches[details.branch];
           pending.splice(index+1,0,...instructions({steps:branch.steps}));
         }
-        if(guided&&handler==="optionalTopMove"&&params.from.zone==="deck"&&details.cards.length&&!pile(context,params.from).length){
-          const refreshed=yield {kind:"deck-empty",state:working};
+        const deckSource=["lookAndOrderTop","shuffleStockIntoDeck","lookTopByStageTraits"].includes(handler)?{side:params.side,zone:"deck"}
+          :handler==="optionalTopMove"&&params.from.zone==="deck"?params.from:null;
+        if(guided&&deckSource&&details.cards.length&&!pile(context,deckSource).length){
+          const refreshed=yield {kind:"deck-empty",state:working,side:deckSource.side};
           if(refreshed){validateBoard(refreshed);working=context.board=structuredClone(refreshed);}
         }
         if(guided&&handler!=="treasureTrigger"&&details.revealed?.length){

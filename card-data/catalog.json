@@ -956,6 +956,1104 @@
           "implementationStatus": "implemented"
         }
       ]
+    },
+    {
+      "cardNumber": "STS/W140-019",
+      "name": "風に揺れる気持ち ナツカ",
+      "reading": "カゼニユレルキモチ ナツカ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "U",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 1,
+        "cost": 0,
+        "power": 1500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者",
+        "花咲旅団"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "treasure-gains-wind",
+          "category": "トレジャーのCXに風を追加",
+          "type": "continuous",
+          "timing": "on_stage",
+          "optional": false,
+          "sourceText": "同名のキャラが自分の舞台に他にいない間、自分の全領域のトレジャー持ちCXに風トリガーを追加する。",
+          "steps": null
+        },
+        {
+          "id": "replace-with-natsuka",
+          "category": "起動・爽風の才媛 ナツカに交代",
+          "type": "activated",
+          "timing": "main",
+          "optional": true,
+          "sourceText": "レベル3以上なら、このカードを控え室に置いて使える。手札の爽風の才媛 ナツカを1枚まで元の枠へ出し、そのターン中パワーを2000上げる。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-024",
+      "name": "カリスマ教師の気苦労 カナーチェ",
+      "reading": "カリスマキョウシノキグロウ カナーチェ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "U",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 2,
+        "cost": 1,
+        "power": 7000,
+        "soul": 1
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "巡遊者",
+        "恩恵意志"
+      ],
+      "keywords": [
+        "回想"
+      ],
+      "flavorText": "キミといると、勉強になるな。教師になってからは中々味わえない体験だ",
+      "effects": [
+        {
+          "id": "salvage",
+          "category": "起動・思い出にしてキャラを回収",
+          "type": "activated",
+          "timing": "main",
+          "optional": true,
+          "sourceText": "【起】［【スタンド】しているこのカードを思い出にする］ あなたは自分の控え室の、《巡遊者》か《魔王》のキャラを1枚選び、手札に戻す。",
+          "conditions": [
+            {
+              "handler": "sourceStanding",
+              "params": {
+                "side": "self"
+              }
+            }
+          ],
+          "costs": [
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "stage"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "memory"
+                },
+                "selection": "@source"
+              }
+            }
+          ],
+          "target": null,
+          "steps": [
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "as": "salvage",
+                "count": 1,
+                "allowNoTarget": true,
+                "cardType": "character",
+                "traits": {
+                  "mode": "any",
+                  "names": [
+                    "巡遊者",
+                    "魔王"
+                  ]
+                }
+              }
+            },
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "selection": "salvage"
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "recall-attach",
+          "category": "回想・思い出からマーカーにする",
+          "type": "auto",
+          "timing": "own_character_enter_stage",
+          "optional": true,
+          "sourceText": "【永】 回想 （【自】 これが思い出にあるなら、あなたのキャラが舞台以外から舞台に置かれた時、その下にマーカーがないなら、これを表でその下のマーカーにしてよい。 【自】 これがマーカー置場から離れた時、これを思い出にする）",
+          "conditions": [],
+          "costs": [],
+          "target": null,
+          "steps": null,
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "recall-return",
+          "category": "回想・マーカーを離れたら思い出へ",
+          "type": "auto",
+          "timing": "leave_marker",
+          "optional": false,
+          "sourceText": "【自】 これがマーカー置場から離れた時、これを思い出にする",
+          "conditions": [],
+          "costs": [],
+          "target": null,
+          "steps": null,
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "marker-attack",
+          "category": "マーカー・アタック時に山札を並べ替え",
+          "type": "auto",
+          "timing": "marker_host_attack",
+          "optional": false,
+          "sourceText": "【自】 マーカー置場にこのカードがあるなら、このマーカーを持つ舞台の、《巡遊者》か《魔王》のキャラがアタックした時、あなたは自分の山札を上から2枚まで見て、山札の上に好きな順番で置く。",
+          "conditions": [],
+          "costs": [],
+          "target": null,
+          "steps": null,
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-008",
+      "name": "魂の取引 魔王ちゃん",
+      "reading": "タマシイノトリヒキ マオウチャン",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "R",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 2000,
+        "soul": 0
+      },
+      "triggers": [],
+      "traits": [
+        "魔王",
+        "魔王プロトコル"
+      ],
+      "keywords": [
+        "相手の効果に選ばれない",
+        "集中"
+      ],
+      "effects": [
+        {
+          "id": "opponent-selection-protection",
+          "category": "相手の効果に選ばれない",
+          "type": "continuous",
+          "timing": "on_stage",
+          "optional": false,
+          "sourceText": "【永】 このカードは相手の効果に選ばれない。",
+          "conditions": [],
+          "costs": [],
+          "target": null,
+          "steps": null,
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "other-attack-stock",
+          "category": "他のキャラのアタック時・ソウル－1と山札上公開",
+          "type": "auto",
+          "timing": "other_own_attack",
+          "optional": false,
+          "sourceText": "【自】【ターン1】 他のあなたのキャラがアタックした時、そのターン中、あなたはそのアタックしているキャラのソウルを－1し、自分の山札の上から1枚を公開する。そのカードがレベル0以下のキャラならストック置場に置く。（そうでないなら元に戻す）",
+          "conditions": [],
+          "costs": [],
+          "target": null,
+          "steps": null,
+          "duration": null,
+          "limit": {
+            "perTurn": 1
+          },
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "salvage-brainstorm",
+          "category": "集中（1ストック・自身レスト）",
+          "type": "activated",
+          "timing": "main",
+          "optional": true,
+          "sourceText": "【起】 集中 ［(1) このカードを【レスト】する］ あなたは自分の山札の上から4枚をめくり、控え室に置く。それらのカードのCX1枚につき、あなたは自分の控え室のキャラを1枚まで選び、手札に戻す。",
+          "conditions": [],
+          "costs": [],
+          "target": null,
+          "steps": null,
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": [],
+          "brainstorm": {
+            "stock": 1,
+            "reveal": 4,
+            "salvage": true
+          }
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-023",
+      "name": "ドリンクの誘惑 コゼット",
+      "reading": "ドリンクノユウワク コゼット",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "U",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 2,
+        "cost": 1,
+        "power": 5500,
+        "soul": 1
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "巡遊者"
+      ],
+      "keywords": [],
+      "flavorText": "あ、あれ…引っかかって落ちてこない…どうしよう、揺らしたら取れるかな？",
+      "effects": [
+        {
+          "id": "grant-clock-swap",
+          "category": "登場時・最大2枚にリバース時能力を付与",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "【自】 このカードが手札から舞台に置かれた時、あなたは自分のキャラを2枚まで選び、そのターン中、次の能力を与える。『【自】 このカードが【リバース】した時、このカードのバトル相手のレベルが相手のレベルより高いなら、あなたは相手のクロックの上から1枚を、控え室に置いてよい。そうしたら、あなたはそのキャラをクロック置場に置く。』",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "stage"
+                },
+                "as": "targets",
+                "count": 2,
+                "min": 0,
+                "cardType": "character"
+              }
+            },
+            {
+              "handler": "grantSelectedStageAbility",
+              "params": {
+                "selection": "targets",
+                "abilityId": "STS/W140-023:clock-swap"
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-013",
+      "name": "ムーンシャドウ コゼット",
+      "reading": "ムーンシャドウ コゼット",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "R",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 2,
+        "cost": 1,
+        "power": 8500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者"
+      ],
+      "keywords": [],
+      "flavorText": "永夜の始末屋の力…甘く見てるとケガするよ？",
+      "effects": [
+        {
+          "id": "on-play-peek",
+          "category": "登場時・相手の山札上を確認",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "【自】 このカードが手札から舞台に置かれた時、あなたは相手の山札を上から2枚まで見て、山札の上に元の順番で置く。",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "lookOpponentTop",
+              "params": {
+                "max": 2
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "mill-and-bounce",
+          "category": "起動・双方の山札を落として前列を戻す",
+          "type": "activated",
+          "timing": "main",
+          "optional": true,
+          "sourceText": "【起】［このカードを控え室に置く］ すべてのプレイヤーは自分の山札の上から2枚を、控え室に置く。それらのカードにCXがあるなら、あなたは相手の前列のレベル3以下のキャラを2枚まで選び、手札に戻す。",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "stage"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "selection": "@source"
+              }
+            }
+          ],
+          "target": null,
+          "steps": [
+            {
+              "handler": "millDeckTop",
+              "params": {
+                "side": "self",
+                "count": 2
+              }
+            },
+            {
+              "handler": "millDeckTop",
+              "params": {
+                "side": "opponent",
+                "count": 2
+              }
+            },
+            {
+              "handler": "bounceFrontAfterMill",
+              "params": {
+                "max": 2
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-076",
+      "name": "知識の力 アヤメ",
+      "reading": "チシキノチカラ アヤメ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "R",
+      "side": "W",
+      "type": "character",
+      "color": "青",
+      "stats": {
+        "level": 3,
+        "cost": 2,
+        "power": 10000,
+        "soul": 2
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "巡遊者",
+        "空白旅団"
+      ],
+      "keywords": [],
+      "flavorText": "このバッグの重さは、すなわちこれまで詰め込んできた知識の重さなんです",
+      "effects": [
+        {
+          "id": "on-play-order-and-stock",
+          "category": "登場時・山札確認とストック入れ替え",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "【自】 このカードが手札から舞台に置かれた時、次の2つの効果を1回ずつ行う。『あなたは自分の山札を上から2枚まで見て、カードを2枚まで選び、山札の上に好きな順番で置き、残りのカードを控え室に置く。』『相手は自分のストックすべてを、山札に戻し、その山札をシャッフルし、自分の山札の上から同じ枚数をストック置場に置く。』",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "lookAndOrderTop",
+              "params": {
+                "side": "self",
+                "max": 2
+              }
+            },
+            {
+              "handler": "shuffleStockIntoDeck",
+              "params": {
+                "side": "opponent"
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "on-attack-double-trigger",
+          "category": "アタック時・トリガーチェック2回",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": true,
+          "sourceText": "【自】［手札を1枚控え室に置く］ このカードがアタックした時、あなたはコストを払ってよい。そうしたら、そのアタック中、あなたはトリガーステップにトリガーチェックを2回行う。",
+          "conditions": [
+            {
+              "handler": "zoneCount",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "min": 1
+              }
+            }
+          ],
+          "costs": [
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "as": "discard",
+                "count": 1
+              }
+            },
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "selection": "discard"
+              }
+            }
+          ],
+          "target": null,
+          "steps": [
+            {
+              "handler": "setAttackTriggerChecks",
+              "params": {
+                "count": 2
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-094",
+      "name": "巡遊者 グレイ",
+      "reading": "ジュンユウシャ グレイ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "C",
+      "side": "W",
+      "type": "character",
+      "color": "青",
+      "stats": {
+        "level": 3,
+        "cost": 2,
+        "power": 6500,
+        "soul": 2
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "巡遊者",
+        "恩恵意志"
+      ],
+      "keywords": [],
+      "flavorText": "はじめまして。ワタシは恩恵意志のグレイ。この心の渇きを潤してくれるならアナタに『特別』なものを見せてあげる。でもあんまり待たせちゃダメよ？",
+      "effects": [
+        {
+          "id": "trait-count-early-play",
+          "category": "特徴4枚・早出し",
+          "type": "continuous",
+          "timing": "in_hand",
+          "optional": false,
+          "sourceText": "【永】 あなたの、《巡遊者》か《魔王》のキャラが4枚以上なら、あなたの手札のこのカードのレベルを－1。",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "hand"
+              }
+            },
+            {
+              "handler": "stageTraitCount",
+              "params": {
+                "side": "self",
+                "min": 4,
+                "traits": {
+                  "mode": "any",
+                  "names": [
+                    "巡遊者",
+                    "魔王"
+                  ]
+                }
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "modifyLevel",
+              "params": {
+                "selection": "@source",
+                "amount": -1
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "marker-power",
+          "category": "マーカー参照・パワー＋3500",
+          "type": "continuous",
+          "timing": "on_stage",
+          "optional": false,
+          "sourceText": "【永】 このカードの下にマーカーがあるなら、このカードのパワーを＋3500し、このカードは次の能力を得る。『【自】［(1) 手札を1枚控え室に置く］ このカードがアタックした時、あなたはコストを払ってよい。そうしたら、相手に1ダメージを与える。』（ダメージキャンセルは発生する）",
+          "conditions": [
+            {
+              "handler": "sourceMarkerCount",
+              "params": {
+                "side": "self",
+                "min": 1
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "modifyPower",
+              "params": {
+                "selection": "@source",
+                "amount": 3500
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "marker-attack-damage",
+          "category": "マーカー付き・アタック時1ダメージ",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": true,
+          "sourceText": "【自】［(1) 手札を1枚控え室に置く］ このカードがアタックした時、あなたはコストを払ってよい。そうしたら、相手に1ダメージを与える。（ダメージキャンセルは発生する）",
+          "conditions": [
+            {
+              "handler": "sourceMarkerCount",
+              "params": {
+                "side": "self",
+                "min": 1
+              }
+            },
+            {
+              "handler": "zoneCount",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "stock"
+                },
+                "min": 1
+              }
+            },
+            {
+              "handler": "zoneCount",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "min": 1
+              }
+            }
+          ],
+          "costs": [
+            {
+              "handler": "payStock",
+              "params": {
+                "side": "self",
+                "count": 1
+              }
+            },
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "as": "discard",
+                "count": 1
+              }
+            },
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "selection": "discard"
+              }
+            }
+          ],
+          "target": null,
+          "steps": [
+            {
+              "handler": "dealDamage",
+              "params": {
+                "side": "opponent",
+                "count": 1
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "on-play-trait-look",
+          "category": "登場時・山札確認",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "【自】 このカードが手札から舞台に置かれた時、あなたは自分の山札を上からＸ枚まで見て、カードを1枚まで選び、手札に加え、残りのカードを控え室に置く。Ｘはあなたの、《巡遊者》か《魔王》のキャラの枚数に等しい。",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "lookTopByStageTraits",
+              "params": {
+                "side": "self",
+                "traits": {
+                  "mode": "any",
+                  "names": [
+                    "巡遊者",
+                    "魔王"
+                  ]
+                },
+                "amountKey": "lookCount",
+                "pickKey": "lookPick"
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-T03",
+      "name": "巡遊者 コゼット",
+      "reading": "ジュンユウシャ コゼット",
+      "title": "ステラソラ",
+      "product": "トライアルデッキ ステラソラ",
+      "rarity": "TD",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 1500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "t03-entry",
+          "category": "登場時・パワー＋2000",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "sourceText": "手札から登場したターンはパワー＋2000。さらにアタック時の手札交換能力を得る。",
+          "optional": false,
+          "steps": null
+        },
+        {
+          "id": "t03-attack",
+          "category": "アタック時・山札公開と手札交換",
+          "type": "auto",
+          "timing": "on_attack",
+          "sourceText": "登場したターンのアタック時に山札上を公開。巡遊者か魔王のキャラなら手札に加えて手札1枚を控え室に置き、それ以外は元に戻す。",
+          "optional": false,
+          "steps": null
+        },
+        {
+          "id": "t03-retreat",
+          "category": "バトル相手リバース時・後列へ移動",
+          "type": "auto",
+          "timing": "battle_opponent_reverse",
+          "sourceText": "他の自分の巡遊者か魔王のキャラを1枚レストして空いている後列へ移す。",
+          "optional": false,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-025",
+      "name": "巡遊者 レイス",
+      "reading": "ジュンユウシャ レイス",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "C",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 1000,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者",
+        "恩恵意志"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "reis-cx",
+          "category": "登場時・CX回収",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "sourceText": "手札のCXと他の舞台のキャラを1枚ずつ控え室に置くと、控え室からCX1枚を回収する。",
+          "optional": true,
+          "steps": null
+        },
+        {
+          "id": "reis-clock",
+          "category": "自身リバース時・クロック入れ替え",
+          "type": "auto",
+          "timing": "own_reverse",
+          "sourceText": "レベル0以下のバトル相手を、相手のクロック上1枚と任意で入れ替える。",
+          "optional": true,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-071",
+      "name": "弾む小雨 シーミャオ",
+      "reading": "ハズムコサメ シーミャオ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "R",
+      "side": "W",
+      "type": "character",
+      "color": "青",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者",
+        "龍族"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "shimiao-power",
+          "category": "特徴統一・パワー＋3000",
+          "type": "continuous",
+          "timing": "on_stage",
+          "sourceText": "全員が巡遊者か魔王なら自身のパワー＋3000。",
+          "optional": false,
+          "steps": null
+        },
+        {
+          "id": "shimiao-look",
+          "category": "登場時・上3枚確認",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "sourceText": "山札上3枚までから回想キャラかイベントを1枚まで公開して手札へ。残りを控え室へ置き、手札に加えた場合は手札1枚を控え室へ。",
+          "optional": false,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-077",
+      "name": "森のうっかりさん テレサ",
+      "reading": "モリノウッカリサン テレサ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "U",
+      "side": "W",
+      "type": "character",
+      "color": "青",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者",
+        "ヨロズ配達"
+      ],
+      "keywords": [
+        "回想"
+      ],
+      "effects": [
+        {
+          "id": "teresa-recall",
+          "category": "起動・キャラを回収してテレサを思い出へ",
+          "type": "activated",
+          "timing": "main",
+          "sourceText": "手札1枚とスタンド中の自身を控え室に置き、レベル1以上のキャラ1枚を回収。思い出とマーカーが合計2枚以下なら控え室の同名カードを1枚まで思い出へ。",
+          "optional": true,
+          "steps": null
+        },
+        {
+          "id": "recall-attach",
+          "category": "回想・思い出からマーカーへ",
+          "type": "auto",
+          "timing": "own_character_enter_stage",
+          "sourceText": "舞台以外から登場した自分のキャラにマーカーがなければ、自身を表向きマーカーにできる。",
+          "optional": true,
+          "steps": null
+        },
+        {
+          "id": "recall-return",
+          "category": "回想・思い出へ戻る",
+          "type": "auto",
+          "timing": "leave_marker",
+          "sourceText": "マーカー置場を離れたら思い出にする。",
+          "optional": false,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-068",
+      "name": "弁論と立証 フリージア",
+      "reading": "ベンロントリッショウ フリージア",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "RR",
+      "side": "W",
+      "type": "character",
+      "color": "青",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 1500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者",
+        "ヨロズ配達"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "freesia-power",
+          "category": "特徴統一・ターンに応じたパワー増加",
+          "type": "continuous",
+          "timing": "on_stage",
+          "sourceText": "全員が巡遊者か魔王なら自ターン＋500、相手ターン＋1500。",
+          "optional": false,
+          "steps": null
+        },
+        {
+          "id": "freesia-reveal",
+          "category": "登場時・山札公開とキャラ回収",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "sourceText": "手札1枚を控え室に置くと山札上を公開し、そのレベル以下の巡遊者か魔王のキャラ1枚を回収。CXのレベルは0。公開カードは元に戻す。",
+          "optional": true,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-030",
+      "name": "星ノ塔スタッフ ヴェルジュ",
+      "reading": "ホシノトウスタッフ ヴェルジュ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "C",
+      "side": "W",
+      "type": "event",
+      "color": "緑",
+      "stats": {
+        "level": 1,
+        "cost": 1,
+        "power": null,
+        "soul": null
+      },
+      "triggers": [],
+      "traits": [],
+      "keywords": [
+        "記憶"
+      ],
+      "effects": [
+        {
+          "id": "verge-event",
+          "category": "舞台をコストに山札上を確認",
+          "type": "event",
+          "timing": "event",
+          "sourceText": "舞台のキャラ1枚を控え室に置くと山札上4枚まで確認。巡遊者か魔王のキャラかイベントを2枚まで公開し、1枚を手札、もう1枚をストックへ。残りを控え室へ。このイベントは思い出にする。",
+          "optional": true,
+          "steps": null
+        },
+        {
+          "id": "verge-memory",
+          "category": "記憶・CXトリガー時にキャラ回収",
+          "type": "auto",
+          "timing": "own_climax_trigger",
+          "sourceText": "思い出で自分のCXがトリガーした時、手札のCXを控え室に置くと巡遊者か魔王のキャラ1枚を回収できる。",
+          "optional": true,
+          "steps": null
+        }
+      ]
     }
   ]
 }

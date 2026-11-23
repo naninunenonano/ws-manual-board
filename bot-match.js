@@ -85,7 +85,7 @@ function botMove(board,from,index,to,position="top"){
   if(isStageZone(from)&&!isStageZone(to)){
     card.orientation=0;
     for(const marker of card.markers??[]){
-      marker.card.faceUp=true;board.waiting.push(marker.card);
+      marker.card.faceUp=true;board[botMarkerExitZone(marker)].push(marker.card);
     }
     delete card.markers;
   }
@@ -119,13 +119,15 @@ function startBotMatch(deck,scenario){
   if(!isDeckSetup())return;
   if(onlineMatch?.active()){message("オンラインルームを退出してから開始してください");return}
   const rules=isAutoRules(scenario);
-  const redBlue=scenario===redBlueScenario;
+  const redBlue=isDeckMirror(scenario);
+  const mirrorDeck=scenario===stellaScenario?stellaDeck:redBlueDeck;
+  if(scenario===stellaScenario&&!botCatalog){message("カードデータの読み込みをお待ちください");return}
   const opening=scenario==="opening"||redBlue;
-  if(redBlue)deck=redBlueDeck;
+  if(redBlue)deck=mirrorDeck;
   else if(rules)deck=Object.hasOwn(practiceTitles,scenario)?practiceDeck(botDeck,scenario):{...botDeck,title:"共通ルール確認用デッキ"};
   if(!deck){message("プレイヤー1の使用デッキを選択してください");return}
   if(!rules&&!Object.hasOwn(botScenarioNames,scenario))return;
-  const opponentDeck=redBlue?redBlueDeck:scenario===bondScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["109",1]],["001"]):
+  const opponentDeck=redBlue?mirrorDeck:scenario===bondScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["109",1]],["001"]):
     scenario===backupScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["120",1]],["009"]):botDeck;
   const boards=[buildMatchBoard(deck,0),buildMatchBoard(opponentDeck,1)];
   const [own,opponent]=boards;
@@ -163,7 +165,7 @@ function startBotMatch(deck,scenario){
   }
   const snapshot={version:1,phase:opening?"mulligan":"active",screen:opening?"mulligan":"battle",
     side:0,firstPlayer:0,mulliganPlayer:0,openingHandDealt:true,decks:[deck,opponentDeck],players:boards,result:null,
-    turn:{player:0,number:opening?1:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[redBlue?"赤青デッキ同士・初手から開始":scenario===backupScenario?"赤Lv3を前列①にプレイできます。青Lv2の助太刀は相手のフロントアタック時に使えます":scenario===waitingScenario?"青Lv0を控え室へ移動して誘発を確認。赤Lv0を出すと公開と任意ドローを順に試せます":scenario===bondScenario?"赤Lv0を出すと絆で控え室の赤Lv1を回収できます。青Lv2を前列①に出すと相手のLv3にアタックできます":scenario===stockScenario?"赤Lv3は控え室のCXが2枚以下ならLv2で登場できます。青のイベントで相手のストックを入れ替えられます":scenario===entryScenario?"手札の青Lv0で山札調整とCX回収、赤Lv0でクロックサーチを確認できます":scenario===levelThreeScenario?"青Lv3を前列①に出し、ゲートCXを置いてアタックできます":scenario===levelTwoScenario?"手札のLv2を後列①に置き、前のLv0とLv1のパワーを確認できます":scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
+    turn:{player:0,number:opening?1:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[redBlue?mirrorDeck.title+"・初手から開始":scenario===backupScenario?"赤Lv3を前列①にプレイできます。青Lv2の助太刀は相手のフロントアタック時に使えます":scenario===waitingScenario?"青Lv0を控え室へ移動して誘発を確認。赤Lv0を出すと公開と任意ドローを順に試せます":scenario===bondScenario?"赤Lv0を出すと絆で控え室の赤Lv1を回収できます。青Lv2を前列①に出すと相手のLv3にアタックできます":scenario===stockScenario?"赤Lv3は控え室のCXが2枚以下ならLv2で登場できます。青のイベントで相手のストックを入れ替えられます":scenario===entryScenario?"手札の青Lv0で山札調整とCX回収、赤Lv0でクロックサーチを確認できます":scenario===levelThreeScenario?"青Lv3を前列①に出し、ゲートCXを置いてアタックできます":scenario===levelTwoScenario?"手札のLv2を後列①に置き、前のLv0とLv1のパワーを確認できます":scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
   if(!writeMatch(snapshot))return;
   match=snapshot;players=boards;side=0;selected=null;mulliganSelection=new Set();
   showMatchScreen();
@@ -173,7 +175,7 @@ function startBotMatch(deck,scenario){
 
 function botEffectCard(card){
   const def=botDefinition(card);
-  return {uid:card.uid,cardNumber:card.id,name:def?.name??null,type:def?.type??(card.cx?"climax":null),
+  return {uid:card.uid,cardNumber:card.id,faceUp:card.faceUp,orientation:card.orientation,name:def?.name??null,type:def?.type??(card.cx?"climax":null),
     level:card.botLevel??def?.stats?.level??null,cost:def?.stats?.cost??null,power:card.botPower??def?.stats?.power??null,
     soul:card.botSoul??def?.stats?.soul??null,turnLevelBonus:card.turnLevelBonus??0,
     traits:def?.traits??null,keywords:def?.keywords??null,allTags:def?.allTags??false,markers:card.markers??[],gainedAbilities:card.gainedAbilities??[]};
@@ -183,8 +185,9 @@ function botEffectBoard(p){
   for(const [label,owner] of [["self",p],["opponent",1-p]]){
     const board=players[owner];
     for(const zone of Object.keys(result[label])){
-      const cards=zone==="stage"?botSlots.flatMap(slot=>board[slot]):board[zone];
-      result[label][zone]=cards.map(botEffectCard);
+      result[label][zone]=zone==="stage"?botSlots.flatMap(slot=>board[slot].map(card=>({
+        ...botEffectCard(card),row:slot.startsWith("front")?"front":"back",faceUp:card.faceUp
+      }))):board[zone].map(botEffectCard);
     }
   }
   return result;
@@ -205,7 +208,7 @@ function botApplyEffect(state,destinations,p){
     }
   }
   const next=Object.fromEntries(zones.map(zone=>[zone,[]]));
-  const markers=[];
+  const releasedMarkers={waiting:[],memory:[]};
   for(const [zone,cards] of Object.entries(state.self)){
     for(const entry of cards){
       const old=all.get(entry.uid);
@@ -219,7 +222,7 @@ function botApplyEffect(state,destinations,p){
       }
       if(zone!=="stage"&&isStageZone(old.zone)){
         card.orientation=0;
-        markers.push(...(card.markers??[]).map(marker=>({...marker.card,faceUp:true})));
+        for(const marker of card.markers??[])releasedMarkers[botMarkerExitZone(marker)].push({...marker.card,faceUp:true});
         delete card.markers;
       }
       const target=zone==="stage"?slots.get(entry.uid):zone;
@@ -230,7 +233,7 @@ function botApplyEffect(state,destinations,p){
       next[target].push(card);
     }
   }
-  next.waiting.push(...markers);
+  for(const [zone,cards] of Object.entries(releasedMarkers))next[zone].push(...cards);
   Object.assign(board,next);
   return true;
 }
@@ -260,34 +263,153 @@ function botStats(p,card){
       }
     }
   }
+  if(power!=null)power+=stellaPower(p,card);
   return {power,soul};
+}
+
+function botMarkerAbility(card,timing){
+  return botDefinition(card)?.effects?.find(effect=>effect.timing===timing);
+}
+function botMarkerExitZone(marker){
+  return match?.bot&&botMarkerAbility(marker.card,"leave_marker")?"memory":"waiting";
+}
+function botResolveRecall(p,entrant,done){
+  const board=players[p];
+  const current=botSlots.flatMap(slot=>board[slot]).find(card=>card.uid===entrant.uid);
+  if(!current||botDefinition(current)?.type!=="character"||current.markers?.length){done();return}
+  const choices=board.memory.filter(card=>botMarkerAbility(card,"own_character_enter_stage"));
+  if(!choices.length){done();return}
+  function attach(card){
+    const index=board.memory.findIndex(entry=>entry.uid===card.uid);
+    if(index>=0&&!current.markers?.length){
+      const [marker]=board.memory.splice(index,1);
+      marker.faceUp=true;
+      current.markers=[{card:marker,faceUp:true}];
+    }
+    done();
+  }
+  if(p===1){attach(choices[0]);return}
+  const body=showResolution("回想・登場したキャラの下に置く",[current,...choices]);
+  choices.forEach((card,index)=>deckButton(body,"思い出の"+(index+1)+"枚目をマーカーにする",()=>{
+    closeResolution();attach(card);
+  }));
+  deckButton(body,"マーカーにしない",()=>{closeResolution();done()});
+}
+function botStageEntry(p,card,from,done){
+  botResolveRecall(p,card,()=>{
+    if(from==="hand")botDispatch(card,"from_hand_to_stage",done,p);
+    else done();
+  });
+}
+function botResolveMarkerAttack(p,card,done){
+  const current=botSlots.flatMap(slot=>players[p][slot]).find(entry=>entry.uid===card.uid);
+  if(!current||!["巡遊者","魔王"].some(trait=>matchesPracticeTrait(current,trait))){done();return}
+  const markers=(current.markers??[]).filter(marker=>marker.faceUp&&botMarkerAbility(marker.card,"marker_host_attack"));
+  function next(index){
+    if(index===markers.length){done();return}
+    autoRuleReorderTop(p,()=>next(index+1),true);
+  }
+  next(0);
+}
+function botOtherAttackEffects(p,attacker,done){
+  const board=players[p];
+  const sources=botSlots.flatMap(slot=>board[slot]).filter(card=>card.faceUp&&card.uid!==attacker.uid);
+  function next(index){
+    const source=sources[index];
+    if(!source){done();return}
+    const resume=()=>next(index+1);
+    const effect=botDefinition(source)?.effects?.find(entry=>entry.timing==="other_own_attack");
+    if(!effect||!botSlots.some(slot=>board[slot].some(card=>card.uid===source.uid))){resume();return}
+    const key=source.uid+":"+effect.id;
+    if((match.bot.uses[key]??0)>=effect.limit.perTurn){resume();return}
+    const current=botSlots.flatMap(slot=>board[slot]).find(card=>card.uid===attacker.uid);
+    if(!current){done();return}
+    match.bot.uses[key]=(match.bot.uses[key]??0)+1;
+    current.botSoul=(current.botSoul??botDefinition(current)?.stats?.soul??1)-1;
+    current.turnSoulBonus=(current.turnSoulBonus??0)-1;
+    const top=board.deck.at(-1);
+    if(!top){resume();return}
+    const info=botEffectCard(top);
+    const stocked=info.type==="character"&&info.level!=null&&info.level<=0;
+    function finish(){
+      if(stocked)botMove(board,"deck",board.deck.length-1,"stock");
+      resolveBoardRules(p,resume);
+    }
+    if(p===1){autoRuleLog("山札の上を公開："+(info.name??info.cardNumber)+(stocked?"（ストックへ）":"（元に戻す）"));finish();return}
+    const body=showResolution(effect.category,[top]);
+    deckButton(body,stocked?"ストックに置く":"元に戻す",()=>{closeResolution();finish()});
+  }
+  next(0);
 }
 
 function botDispatch(card,timing,done,p=0,context={}){
   const effects=botDefinition(card)?.effects?.filter(item=>item.timing===timing&&item.type==="auto"
     &&(timing!=="on_own_climax_trigger"||card.gainedAbilities?.includes(item.id)))??[];
   function next(i){
-    if(i===effects.length){done?.();return}
+    if(i===effects.length){
+      if(timing==="on_attack")botResolveMarkerAttack(p,card,()=>botOtherAttackEffects(p,card,()=>done?.()));
+      else done?.();
+      return;
+    }
     const effect=effects[i],resume=()=>next(i+1);
-    if(effect.reorderTop)autoRuleReorderTop(p,resume);
+    if(Object.hasOwn(stellaActions,effect.id))stellaActions[effect.id](p,card,resume);
+    else if(effect.reorderTop)autoRuleReorderTop(p,resume);
     else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
     else if(effect.traitLoot)autoRuleTraitLoot(p,card,effect,resume);
-    else botGuide(card,effect,success=>{
+    else botGuide(card,effect,(success,result)=>{
+      const triggerChecks=success&&result?.log.find(step=>step.triggerChecks)?.triggerChecks;
+      if(triggerChecks)context.setTriggerChecks?.(triggerChecks);
       if(success&&effect.lookTop){
         const {max,targetLabel,minLevel}=effect.lookTop;
         resolveBoardRules(p,()=>autoRuleLookTop(p,max,effect.category,targetLabel,candidate=>
           (botEffectCard(candidate).level??-1)>=minLevel,resume));
       }else if(success&&effect.drawAfterCost)autoRuleDrawAfterCost(p,effect.drawAfterCost,resume);
       else resume();
-    },p,!effect.steps?.some(step=>step.handler==="chooseBranch"),context);
+    },p,!effect.steps?.some(step=>["chooseBranch","lookAndOrderTop"].includes(step.handler)),context);
   }
   next(0);
 }
+function botTriggerIcons(p,card){
+  const definition=botDefinition(card),icons=definition?.triggers??[];
+  if(definition?.type!=="climax"||!icons.includes("トレジャー"))return icons;
+  const sources=botSlots.flatMap(slot=>players[p][slot]).filter(entry=>entry.faceUp&&
+    sameBotCardNumber(entry.id,"STS/W140-019"));
+  return sources.length===1?[...icons,"風"]:icons;
+}
+function botResolveWind(p,done){
+  const rival=players[1-p];
+  const targets=botSlots.flatMap(slot=>rival[slot].map(card=>({slot,card}))).filter(({card})=>
+    card.faceUp&&!card.cx&&!["event","climax"].includes(botDefinition(card)?.type)&&
+    !botDefinition(card)?.keywords?.includes("相手の効果に選ばれない"));
+  if(!targets.length){done();return}
+  function bounce({slot,card}){
+    const index=rival[slot].findIndex(entry=>entry.uid===card.uid);
+    if(index>=0)botMove(rival,slot,index,"hand");
+    done();
+  }
+  if(p===1){bounce(targets[0]);return}
+  const body=showResolution("風・相手のキャラを手札に戻す",targets.map(({card})=>card));
+  for(const target of targets)deckButton(body,labels[target.slot]+"の"+(botCardInfo(target.card)?.name??target.card.id),()=>{
+    closeResolution();bounce(target);
+  });
+  deckButton(body,"戻さない",()=>{closeResolution();done()});
+}
+function botResolveTriggerIcons(p,trigger,done){
+  if(!botTriggerIcons(p,trigger).includes("風")){botTriggerEffect(p,trigger,done);return}
+  const windFirst=()=>botResolveWind(p,()=>botTriggerEffect(p,trigger,done));
+  const treasureFirst=()=>botTriggerEffect(p,trigger,()=>botResolveWind(p,done));
+  if(p===1){windFirst();return}
+  const body=showResolution("トレジャーと風の解決順を選ぶ",[trigger]);
+  deckButton(body,"風から解決",()=>{closeResolution();windFirst()});
+  deckButton(body,"トレジャーから解決",()=>{closeResolution();treasureFirst()});
+}
 function botResolveAttackTrigger(p,trigger,attacker,done){
-  botTriggerEffect(p,trigger,()=>{
+  botResolveTriggerIcons(p,trigger,()=>{
     const source=attacker();
-    if(trigger.cx!==true||!source){done();return}
-    botDispatch(source,"on_own_climax_trigger",done,p,{triggerClimax:true});
+    if(trigger.cx!==true){done();return}
+    const finish=()=>stellaMemoryTrigger(p,done);
+    if(!source){finish();return}
+    botDispatch(source,"on_own_climax_trigger",finish,p,{triggerClimax:true});
   });
 }
 
@@ -296,18 +418,22 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const iterator=WSEffects.guide(ability,botEffectBoard(p),{
     ...context,sourceUid:card.uid,usedThisTurn:match.bot.uses[key]??0
   },findBotCard);
+  function apply(state,destinations,bothSides){
+    return botApplyEffect(state,destinations,p)&&(!bothSides||botApplyEffect({self:state.opponent},new Map(),1-p));
+  }
   function finish(result,destinations=new Map(),entered=[]){
-    const success=result.status==="success"&&botApplyEffect(result.state,destinations,p);
+    const bothSides=result.log.some(step=>["millDeckTop","shuffleStockIntoDeck"].includes(step.handler)&&step.ok);
+    const success=result.status==="success"&&apply(result.state,destinations,bothSides);
     if(success&&ability.limit?.perTurn)match.bot.uses[key]=(match.bot.uses[key]??0)+1;
     const text=success?"解決しました":result.status==="success"?"舞台の空き枠がありません":result.message;
     if(!isAutoRules())botMessage((ability.category??ability.id)+" · "+text);
     else if(result.status!=="condition-not-met")autoRuleLog((ability.category??ability.id)+" · "+text);
-    if(!success||!entered.length){done?.(success);return}
+    if(!success||!entered.length){done?.(success,result);return}
     function dispatch(index){
-      if(index===entered.length){done?.(true);return}
+      if(index===entered.length){done?.(true,result);return}
       const entry=entered[index];
       const current=players[p][destinations.get(entry.uid)].find(card=>card.uid===entry.uid);
-      if(current)botDispatch(current,"from_hand_to_stage",()=>dispatch(index+1),p);
+      if(current)botStageEntry(p,current,"hand",()=>dispatch(index+1));
       else dispatch(index+1);
     }
     resolveBoardRules(p,()=>dispatch(0));
@@ -362,6 +488,13 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     const next=iterator.next(answer);
     if(next.done){chooseStage(next.value);return}
     const prompt=next.value;
+    if(prompt.kind==="commit-cost"){
+      if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
+      abortable=false;
+      render();
+      step(botEffectBoard(p));
+      return;
+    }
     if(prompt.kind==="damage"){
       if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
       abortable=false;
@@ -370,9 +503,19 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       return;
     }
     if(prompt.kind==="deck-empty"){
-      if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
-      resolveBoardRules(p,()=>step(botEffectBoard(p)));
+      if(!apply(prompt.state,new Map(),prompt.bothSides||prompt.side==="opponent")){done?.(false);return}
+      abortable=false;
+      const target=prompt.side==="opponent"?1-p:p;
+      resolveBoardRules(target,()=>{
+        if(players[target].level.length>=4){done?.(false);return}
+        step(botEffectBoard(p));
+      });
       return;
+    }
+    if(prompt.committedState){
+      if(!apply(prompt.committedState,new Map(),true)){done?.(false);return}
+      abortable=false;
+      render();
     }
     if(p===1&&isAutoRules()){
       switch(prompt.kind){
@@ -387,18 +530,25 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
           step(candidates.slice(0,prompt.max).map(card=>card.uid));
           break;
         }
-        case "heal":step(prompt.max);break;
+        case "look-count":case "private-look-count":case "heal":step(prompt.max);break;
         case "destination":step(prompt.destinations[0]);break;
         case "treasure":step(prompt.canStock);break;
         default:step();break;
       }
       return;
     }
-    const body=showResolution(ability.category??"カード効果",prompt.kind==="reveal"?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
+    const body=showResolution(ability.category??"カード効果",(prompt.committedState||prompt.topOrder||prompt.privateLook)?prompt.candidates.map(c=>({id:c.cardNumber})):["reveal","private-look"].includes(prompt.kind)?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
     const add=(label,action)=>deckButton(body,label,()=>{closeResolution();action()});
     const respond=(label,result)=>add(label,()=>step(result));
     if(prompt.kind==="branch"){
       prompt.labels.forEach((label,index)=>respond(label,index));
+    }else if(prompt.kind==="private-look-count"){
+      body.append(document.createTextNode("相手の山札を上から何枚見るか選んでください。"));
+      for(let n=0;n<=prompt.max;n++)respond(n?n+"枚見る":"見ない",n);
+    }else if(prompt.kind==="private-look"){
+      respond("元の順番で戻す");
+    }else if(prompt.kind==="look-count"){
+      for(let n=0;n<=prompt.max;n++)respond(n?n+"枚見る":"見ない",n);
     }else if(prompt.kind==="heal"){
       for(let n=0;n<=prompt.max;n++)respond(n===0?"回復しない":n+"枚回復",n);
     }else if(prompt.kind==="optional-top"){
@@ -407,19 +557,27 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     }else if(prompt.kind==="optional"){
       respond("能力を使う",true);respond("使わない",false);
     }else if(prompt.kind==="select"){
-      body.append(document.createTextNode(prompt.label+"から選んでください"));
-      const picks=new Set();
+      body.append(document.createTextNode(prompt.text??prompt.label+"から選んでください"));
+      const picks=new Set(),orderButtons=[];
       const confirm=add("選択を確定",()=>step([...picks]));confirm.disabled=prompt.min>0;
-      for(const entry of prompt.candidates){
+      for(const [candidateIndex,entry] of prompt.candidates.entries()){
         const actual={id:entry.cardNumber};
-        const b=deckButton(body,botCardInfo(actual)?.name??entry.cardNumber,()=>{
+        const b=deckButton(body,((prompt.topOrder||prompt.privateLook)?(candidateIndex+1)+"．":"")+(botCardInfo(actual)?.name??entry.cardNumber),()=>{
           if(picks.has(entry.uid))picks.delete(entry.uid);
           else if(picks.size<prompt.max)picks.add(entry.uid);
           b.setAttribute("aria-pressed",String(picks.has(entry.uid)));
+          if(prompt.topOrder){
+            const ordered=[...picks];
+            for(const [uid,button,label] of orderButtons){
+              const index=ordered.indexOf(uid);
+              button.textContent=index<0?label:(index+1)+"番目に戻す ／ "+label;
+            }
+          }
           b.style.outline=picks.has(entry.uid)?"2px solid #f4cf73":"";
           confirm.disabled=picks.size<prompt.min;
         });
         b.setAttribute("aria-pressed","false");
+        if(prompt.topOrder)orderButtons.push([entry.uid,b,b.textContent]);
       }
       if(prompt.min===0)respond("選ばず進む",[]);
     }else if(prompt.kind==="destination"){
@@ -454,6 +612,8 @@ function botEndTurn(p){
   for(const board of players)for(const zone of zones){
     for(const card of board[zone]){
       delete card.gainedAbilities;
+      if(card.turnPowerBonus){card.botPower-=card.turnPowerBonus;delete card.turnPowerBonus}
+      if(card.turnSoulBonus){card.botSoul-=card.turnSoulBonus;delete card.turnSoulBonus}
       if(card.turnLevelBonus){card.botLevel-=card.turnLevelBonus;delete card.turnLevelBonus}
     }
   }
@@ -461,9 +621,6 @@ function botEndTurn(p){
   if(isAutoRules()){
     match.bot.attacked=false;
     for(const board of players)for(const zone of zones)for(const card of board[zone]){
-      if(card.turnPowerBonus)card.botPower-=card.turnPowerBonus;
-      if(card.turnSoulBonus)card.botSoul-=card.turnSoulBonus;
-      delete card.turnPowerBonus;delete card.turnSoulBonus;
       delete card.botBackupReverse;
       if(card.botEntryBattleBuff?.until<match.turn.number)delete card.botEntryBattleBuff;
     }
@@ -518,8 +675,8 @@ function botBattle(p,zone,attackUid,defenceUid,opposite=zone){
     return;
   }
   const reversals=[];
-  if(defence<=attack&&defender.orientation!==180)reversals.push({owner:p,source:attacker,target:defender,slot:opposite});
-  if(attack<=defence&&attacker.orientation!==180)reversals.push({owner:1-p,source:defender,target:attacker,slot:zone});
+  if(defence<=attack&&defender.orientation!==180)reversals.push({owner:p,source:attacker,target:defender,slot:opposite,sourceSlot:zone});
+  if(attack<=defence&&attacker.orientation!==180)reversals.push({owner:1-p,source:defender,target:attacker,slot:zone,sourceSlot:opposite});
   if(attack<=defence)attacker.orientation=180;
   if(defence<=attack)defender.orientation=180;
   if(isAutoRules())autoRuleLog("バトル "+attack+" 対 "+defence+(attack===defence?"（両方リバース）":attack<defence?"（攻撃側リバース）":"（防御側リバース）"));
@@ -530,34 +687,40 @@ function botHumanAttack(p,zone,index){
   const board=players[p],uid=board[zone][index].uid;
   const defender=players[1-p][zone].at(-1);
   selected=null;
+  let triggerChecks=1;
   runRuleOperation(done=>{
     board[zone][index].orientation=90;
     function afterEffects(){
       const attacker=board[zone].find(c=>c.uid===uid);
       if(!attacker){done();return}
+      let triggerSouls=0;
       function damage(){
         const body=showResolution("ダメージ枚数を決める",[]);
         const current=board[zone].find(card=>card.uid===uid);
         if(!current){closeResolution();done();return}
-        const attack=botStats(p,current),n=(attack.soul??1)+(defender?0:1);
+        const attack=botStats(p,current),n=(attack.soul??1)+(defender?0:1)+triggerSouls;
         const amount=deckSelect(50,n),zero=document.createElement("option");
         zero.value=0;zero.textContent="0枚";amount.prepend(zero);
         body.append(document.createTextNode(defender?"フロントアタック":"ダイレクトアタック"),amount);
         deckButton(body,"ダメージを与える",()=>{
           closeResolution();
           botDamage(1-p,Number(amount.value),()=>{
-            botBattle(p,zone,uid,defender?.uid);
-            done();
+            autoRuleResolveReversals(botBattle(p,zone,uid,defender?.uid)??[],done);
           });
         });
       }
-      let trigger;
-      botRevealTop(p,card=>{trigger=card},found=>{
-        if(!found){damage();return}
-        botResolveAttackTrigger(p,trigger,()=>board[zone].find(c=>c.uid===uid),damage);
-      });
+      function check(remaining){
+        if(!remaining){damage();return}
+        let trigger;
+        botRevealTop(p,card=>{trigger=card},found=>{
+          if(!found){damage();return}
+          if(triggerChecks>1)triggerSouls+=botDefinition(trigger)?.triggers?.filter(icon=>icon==="ソウル").length??0;
+          botResolveAttackTrigger(p,trigger,()=>board[zone].find(c=>c.uid===uid),()=>check(remaining-1));
+        });
+      }
+      check(triggerChecks);
     }
-    botDispatch(board[zone][index],"on_attack",afterEffects);
+    botDispatch(board[zone][index],"on_attack",afterEffects,p,{setTriggerChecks:n=>{triggerChecks=n}});
   });
 }
 
@@ -590,8 +753,7 @@ function botAttack(zone){
     botRevealTop(1,card=>{card.faceUp=false;players[1].stock.push(card)},()=>{
       const amount=(botStats(1,attacker).soul??1)+(defender?0:1);
       botDamage(0,amount,()=>{
-        botBattle(1,zone,attacker.uid,defender?.uid);
-        done();
+        autoRuleResolveReversals(botBattle(1,zone,attacker.uid,defender?.uid)??[],done);
       });
     });
   });
@@ -604,7 +766,7 @@ function botCanStep(){
 }
 let botTurnTimer=null;
 function scheduleBotTurn(){
-  if(match?.bot?.scenario!==redBlueScenario||!botCanStep()){
+  if(!isDeckMirror(match?.bot?.scenario)||!botCanStep()){
     if(botTurnTimer!==null)clearTimeout(botTurnTimer);
     botTurnTimer=null;
     return;
@@ -619,9 +781,9 @@ function scheduleBotTurn(){
 }
 function renderBotControls(){
   document.getElementById("botControls").hidden=false;
-  document.getElementById("botModeName").textContent="Bot戦 · "+((match.bot.scenario===redBlueScenario?redBlueDeck.title:practiceTitles[match.bot.scenario])??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
+  document.getElementById("botModeName").textContent="Bot戦 · "+((match.bot.scenario===stellaScenario?stellaDeck.title:match.bot.scenario===redBlueScenario?redBlueDeck.title:practiceTitles[match.bot.scenario])??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
   const button=document.getElementById("botStep");
-  button.hidden=match.bot.scenario===redBlueScenario;
+  button.hidden=isDeckMirror(match.bot.scenario);
   button.disabled=!botCanStep();
   scheduleBotTurn();
   const phase=match.turn.phase;
@@ -635,7 +797,10 @@ function renderBotControls(){
 }
 function botDefinitionForAbilities(card){
   if(!card||match.turn.player!==0||match.turn.phase!=="main"||ruleBusy)return [];
-  return (botDefinition(card)?.effects??[]).filter(ability=>ability.type==="activated");
+  return (botDefinition(card)?.effects??[]).filter(ability=>ability.type==="activated"&&
+    (ability.id!=="teresa-recall"||card.orientation===0&&players[0].hand.length>0)&&
+    (ability.id!=="replace-with-natsuka"||players[0].level.length>=3)&&
+    (!ability.conditions?.some(step=>step.handler==="sourceStanding")||card.faceUp!==false&&(card.orientation??0)===0));
 }
 
 function runBotTurnStep(){
@@ -652,7 +817,7 @@ function runBotTurnStep(){
       for(const slot of botSlots.slice(0,3)){
         const index=board.hand.findIndex(card=>card.cx!==true);
         if(index<0)break;
-        if(!board[slot].length)botMove(board,"hand",index,slot);
+        if(!board[slot].length)botResolveRecall(1,botMove(board,"hand",index,slot),()=>{});
       }
       botMessage("Botが空いている前列に練習キャラを出しました");updateBoard();
       break;
@@ -681,6 +846,26 @@ function runBotTurnStep(){
   }
 }
 document.getElementById("botStep").onclick=runBotTurnStep;
+function botReplaceWithNatsuka(p,source,done){
+  const board=players[p],slot=botSlots.find(zone=>board[zone].some(card=>card.uid===source.uid));
+  if(!slot||board.level.length<3){botMessage("レベル3以上で使えます");done();return}
+  const body=showResolution("このカードを控え室に置いて能力を使う？",[source]);
+  deckButton(body,"能力を使う",()=>{
+    closeResolution();
+    botMove(board,slot,board[slot].findIndex(card=>card.uid===source.uid),"waiting");
+    const candidates=board.hand.filter(card=>sameBotCardNumber(card.id,"STS/W140-004"));
+    if(!candidates.length){done();return}
+    const choice=showResolution("同じ枠に爽風の才媛 ナツカを出す？",candidates);
+    for(const [index,candidate] of candidates.entries())deckButton(choice,candidates.length===1?"同じ枠に出す":(index+1)+"枚目を出す",()=>{
+      closeResolution();
+      const entrant=botMove(board,"hand",board.hand.findIndex(card=>card.uid===candidate.uid),slot);
+      autoRuleAddTurnStat(entrant,"power",2000);
+      botDispatch(entrant,"from_hand_to_stage",done,p);
+    });
+    deckButton(choice,"出さない",()=>{closeResolution();done()});
+  });
+  deckButton(body,"使わない",()=>{closeResolution();done()});
+}
 function openBotAbility(){
   const card=selected?.p===0&&isStageZone(selected.z)?players[0][selected.z][selected.index]:null;
   const abilities=botDefinitionForAbilities(card);
@@ -692,6 +877,8 @@ function openBotAbility(){
   for(const ability of abilities)deckButton(body,ability.category??ability.id,()=>{
     closeResolution();
     if(ability.brainstorm){activateBrainstorm(0,card,ability.brainstorm);return}
+    if(ability.id==="replace-with-natsuka"){runRuleOperation(done=>botReplaceWithNatsuka(0,card,done));return}
+    if(Object.hasOwn(stellaActions,ability.id)){runRuleOperation(done=>stellaActions[ability.id](0,card,done));return}
     runRuleOperation(done=>botGuide(card,ability,done));
   });
 }

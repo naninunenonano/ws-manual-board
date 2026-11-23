@@ -102,3 +102,14 @@ test("empty zones, duplicate physical IDs, duration and limits are explicit",()=
   board.opponent.hand.push({uid:"same",cardNumber:"TEST/S001-001"});
   assert.equal(engine.run(effect,board,{activate:true}).status,"invalid");
 });
+
+test("相手の効果に選ばれないキャラは舞台の対象候補から外れる",()=>{
+  const state=engine.emptyBoard();
+  state.opponent.stage.push(
+    {uid:"protected",cardNumber:"STS/W140-008",type:"character",keywords:["相手の効果に選ばれない"]},
+    {uid:"normal",cardNumber:"STS/W140-004",type:"character",keywords:[]}
+  );
+  const effect={optional:false,steps:[{handler:"selectCards",params:{from:{side:"opponent",zone:"stage"},as:"target",count:1}}]};
+  assert.deepEqual(engine.guide(effect,state).next().value.candidates.map(card=>card.uid),["normal"]);
+  assert.equal(engine.run(effect,state,{target:["protected"]}).status,"needs-choice");
+});
