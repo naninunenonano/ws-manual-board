@@ -23,8 +23,16 @@ function stellaChoose(p,title,cards,done,{optional=false,shown=[]}={}){
     return;
   }
   if(p===1){done(cards[0]);return}
-  const body=showResolution(title,shown.length?shown:cards);
-  for(const [index,card] of cards.entries())deckButton(body,(index+1)+"．"+stellaName(card),()=>{
+  const body=showResolution(title,shown.length?[]:cards);
+  if(shown.length){
+    for(const card of shown){
+      const index=cards.indexOf(card);
+      const button=effectCardButton(body,card,index<0?stellaName(card):(index+1)+"．"+stellaName(card),()=>{
+        closeResolution();done(card);
+      });
+      button.disabled=index<0;
+    }
+  }else for(const [index,card] of cards.entries())deckButton(body,(index+1)+"．"+stellaName(card),()=>{
     closeResolution();done(card);
   });
   if(optional)deckButton(body,"選ばない",()=>{closeResolution();done(null)});
@@ -122,13 +130,18 @@ function stellaT03Retreat(p,source,done){
 function stellaReis(p,source,done){
   const board=players[p],others=stellaStage(p).filter(card=>card.uid!==source.uid);
   if(!others.length||!board.hand.some(card=>card.cx)){done();return}
-  stellaConfirm(p,"CXと他の舞台のキャラを控え室に置いてCXを回収する？",use=>{
-    if(!use){done();return}
-    stellaDiscard(p,()=>stellaChoose(p,"控え室に置く舞台のキャラ",others,card=>{
+  stellaChoose(p,"使うなら、控え室に置く手札のCXを選ぶ",board.hand.filter(card=>card.cx),cx=>{
+    if(!cx){done();return}
+    function pay(card){
+      if(!card){done();return}
+      stellaMove(board,"hand",cx,"waiting");
       stellaMove(board,botSlots.find(slot=>board[slot].includes(card)),card,"waiting");
+      const eligible=board.waiting.filter(entry=>entry.cx);
+      if(eligible.length===1){stellaMove(board,"waiting",eligible[0],"hand");done();return}
       stellaSalvage(p,entry=>entry.cx,done);
-    }),true);
-  });
+    }
+    stellaChoose(p,"続けて、控え室に置く舞台のキャラを選ぶ",others,pay,{optional:true});
+  },{optional:true});
 }
 function stellaShimiao(p,source,done){
   stellaLookAndTake(p,3,card=>{

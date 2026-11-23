@@ -1276,7 +1276,6 @@ test("赤の仮Lv0：ストックを払って山札上をクロックに置き�
   ruleButton(page,"1ストック払う");
   assert.equal(page.get("dialogBody").children.some(el=>el.textContent==="仮キャラ ゲート連動"),false);
   ruleButton(page,"仮キャラ カムバック連動");
-  ruleButton(page,"選択を確定");
   ruleButton(page,"公開を確認");
   let saved=snapshot(page),board=saved.players[0];
   assert.equal(board.clock.at(-1).uid,before.deck.at(-1).uid);
@@ -2149,10 +2148,8 @@ test("巡遊者レイスは支払ったCXを回収でき、レベル0のバト�
     rb.clock.push(sc("oldclock","025"));
     runRuleOperation(done=>botDispatch(sb.front0[0],"from_hand_to_stage",done));
   `);
-  ruleButton(page,"使う");
   ruleButton(page,"1．夢の先へ");
   ruleButton(page,"1．弾む小雨 シーミャオ");
-  ruleButton(page,"1．夢の先へ");
   assert.equal(page.run("sb.hand[0].uid"),"paid");
   page.run('runRuleOperation(done=>autoRuleResolveReversals(botBattle(0,"front0","source","rival","front2"),done))');
   ruleButton(page,"クロックを入れ替える");
@@ -2210,4 +2207,28 @@ test("フリージアはCXをレベル0として回収し、相手のターン�
   assert.equal(page.run("botStats(0,sb.front0[0]).power"),2000);
   page.run("match.turn.player=1");
   assert.equal(page.run("botStats(0,sb.front0[0]).power"),3000);
+});
+
+test("黎明の刻 レイスは2回のカード選択でコストと山札サーチを解決する",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var rb=players[0],rc=(uid,id)=>({uid,id,faceUp:true,cx:false,orientation:0});
+    for(const zone of zones)rb[zone]=[];
+    rb.front0.push(rc("reis","STS/W140-001"));
+    rb.stock.push(rc("payment","STS/W140-004"));
+    rb.waiting.push(rc("clock-cost","STS/W140-T03"));
+    rb.deck.push(rc("ineligible","STS/W140-004"),rc("wanted","STS/W140-071"));
+    runRuleOperation(done=>botDispatch(rb.front0[0],"from_hand_to_stage",done));
+  `);
+  assert.match(page.get("dialogTitle").textContent,/クロックの下/);
+  ruleButton(page,"巡遊者 コゼット");
+  const target=page.get("dialogBody").children.find(el=>el.textContent==="弾む小雨 シーミャオ");
+  assert.match(target.children[0].src,/sts-w140-071\.png$/);
+  assert.equal(page.get("dialogBody").children.some(el=>el.textContent==="爽風の才媛 ナツカ"),false);
+  ruleButton(page,"弾む小雨 シーミャオ");
+  assert.equal(page.run("ruleBusy"),false);
+  assert.equal(page.run("rb.clock[0].uid"),"clock-cost");
+  assert.equal(page.run("rb.stock.length"),0);
+  assert.equal(page.run("rb.hand[0].uid"),"wanted");
 });

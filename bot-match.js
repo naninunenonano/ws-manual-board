@@ -415,6 +415,9 @@ function botResolveAttackTrigger(p,trigger,attacker,done){
 
 function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const key=card.uid+":"+ability.id;
+  const reisSearch=ability.id==="on-play-waiting-okaken";
+  const reisConsole=ability.id==="memory-recollection-top-reveal";
+  const simpleReis=reisSearch||reisConsole;
   const iterator=WSEffects.guide(ability,botEffectBoard(p),{
     ...context,sourceUid:card.uid,usedThisTurn:match.bot.uses[key]??0
   },findBotCard);
@@ -517,6 +520,17 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       abortable=false;
       render();
     }
+    if(simpleReis&&(prompt.kind==="cost"||prompt.kind==="optional"&&reisSearch)){
+      step(prompt.kind==="optional"?true:undefined);
+      return;
+    }
+    if(reisSearch&&prompt.kind==="reveal"){
+      const names=prompt.cards.map(entry=>stellaName({id:entry.cardNumber}));
+      if(isAutoRules())autoRuleLog(names.join("、")+"を公開して手札へ");
+      else botMessage(names.join("、")+"を公開して手札へ");
+      step();
+      return;
+    }
     if(p===1&&isAutoRules()){
       switch(prompt.kind){
         case "optional":case "optional-top":step(true);break;
@@ -537,7 +551,13 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       }
       return;
     }
-    const body=showResolution(ability.category??"カード効果",(prompt.committedState||prompt.topOrder||prompt.privateLook)?prompt.candidates.map(c=>({id:c.cardNumber})):["reveal","private-look"].includes(prompt.kind)?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
+    const cardChoices=prompt.kind==="select"&&(prompt.from.zone==="deck"||simpleReis);
+    const title=simpleReis&&prompt.kind==="select"?(prompt.phase==="costs"?
+      (reisSearch?"ストック1枚を払い、クロックの下に置くカードを選ぶ":"思い出に置く回想キャラを選ぶ"):
+      "山札からレベル1以下のキャラを1枚まで選ぶ"):ability.category??"カード効果";
+    const visibleCards=!cardChoices&&prompt.kind==="select"&&prompt.committedState?prompt.candidates:
+      ["reveal","private-look"].includes(prompt.kind)?prompt.cards:[];
+    const body=showResolution(title,prompt.kind==="treasure"?[card]:visibleCards.map(c=>({id:c.cardNumber})));
     const add=(label,action)=>deckButton(body,label,()=>{closeResolution();action()});
     const respond=(label,result)=>add(label,()=>step(result));
     if(prompt.kind==="branch"){
@@ -557,12 +577,24 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     }else if(prompt.kind==="optional"){
       respond("能力を使う",true);respond("使わない",false);
     }else if(prompt.kind==="select"){
-      body.append(document.createTextNode(prompt.text??prompt.label+"から選んでください"));
+      const immediate=cardChoices&&prompt.max===1;
+      if(!simpleReis){
+        const hint=document.createElement("p");
+        hint.textContent=prompt.text??prompt.label+"から選んでください";
+        body.append(hint);
+      }
       const picks=new Set(),orderButtons=[];
-      const confirm=add("選択を確定",()=>step([...picks]));confirm.disabled=prompt.min>0;
+      let confirm;
       for(const [candidateIndex,entry] of prompt.candidates.entries()){
         const actual={id:entry.cardNumber};
-        const b=deckButton(body,((prompt.topOrder||prompt.privateLook)?(candidateIndex+1)+"．":"")+(botCardInfo(actual)?.name??entry.cardNumber),()=>{
+        const label=((prompt.topOrder||prompt.privateLook)?(candidateIndex+1)+"．":"")+(botCardInfo(actual)?.name??entry.cardNumber);
+        const choose=()=>{
+          if(immediate){
+            if(simpleReis&&prompt.phase==="costs")abortable=false;
+            closeResolution();
+            step([entry.uid]);
+            return;
+          }
           if(picks.has(entry.uid))picks.delete(entry.uid);
           else if(picks.size<prompt.max)picks.add(entry.uid);
           b.setAttribute("aria-pressed",String(picks.has(entry.uid)));
@@ -570,15 +602,17 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
             const ordered=[...picks];
             for(const [uid,button,label] of orderButtons){
               const index=ordered.indexOf(uid);
-              button.textContent=index<0?label:(index+1)+"番目に戻す ／ "+label;
+              (button.firstChild??button).textContent=index<0?label:(index+1)+"番目に戻す ／ "+label;
             }
           }
           b.style.outline=picks.has(entry.uid)?"2px solid #f4cf73":"";
           confirm.disabled=picks.size<prompt.min;
-        });
-        b.setAttribute("aria-pressed","false");
-        if(prompt.topOrder)orderButtons.push([entry.uid,b,b.textContent]);
+        };
+        const b=cardChoices?effectCardButton(body,actual,label,choose):deckButton(body,label,choose);
+        if(!immediate)b.setAttribute("aria-pressed","false");
+        if(prompt.topOrder)orderButtons.push([entry.uid,b,label]);
       }
+      if(!immediate){confirm=add("選択を確定",()=>step([...picks]));confirm.disabled=prompt.min>0}
       if(prompt.min===0)respond("選ばず進む",[]);
     }else if(prompt.kind==="destination"){
       for(const destination of prompt.destinations)respond(labels[destination.zone]+"へ",destination);
@@ -592,7 +626,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       body.append(document.createTextNode(prompt.text??"コストを確認してください"));
       respond("コストを支払う");
     }
-    if(abortable)add("効果確認を中止",()=>{iterator.return();done?.(false)});
+    if(abortable)add(simpleReis?"使わない":"効果確認を中止",()=>{iterator.return();done?.(false)});
   }
   step();
 }

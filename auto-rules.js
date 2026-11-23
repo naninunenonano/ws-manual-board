@@ -707,9 +707,11 @@ function autoRuleLookTop(p,max,label,targetLabel,matches,done){
       resolveBoardRules(p,done);
     }
     if(p===1){finish(viewed.find(matches));return}
-    const result=showResolution(label+"・"+targetLabel+"を1枚まで選ぶ",viewed);
-    for(const [index,card] of viewed.entries())if(matches(card)){
-      deckButton(result,(index+1)+"．"+botCardInfo(card).name+"を手札へ",()=>{closeResolution();finish(card)});
+    const result=showResolution(label+"・"+targetLabel+"を1枚まで選ぶ",[]);
+    for(const [index,card] of viewed.entries()){
+      const eligible=matches(card);
+      const button=effectCardButton(result,card,(index+1)+"．"+(botCardInfo(card)?.name??card.id)+(eligible?"を手札へ":""),()=>{closeResolution();finish(card)});
+      button.disabled=!eligible;
     }
     deckButton(result,"加えない",()=>{closeResolution();finish(null)});
   }
