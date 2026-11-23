@@ -182,6 +182,16 @@ const WSEffects = (() => {
       card.gainedAbilities=[...new Set([...(card.gainedAbilities??[]),p.abilityId])];
       return [card.uid];
     },["side","abilityId","minMarkers"]);
+  operation("grantSelectedStageAbility","選んだキャラにターン中の能力を付与",
+    p=>word(p.selection)&&word(p.abilityId),
+    ()=>"選んだキャラにターン中の能力を与える",
+    (ctx,p)=>{
+      const ids=ctx.selections.get(p.selection);
+      const targets=pile(ctx,{side:"self",zone:"stage"}).filter(card=>ids?.includes(card.uid));
+      if(!ids||targets.length!==ids.length)fail("舞台のキャラを確認してください","needs-choice");
+      for(const card of targets)(card.gainedAbilities??=[]).push(p.abilityId);
+      return ids;
+    },["selection","abilityId"]);
   register(conditions,"ownClimaxTrigger","このカードがCXをトリガー",
     p=>knownKey(sides,p.side)&&word(p.abilityId),p=>"このカードが得た能力を持ち、トリガーチェックでCXが出た",
     (ctx,p)=>ctx.choices.triggerClimax===true&&pile(ctx,{side:p.side,zone:"stage"})
