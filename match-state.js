@@ -123,6 +123,7 @@ function showMatchScreen() {
   matchElement("setupScreen").hidden = !isDeckSetup();
   matchElement("battleScreen").hidden = !isMatchActive();
   matchElement("botControls").hidden=!match?.bot;
+  for(const id of ["battleSideControl","shuffle","manualBattleHint"])matchElement(id).hidden=!!match?.bot;
   matchElement("mulliganScreen").hidden = match?.phase !== "mulligan";
   if(match?.phase === "mulligan") renderMulligan();
   matchElement("resultScreen").hidden = match?.phase !== "ended";
@@ -143,6 +144,8 @@ function showMatchScreen() {
     renderTurnControls();
     checkMandatoryLevel();
   } else if (match?.phase === "ended") {
+    matchElement("resultRevealControls").hidden=!match.bot;
+    if(match.bot)renderBotRevealButtons("result");
     const { reason, winner } = match.result;
     matchElement("battleResult").textContent = reason === "level"
       ? winner===0?"Botがレベル4になりました。あなたの勝ちです":"レベル4になりました。Botの勝ちです"

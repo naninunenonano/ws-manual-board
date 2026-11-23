@@ -297,7 +297,11 @@ async function checkBot(browser,url){
   await reset();
   await start("front");
   assert.equal(await state(()=>players[1].deck.at(-1).cx),true);
-  assert.equal(await page.locator("#battleSide").isDisabled(),true);
+  assert.equal(await page.locator("#battleSide").isVisible(),false);
+  assert.equal(await page.locator("#shuffle").isVisible(),false);
+  const ownZone=name=>page.locator('#boards .zone[data-p="0"][data-z="'+name+'"]');
+  await ownZone("deck").tap();
+  assert.equal(await page.locator("#dialog").isVisible(),false);
   await page.evaluate(()=>{
     const board=players[0];
     const i=board.deck.findIndex(card=>card.id==="STS/W140-001");
@@ -326,12 +330,7 @@ async function checkBot(browser,url){
   await hand.locator('.card[title^="鋼に宿る優しき心 フィレン"]').tap({position:{x:8,y:10}});
   await hand.locator(".card.selected").waitFor();
   await page.locator('#boards .zone[data-p="0"][data-z="front0"]').tap();
-  await button("能力を使う").tap();
   await button("黎明の刻 レイス").tap();
-  await button("選択を確定").tap();
-  await button("コストを支払う").tap();
-  await button("鋼に宿る優しき心 フィレン").tap();
-  await button("選択を確定").tap();
   await button("後列②").tap();
   assert.deepEqual(await state(()=>[players[0].back1[0].botLevel,botStats(0,players[0].front0[0]).power]),[2,7000]);
   await page.evaluate(()=>{
@@ -343,7 +342,6 @@ async function checkBot(browser,url){
   assert.deepEqual(await state(()=>botStats(0,players[0].front0[0])),{power:8000,soul:2});
   await page.locator("#autoAttack").tap();
   await button("黎明の刻 レイス").first().tap();
-  await button("選択を確定").tap();
   await button("手札へ").tap();
   await button("山札の上をストックへ").tap();
   assert.equal(await state(()=>players[0].hand.some(card=>card.id==="STS/W140-031")),true);

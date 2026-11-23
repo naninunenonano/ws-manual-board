@@ -421,12 +421,15 @@ function autoRuleLegalPlay(p,card,phase,type,{planning=false}={}){
   const def=botDefinition(card),board=players[p];
   if(!def||def.type!==type)return "このカードは現在の操作ではプレイできません";
   if(!planning&&(match.turn.phase!==phase||(phase!=="attack"&&match.turn.player!==p)))return "現在のフェイズではプレイできません";
-  const level=autoRuleHandLevel(p,card,def),cost=def.stats.cost;
+  const level=autoRuleHandLevel(p,card,def),cost=autoRulePlayCost(def);
   if(!Number.isInteger(cost)||board.stock.length<cost)return "ストックが不足しています（必要 "+cost+"枚）";
   if(level!=null&&board.level.length<level)return "プレイヤーのレベルが不足しています（必要 Lv"+level+"）";
   if(def.color&&(type==="climax"||level>0)&&![...board.level,...board.clock].some(c=>botDefinition(c)?.color===def.color))
     return "レベル置場かクロックに同じ色が必要です";
   return "";
+}
+function autoRulePlayCost(definition){
+  return definition.type==="climax"?0:definition.stats.cost;
 }
 function autoRulePay(p,cost){
   const board=players[p];
@@ -456,7 +459,7 @@ function autoRulePlace(p,uid,zone,confirmedOccupant){
   return true;
 }
 function autoRuleResolvePlay(p,index,zone,done){
-  const board=players[p],card=board.hand[index],cost=botDefinition(card).stats.cost;
+  const board=players[p],card=board.hand[index],cost=autoRulePlayCost(botDefinition(card));
   autoRulePay(p,cost);
   if(board[zone].length)botMove(board,zone,0,"waiting");
   botMove(board,"hand",index,zone);
@@ -523,7 +526,7 @@ function autoRuleHandMenu(p,index){
   setRuleModal(false);
   const level=autoRuleHandLevel(p,card,definition);
   if(level!==definition.stats.level)body.append(document.createTextNode("手札ではLv"+level));
-  const error=autoRuleLegalPlay(p,card,phase,type);
+  const error=type==="climax"&&players[p].cx.length?"すでにCXをプレイしています":autoRuleLegalPlay(p,card,phase,type);
   deckButton(body,"選択解除",()=>{closeResolution();clearCardSelection()});
   if(error){body.append(document.createTextNode(error));return true}
   deckButton(body,"プレイする",()=>{
@@ -1041,10 +1044,11 @@ function resolveBrainstorm(p,source,{stock,reveal,salvage},done){
   function confirm(){
     const max=revealed.filter(card=>card.cx===true).length;
     for(const card of revealed){card.faceUp=true;board.waiting.push(card)}
+    rememberBotReveal("Brainstorm",p,revealed,revealed.length+"枚公開・CX "+max+"枚");
     autoRuleLog("集中で"+revealed.length+"枚、CXが"+max+"枚（"+revealed.map(card=>botCardInfo(card).name).join("、")+"）");
     resolveBoardRules(p,()=>{
       if(!max){done();return}
-      if(salvage){resolveBrainstormSalvage(p,max,done);return}
+      if(salvage){resolveBrainstormSalvage(p,max,revealed,done);return}
       if(p===1){finishDraw(max);return}
       const body=showResolution("集中・引く枚数を選ぶ（最大"+max+"枚）",revealed);
       for(let n=0;n<=max;n++)deckButton(body,n===0?"引かない":n+"枚引く",()=>{
@@ -1062,7 +1066,7 @@ function resolveBrainstorm(p,source,{stock,reveal,salvage},done){
 }
 
 
-function resolveBrainstormSalvage(p,max,done){
+function resolveBrainstormSalvage(p,max,revealed,done){
   const board=players[p];
   const candidates=board.waiting.filter(card=>botDefinition(card)?.type==="character");
   const limit=Math.min(max,candidates.length);
@@ -1078,6 +1082,11 @@ function resolveBrainstormSalvage(p,max,done){
   }
   if(p===1){for(const card of candidates.slice(0,limit))picks.add(card.uid);finish();return}
   const body=showResolution("集中・控え室からキャラを"+limit+"枚まで手札へ",[]);
+  const details=document.createElement("details"),summary=document.createElement("summary");
+  summary.textContent="公開カード "+revealed.length+"枚（CX "+max+"枚）";
+  details.append(summary);
+  appendResolutionCards(details,revealed,effectChoiceImageUrl);
+  body.append(details);
   for(const card of candidates){
     const button=deckButton(body,botCardInfo(card)?.name??card.id,()=>{
       if(picks.has(card.uid))picks.delete(card.uid);

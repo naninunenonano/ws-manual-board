@@ -869,12 +869,10 @@ test("フィレンの登場時能力は手札から誘発し、枠の選択と�
     assert.ok(button,label);
     button.onclick();
   };
-  click("能力を使う");
+  assert.equal(page.get("dialogTitle").textContent,"控え室に置く手札を選ぶ");
+  assert.ok(page.get("dialogBody").children.some(el=>el.textContent==="使わない"));
   click("黎明の刻 レイス");
-  click("選択を確定");
-  click("コストを支払う");
-  click("鋼に宿る優しき心 フィレン");
-  click("選択を確定");
+  assert.equal(page.get("dialogTitle").textContent,"登場させる舞台の枠を選ぶ");
   click("後列②");
   assert.equal(snapshot(page).players[0].back1[0].botLevel,2);
   assert.equal(page.run("botStats(0,players[0].front0[0]).power"),7000);
@@ -883,7 +881,6 @@ test("フィレンの登場時能力は手札から誘発し、枠の選択と�
   assert.equal(page.run("botStats(0,players[0].front0[0]).soul"),2);
   page.run('match.turn.phase="attack";startAutoAttack(0,"front0",0)');
   click("黎明の刻 レイス");
-  click("選択を確定");
   click("手札へ");
   click("山札の上をストックへ");
   click("ダメージを与える");
@@ -1899,6 +1896,9 @@ test("魔王ちゃんの集中は4枚をめくり、CXの枚数まで控え室�
     openBotAbility();
   `);
   ruleButton(page,"集中（1ストック・自身レスト）");
+  const publicCards=page.get("dialogBody").children[0].children;
+  assert.match(publicCards[0].textContent,/公開カード 4枚（CX 1枚）/);
+  assert.match(publicCards[1].children[2].children[0].src,/sts-w140-032\.png$/);
   ruleButton(page,"魂の取引 魔王ちゃん");
   ruleButton(page,"回収を確定");
   assert.equal(page.run("maouBoard.back0[0].orientation"),90);
@@ -2315,4 +2315,127 @@ test("ステラソラBotは手札から出せなくても、攻撃可能な後�
   `);
   assert.equal(page.run("b.front0[0].uid"),"rear");
   assert.equal(page.run("b.back0.length"),0);
+});
+
+test("ステラソラのCXは自分とBotがストック0枚でプレイできる",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.settle();
+  page.get("botScenario").value="stella-sora-mirror";
+  page.click("startBotBattle");
+  page.click("confirmMulligan");
+  page.run(`
+    var cxCard=(uid,no,cx=false)=>({uid,id:"STS/W140-"+no,cx,faceUp:true,orientation:0});
+    for(const b of players)for(const zone of zones)b[zone]=[];
+    players[0].hand.push(cxCard("song","031",true),cxCard("dream","032",true));
+    players[0].front0.push(cxCard("firen","002"));
+    setTurnPhase("climax");
+    cardClick(0,"hand",0);
+  `);
+  assert.match(page.get("dialogBody").children.at(-1).textContent,/同じ色が必要/);
+  page.run('closeResolution();clearCardSelection();players[0].clock.push(cxCard("green","008"));cardClick(0,"hand",0)');
+  ruleButton(page,"プレイする");
+  assert.equal(page.run("players[0].cx[0].uid"),"song");
+  assert.equal(page.run("players[0].stock.length"),0);
+  assert.equal(page.run("botStats(0,players[0].front0[0]).power"),4000);
+  page.run('cardClick(0,"hand",0)');
+  assert.match(page.get("dialogBody").children.at(-1).textContent,/すでにCX/);
+  page.run(`
+    closeResolution();
+    finishEndTurn();
+    players[1].hand.push(cxCard("bot-song","031",true));
+    players[1].clock.push(cxCard("bot-green","008"));
+    players[1].front0.push(cxCard("bot-firen","002"));
+    setTurnPhase("climax");
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("players[1].cx[0].uid"),"bot-song");
+  assert.equal(page.run("players[1].stock.length"),0);
+  assert.equal(page.run("match.turn.phase"),"attack");
+});
+
+test("フィレンのCXコンボは控え室の対象が1枚なら移動先だけ選ぶ",async()=>{
+  for(const choice of ["手札へ","ストックへ","使わない"]){
+    const page=launch("",new Map(),null,100,null,true);
+    await page.settle();
+    page.get("botScenario").value="stella-sora-mirror";
+    page.click("startBotBattle");
+    page.click("confirmMulligan");
+    page.run(`
+      var b=players[0],make=(uid,no)=>({uid,id:"STS/W140-"+no,faceUp:true,orientation:0});
+      b.waiting=[make("target","025")];
+      b.cx=[make("song","031")];
+      b.front0=[make("source","002")];
+      runRuleOperation(done=>botDispatch(b.front0[0],"on_attack",done));
+    `);
+    assert.equal(page.get("dialogTitle").textContent,"選んだキャラをどこに置く？");
+    ruleButton(page,choice);
+    const zone={"手札へ":"hand","ストックへ":"stock","使わない":"waiting"}[choice];
+    assert.equal(page.run(`b.${zone}.at(-1).uid`),"target");
+    assert.equal(page.get("dialog").open,false);
+  }
+});
+
+test("Bot戦では手動コマンドを隠し、舞台内の移動と公開領域の確認はできる",()=>{
+  const page=launchRules();
+  assert.equal(page.get("battleSideControl").hidden,true);
+  assert.equal(page.get("shuffle").hidden,true);
+  assert.equal(page.get("manualBattleHint").hidden,true);
+  page.run('zoneClick(0,"deck");zoneClick(0,"stock");manualDestination(0,"hand",0)');
+  assert.equal(Boolean(page.get("dialog").open),false);
+  page.run('var originalUid=players[0].front0[0].uid;moveFromBoard(0,"front0",0,"back0")');
+  assert.equal(page.run('players[0].back0[0].uid'),page.run('originalUid'));
+  page.run('openList(0,"back0")');
+  const buttons=page.get("dialogBody").children[0].children.flatMap(item=>item.children);
+  assert.ok(buttons.length);
+  assert.ok(buttons.every(button=>!["移動先を選択","縦向き","右90°","180°"].includes(button.textContent)));
+});
+
+test("集中でCXが0枚でも公開順に後から見返せる",()=>{
+  const page=launchRules();
+  assert.equal(page.get("botBrainstormReveals").disabled,true);
+  page.run(`
+    var concentration=players[0];
+    concentration.deck=[...concentration.deck.filter(c=>c.cx),...concentration.deck.filter(c=>!c.cx)];
+    var revealOrder=concentration.deck.slice(-2).reverse().map(c=>({id:c.id}));
+    activateBrainstorm(0,concentration.front0[0],{stock:1,reveal:2});
+  `);
+  assert.equal(page.run("JSON.stringify(match.bot.reveals.Brainstorm[0].cards)"),page.run("JSON.stringify(revealOrder)"));
+  assert.equal(page.get("botBrainstormReveals").disabled,false);
+  page.click("botBrainstormReveals");
+  assert.match(page.get("dialogBody").children[0].textContent,/2枚公開・CX 0枚/);
+  assert.equal(page.get("dialogBody").children[1].children[0].children.length,2);
+  assert.equal(page.get("close").hidden,false);
+});
+
+test("成立とキャンセルのダメージ公開をリロード後も確認できる",()=>{
+  const page=launchRules();
+  assert.equal(page.get("botDamageReveals").disabled,true);
+  page.run(`
+    var own=players[0],opponent=players[1];
+    function moveToTop(board,cx){
+      const index=board.deck.findIndex(card=>card.cx===cx);
+      board.deck.push(...board.deck.splice(index,1));
+      return board.deck.at(-1).id;
+    }
+    var first=moveToTop(own,false);
+    runRuleOperation(done=>botDamage(0,1,done));
+    var cancelCx=moveToTop(opponent,true),beforeCx=moveToTop(opponent,false);
+    runRuleOperation(done=>botDamage(1,3,done));
+  `);
+  const [cancel,hit]=snapshot(page).bot.reveals.Damage;
+  assert.match(cancel.summary,/キャンセル/);
+  assert.equal(cancel.player,1);
+  assert.deepEqual(cancel.cards.map(c=>c.id),[page.run("beforeCx"),page.run("cancelCx")]);
+  assert.equal(hit.player,0);
+  assert.deepEqual(hit.cards,[{id:page.run("first")}]);
+  const reopened=launch("",page.storage);
+  assert.equal(reopened.get("botDamageReveals").disabled,false);
+  reopened.click("botDamageReveals");
+  const [entries,cards]=reopened.get("dialogBody").children;
+  assert.match(entries.children[0].textContent,/Bot.*キャンセル/);
+  assert.equal(cards.children[0].children.length,2);
+  entries.value="1";
+  entries.onchange();
+  assert.match(entries.children[1].textContent,/自分.*ダメージ 1枚/);
+  assert.equal(cards.children[0].children.length,1);
 });
