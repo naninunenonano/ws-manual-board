@@ -168,13 +168,22 @@ const practiceCards={
     backup:{power:3000,reverseMove:{zone:"memory"}}}
 };
 
+const redBlueScenario="red-blue-deck";
+const redBlueDeck={
+  title:"赤青デッキ",
+  cards:Object.entries({
+    "101":2,"102":2,"103":2,"104":4,"105":4,"106":4,"107":2,"108":2,"109":4,"110":2,
+    "111":2,"112":2,"113":2,"114":4,"115":2,"116":2,"117":2,"118":2,"119":2,"120":2
+  }).map(([number,num])=>({id:"BOT/W000-"+number,num,cx:practiceCards[number].type==="climax"}))
+};
+
 const practiceTitles={
   [backupScenario]:backupTitle,
   [practiceScenario]:practiceTitle,[levelOneScenario]:levelOneTitle,[levelTwoScenario]:levelTwoTitle,
   [levelThreeScenario]:levelThreeTitle,[entryScenario]:entryTitle,[stockScenario]:stockTitle,[bondScenario]:bondTitle,[waitingScenario]:waitingTitle
 };
 function isAutoRules(scenario=match?.bot?.scenario){
-  return scenario===autoRuleScenario||Object.hasOwn(practiceTitles,scenario);
+  return scenario===autoRuleScenario||scenario===redBlueScenario||Object.hasOwn(practiceTitles,scenario);
 }
 function practiceDeck(deck,scenario){
   if(scenario===backupScenario)return practiceDeckWithSpecimens(deck,backupTitle,[["119",1],["120",1],["114",1]],["007","008","009"]);

@@ -1573,3 +1573,23 @@ test("相手ターン中に赤Lv3が舞台へ移動した場合は、その相�
   page.run('finishEndTurn()');
   assert.equal(page.run('botStats(0,players[0].front0[0]).power'),9000);
 });
+
+test("赤青デッキは確定した50枚で初手・マリガンから開始する",()=>{
+  const page=launchRules("red-blue-deck");
+  const before=snapshot(page);
+  assert.equal(before.phase,"mulligan");
+  assert.equal(before.turn.number,1);
+  assert.equal(before.turn.phase,"stand");
+  assert.equal(before.decks[0].title,"赤青デッキ");
+  assert.deepEqual(before.decks[0].cards.map(({id,num})=>[id.slice(-3),num]),[
+    ["101",2],["102",2],["103",2],["104",4],["105",4],["106",4],["107",2],["108",2],["109",4],["110",2],
+    ["111",2],["112",2],["113",2],["114",4],["115",2],["116",2],["117",2],["118",2],["119",2],["120",2]
+  ]);
+  assert.equal(before.decks[0].cards.filter(c=>c.cx).reduce((sum,c)=>sum+c.num,0),8);
+  assert.ok(before.players.every(b=>b.deck.length===45&&b.hand.length===5));
+  assert.deepEqual(ruleCounts(before),[50,50]);
+  page.click("confirmMulligan");
+  assert.equal(snapshot(page).phase,"active");
+  assert.equal(page.run('botDefinition({id:"BOT/W000-119"}).stats.power'),9000);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});

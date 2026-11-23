@@ -67,14 +67,22 @@ function startBotMatch(deck,scenario){
   if(!isDeckSetup())return;
   if(onlineMatch?.active()){message("オンラインルームを退出してから開始してください");return}
   const rules=isAutoRules(scenario);
-  if(rules)deck=Object.hasOwn(practiceTitles,scenario)?practiceDeck(botDeck,scenario):{...botDeck,title:"共通ルール確認用デッキ"};
+  const redBlue=scenario===redBlueScenario;
+  const opening=scenario==="opening"||redBlue;
+  if(redBlue)deck=redBlueDeck;
+  else if(rules)deck=Object.hasOwn(practiceTitles,scenario)?practiceDeck(botDeck,scenario):{...botDeck,title:"共通ルール確認用デッキ"};
   if(!deck){message("プレイヤー1の使用デッキを選択してください");return}
   if(!rules&&!Object.hasOwn(botScenarioNames,scenario))return;
   const opponentDeck=scenario===bondScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["109",1]],["001"]):
     scenario===backupScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["120",1]],["009"]):botDeck;
   const boards=[buildMatchBoard(deck,0),buildMatchBoard(opponentDeck,1)];
   const [own,opponent]=boards;
-  if(rules){prepareAutoRuleBoards(boards,scenario);}
+  if(redBlue){
+    for(const board of boards){
+      shuffle(board.deck);
+      for(let i=0;i<5;i++)botMove(board,"deck",board.deck.length-1,"hand");
+    }
+  }else if(rules){prepareAutoRuleBoards(boards,scenario);}
   else if(scenario==="firen"){
     if(!botCatalog){message("カードデータの読み込みをお待ちください");return}
     if(!prepareBotScenario(own)){
@@ -101,10 +109,9 @@ function startBotMatch(deck,scenario){
       botMove(opponent,"deck",first,"deck");
     }
   }
-  const opening=scenario==="opening";
   const snapshot={version:1,phase:opening?"mulligan":"active",screen:opening?"mulligan":"battle",
     side:0,firstPlayer:0,mulliganPlayer:0,openingHandDealt:true,decks:[deck,opponentDeck],players:boards,result:null,
-    turn:{player:0,number:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[scenario===backupScenario?"赤Lv3を前列①にプレイできます。青Lv2の助太刀は相手のフロントアタック時に使えます":scenario===waitingScenario?"青Lv0を控え室へ移動して誘発を確認。赤Lv0を出すと公開と任意ドローを順に試せます":scenario===bondScenario?"赤Lv0を出すと絆で控え室の赤Lv1を回収できます。青Lv2を前列①に出すと相手のLv3にアタックできます":scenario===stockScenario?"赤Lv3は控え室のCXが2枚以下ならLv2で登場できます。青のイベントで相手のストックを入れ替えられます":scenario===entryScenario?"手札の青Lv0で山札調整とCX回収、赤Lv0でクロックサーチを確認できます":scenario===levelThreeScenario?"青Lv3を前列①に出し、ゲートCXを置いてアタックできます":scenario===levelTwoScenario?"手札のLv2を後列①に置き、前のLv0とLv1のパワーを確認できます":scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
+    turn:{player:0,number:opening?1:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[redBlue?"赤青デッキ50枚・初手から開始":scenario===backupScenario?"赤Lv3を前列①にプレイできます。青Lv2の助太刀は相手のフロントアタック時に使えます":scenario===waitingScenario?"青Lv0を控え室へ移動して誘発を確認。赤Lv0を出すと公開と任意ドローを順に試せます":scenario===bondScenario?"赤Lv0を出すと絆で控え室の赤Lv1を回収できます。青Lv2を前列①に出すと相手のLv3にアタックできます":scenario===stockScenario?"赤Lv3は控え室のCXが2枚以下ならLv2で登場できます。青のイベントで相手のストックを入れ替えられます":scenario===entryScenario?"手札の青Lv0で山札調整とCX回収、赤Lv0でクロックサーチを確認できます":scenario===levelThreeScenario?"青Lv3を前列①に出し、ゲートCXを置いてアタックできます":scenario===levelTwoScenario?"手札のLv2を後列①に置き、前のLv0とLv1のパワーを確認できます":scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
   if(!writeMatch(snapshot))return;
   match=snapshot;players=boards;side=0;selected=null;mulliganSelection=new Set();
   showMatchScreen();
@@ -458,7 +465,7 @@ function botCanStep(){
 }
 function renderBotControls(){
   document.getElementById("botControls").hidden=false;
-  document.getElementById("botModeName").textContent="Bot戦 · "+(practiceTitles[match.bot.scenario]??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
+  document.getElementById("botModeName").textContent="Bot戦 · "+((match.bot.scenario===redBlueScenario?redBlueDeck.title:practiceTitles[match.bot.scenario])??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
   const button=document.getElementById("botStep");
   button.disabled=!botCanStep();
   const phase=match.turn.phase;
