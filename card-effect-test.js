@@ -451,7 +451,13 @@
     panel.append(accept);
     const sync=()=>{
       accept.disabled=chosen.size<Math.max(1,request.min);
-      for(const [card,el] of widgets)el.setAttribute("aria-pressed",String(chosen.has(card.uid)));
+      for(const [card,el,badge] of widgets){
+        el.setAttribute("aria-pressed",String(chosen.has(card.uid)));
+        if(badge){
+          const index=[...chosen].indexOf(card.uid);
+          badge.textContent=index<0?"":(index+1)+"番目に戻す";
+        }
+      }
     };
     for(const candidate of request.candidates){
       const el=cardButton(candidate,()=>{
@@ -462,7 +468,9 @@
         }
         sync();
       });
-      widgets.push([candidate,el]);area.append(el);
+      const badge=request.topOrder?node("span"):null;
+      if(badge)el.append(badge);
+      widgets.push([candidate,el,badge]);area.append(el);
     }
     if(!widgets.length)area.append(node("p","選べるカードはありません。"));
     sync();
@@ -508,6 +516,11 @@
     const step=next.value;
     focusOperation();
     if(step.kind==="deck-empty"||step.kind==="damage"){advance();return}
+    if(step.kind==="look-count"){
+      panel.append(node("p","山札を上から何枚見るか選んでください。"),
+        ...Array.from({length:step.max+1},(_,n)=>button(n?n+"枚見る":"見ない",()=>advance(n))));
+      return;
+    }
     if(step.kind==="heal"){
       panel.append(node("p","クロックの上から回復する枚数を選んでください。"),
         ...Array.from({length:step.max+1},(_,n)=>button(n?n+"枚回復":"回復しない",()=>advance(n))));

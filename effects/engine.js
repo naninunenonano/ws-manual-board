@@ -266,11 +266,42 @@ const WSEffects = (() => {
   operation("revealSelection","選択カード公開",p=>word(p.selection),
     p=>"選択カードを公開", (ctx,p)=>{const ids=ctx.selections.get(p.selection);
       if(!ids)fail("選択がありません");return [...ids];},["selection"]);
+  function shuffleEffectDeck(deck){
+    for(let i=deck.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]];}
+    return deck.map(card=>card.uid);
+  }
   operation("shuffleDeck","山札シャッフル",p=>knownKey(sides,p.side),
     p=>sides[p.side]+"の山札をシャッフル",
-    (ctx,p)=>{const deck=pile(ctx,{side:p.side,zone:"deck"});
-      for(let i=deck.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]];}
-      return deck.map(c=>c.uid);},["side"]);
+    (ctx,p)=>shuffleEffectDeck(pile(ctx,{side:p.side,zone:"deck"})),["side"]);
+  operation("shuffleStockIntoDeck","ストックを山札に戻して入れ替え",p=>p.side==="opponent",
+    ()=>"相手のストックを山札に戻してシャッフルし、同じ枚数をストックに置く",
+    (ctx,p)=>{
+      const stock=pile(ctx,{side:p.side,zone:"stock"}),deck=pile(ctx,{side:p.side,zone:"deck"});
+      const amount=stock.length;
+      deck.push(...stock.splice(0));
+      shuffleEffectDeck(deck);
+      return {cards:takeFromTop(ctx,p.side,"deck","stock",amount)};
+    },["side"]);
+  operation("setAttackTriggerChecks","アタック中のトリガーチェック回数",p=>p.count===2,
+    ()=>"このアタックのトリガーチェックを2回行う",
+    (ctx,p)=>({triggerChecks:p.count}),["count"]);
+  operation("lookAndOrderTop","山札上の非公開確認と並べ替え",p=>p.side==="self"&&p.max===2,
+    ()=>"山札を上から2枚まで見て、選んだカードを好きな順で上に戻し、残りを控え室に置く",
+    (ctx,p)=>{
+      const deck=pile(ctx,{side:p.side,zone:"deck"}),limit=Math.min(p.max,deck.length);
+      if(!limit)return [];
+      const n=ctx.choices.lookCount,ids=ctx.choices.topOrder;
+      if(!count(n)||n>limit)fail("見る枚数を選んでください","needs-choice");
+      if(!n)return [];
+      const seen=deck.slice(-n).reverse(),byUid=new Map(seen.map(card=>[card.uid,card]));
+      if(!Array.isArray(ids)||new Set(ids).size!==ids.length||ids.some(id=>!byUid.has(id)))
+        fail("見たカードから山札の上に戻すカードを選んでください","needs-choice");
+      deck.splice(-n);
+      deck.push(...ids.slice().reverse().map(id=>byUid.get(id)));
+      const discarded=seen.filter(card=>!ids.includes(card.uid));
+      pile(ctx,{side:p.side,zone:"waiting"}).push(...discarded);
+      return {cards:discarded.map(card=>card.uid)};
+    },["side","max"]);
   operation("selectNamed","同名カード選択",p=>ref(p.from)&&word(p.as)&&word(p.cardNumber)&&count(p.count)&&p.count>0,
     p=>zoneLabel(p.from)+"から指定カードを"+p.count+"枚選ぶ",
     (ctx,p)=>{const ids=ctx.choices[p.as],available=new Map(pile(ctx,p.from).filter(c=>sameNumber(ctx,c.cardNumber,p.cardNumber)).map(c=>[c.uid,c]));
@@ -462,6 +493,18 @@ const WSEffects = (() => {
         at=entry;
         const {handler,params}=entry.step;
         if(guided){
+          if(handler==="lookAndOrderTop"){
+            const from={side:params.side,zone:"deck"},deck=pile(context,from);
+            const max=Math.min(params.max,deck.length);
+            if(max){
+              const n=yield {kind:"look-count",max};
+              if(!count(n)||n>max)fail("見る枚数を選んでください","needs-choice");
+              choices.lookCount=n;
+              if(n)choices.topOrder=yield {kind:"select",label:"見たカード",from,
+                candidates:deck.slice(-n).reverse(),min:0,max:n,topOrder:true,
+                text:"山札の上に戻すカードを、一番上に置くものから順に選んでください。残りは控え室に置きます。"};
+            }
+          }
           if(handler==="healUpTo"){
             const max=Math.min(params.max,pile(context,{side:params.side,zone:"clock"}).length);
             if(max)choices[params.choiceKey]=yield {kind:"heal",max};
@@ -511,8 +554,10 @@ const WSEffects = (() => {
           const branch=params.branches[details.branch];
           pending.splice(index+1,0,...instructions({steps:branch.steps}));
         }
-        if(guided&&handler==="optionalTopMove"&&params.from.zone==="deck"&&details.cards.length&&!pile(context,params.from).length){
-          const refreshed=yield {kind:"deck-empty",state:working};
+        const deckSource=["lookAndOrderTop","shuffleStockIntoDeck"].includes(handler)?{side:params.side,zone:"deck"}
+          :handler==="optionalTopMove"&&params.from.zone==="deck"?params.from:null;
+        if(guided&&deckSource&&details.cards.length&&!pile(context,deckSource).length){
+          const refreshed=yield {kind:"deck-empty",state:working,side:deckSource.side};
           if(refreshed){validateBoard(refreshed);working=context.board=structuredClone(refreshed);}
         }
         if(guided&&handler!=="treasureTrigger"&&details.revealed?.length){

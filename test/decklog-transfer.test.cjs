@@ -1766,3 +1766,64 @@ test("ナツカのCXコンボとCXトリガー時の回復をアタック中に�
   page.run('botEndTurn(0)');
   assert.equal(page.run("natsukaBoard.front0[0].gainedAbilities"),undefined);
 });
+
+test("アヤメの登場時は山札を選んだ順に戻して相手のストックを入れ替える",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var ayameBoard=players[0], ayameRival=players[1];
+    var ayameCard=(uid,id="BOT/W000-001",faceUp=true)=>({uid,id,faceUp,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    ayameBoard.front0.push(ayameCard("ayame","STS/W140-076"));
+    ayameBoard.deck.push(ayameCard("lower"),ayameCard("upper"));
+    ayameRival.deck.push(ayameCard("rival-deck","BOT/W000-001",false));
+    ayameRival.stock.push(ayameCard("old-stock","BOT/W000-001",false));
+    runRuleOperation(done=>botDispatch(ayameBoard.front0[0],"from_hand_to_stage",done,0));
+  `);
+  ruleButton(page,"2枚見る");
+  ruleButton(page,"2．仮キャラ");
+  ruleButton(page,"1．仮キャラ");
+  ruleButton(page,"選択を確定");
+  assert.equal(page.run("ayameBoard.deck.map(c=>c.uid).join()"),"upper,lower");
+  assert.equal(page.run("ayameRival.stock.length"),1);
+  assert.equal(page.run("ayameRival.stock[0].faceUp"),false);
+  assert.equal(page.run("ayameRival.waiting.length"),0);
+  assert.equal(page.run("[...ayameRival.stock,...ayameRival.deck].map(c=>c.uid).sort().join()"),"old-stock,rival-deck");
+  assert.equal(page.run("ruleBusy"),false);
+});
+
+test("アヤメは手札を1枚払ったアタックだけ2回トリガーし、両方のソウルを加える",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var ayameBoard=players[0], ayameRival=players[1];
+    var ayameCard=(uid,id="BOT/W000-001")=>({uid,id,faceUp:true,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    ayameBoard.front0.push(ayameCard("ayame","STS/W140-076"));
+    ayameBoard.hand.push(ayameCard("discard"),ayameCard("decline"));
+    ayameBoard.deck.push(ayameCard("later"),ayameCard("second","STS/W140-076"),ayameCard("first","STS/W140-076"));
+    for(let i=0;i<13;i++)ayameRival.deck.push(ayameCard("r"+i));
+    match.turn.phase="attack";
+    autoRuleAttack(0,"front0","ayame","direct");
+  `);
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"仮キャラ");
+  ruleButton(page,"選択を確定");
+  ruleButton(page,"コストを支払う");
+  assert.equal(page.run("ayameBoard.waiting[0].uid"),"discard");
+  assert.equal(page.run("ayameBoard.stock.map(c=>c.uid).join()"),"first,second");
+  assert.equal(page.run("ayameRival.clock.length"),5);
+  assert.equal(page.run("ruleBusy"),false);
+  page.run(`
+    ayameRival.clock.length=0;
+    ayameBoard.front1.push(ayameCard("another","STS/W140-076"));
+    ayameBoard.deck.unshift(ayameCard("bottom"));
+    autoRuleAttack(0,"front1","another","direct");
+  `);
+  ruleButton(page,"使わない");
+  assert.equal(page.run("ayameBoard.hand[0].uid"),"decline");
+  assert.equal(page.run("ayameBoard.stock.map(c=>c.uid).join()"),"first,second,later");
+  assert.equal(page.run("ayameBoard.deck[0].uid"),"bottom");
+  assert.equal(page.run("ayameRival.clock.length"),3);
+  assert.equal(page.run("ruleBusy"),false);
+});

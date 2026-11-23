@@ -272,14 +272,16 @@ function botDispatch(card,timing,done,p=0,context={}){
     if(effect.reorderTop)autoRuleReorderTop(p,resume);
     else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
     else if(effect.traitLoot)autoRuleTraitLoot(p,card,effect,resume);
-    else botGuide(card,effect,success=>{
+    else botGuide(card,effect,(success,result)=>{
+      const triggerChecks=success&&result?.log.find(step=>step.triggerChecks)?.triggerChecks;
+      if(triggerChecks)context.setTriggerChecks?.(triggerChecks);
       if(success&&effect.lookTop){
         const {max,targetLabel,minLevel}=effect.lookTop;
         resolveBoardRules(p,()=>autoRuleLookTop(p,max,effect.category,targetLabel,candidate=>
           (botEffectCard(candidate).level??-1)>=minLevel,resume));
       }else if(success&&effect.drawAfterCost)autoRuleDrawAfterCost(p,effect.drawAfterCost,resume);
       else resume();
-    },p,!effect.steps?.some(step=>step.handler==="chooseBranch"),context);
+    },p,!effect.steps?.some(step=>["chooseBranch","lookAndOrderTop"].includes(step.handler)),context);
   }
   next(0);
 }
@@ -296,15 +298,24 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const iterator=WSEffects.guide(ability,botEffectBoard(p),{
     ...context,sourceUid:card.uid,usedThisTurn:match.bot.uses[key]??0
   },findBotCard);
+  let opponentApplied=false;
+  function apply(state,replaceOpponentStock,destinations=new Map()){
+    if(!botApplyEffect(state,destinations,p))return false;
+    if(!opponentApplied&&replaceOpponentStock){
+      opponentApplied=botApplyEffect({self:state.opponent},new Map(),1-p);
+      return opponentApplied;
+    }
+    return true;
+  }
   function finish(result,destinations=new Map(),entered=[]){
-    const success=result.status==="success"&&botApplyEffect(result.state,destinations,p);
+    const success=result.status==="success"&&apply(result.state,result.log.some(step=>step.handler==="shuffleStockIntoDeck"),destinations);
     if(success&&ability.limit?.perTurn)match.bot.uses[key]=(match.bot.uses[key]??0)+1;
     const text=success?"解決しました":result.status==="success"?"舞台の空き枠がありません":result.message;
     if(!isAutoRules())botMessage((ability.category??ability.id)+" · "+text);
     else if(result.status!=="condition-not-met")autoRuleLog((ability.category??ability.id)+" · "+text);
-    if(!success||!entered.length){done?.(success);return}
+    if(!success||!entered.length){done?.(success,result);return}
     function dispatch(index){
-      if(index===entered.length){done?.(true);return}
+      if(index===entered.length){done?.(true,result);return}
       const entry=entered[index];
       const current=players[p][destinations.get(entry.uid)].find(card=>card.uid===entry.uid);
       if(current)botDispatch(current,"from_hand_to_stage",()=>dispatch(index+1),p);
@@ -370,8 +381,10 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       return;
     }
     if(prompt.kind==="deck-empty"){
-      if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
-      resolveBoardRules(p,()=>step(botEffectBoard(p)));
+      const target=prompt.side==="opponent"?1-p:p;
+      if(!apply(prompt.state,target!==p)){done?.(false);return}
+      abortable=false;
+      resolveBoardRules(target,()=>step(botEffectBoard(p)));
       return;
     }
     if(p===1&&isAutoRules()){
@@ -387,18 +400,20 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
           step(candidates.slice(0,prompt.max).map(card=>card.uid));
           break;
         }
-        case "heal":step(prompt.max);break;
+        case "look-count":case "heal":step(prompt.max);break;
         case "destination":step(prompt.destinations[0]);break;
         case "treasure":step(prompt.canStock);break;
         default:step();break;
       }
       return;
     }
-    const body=showResolution(ability.category??"カード効果",prompt.kind==="reveal"?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
+    const body=showResolution(ability.category??"カード効果",prompt.topOrder?prompt.candidates.map(c=>({id:c.cardNumber})):prompt.kind==="reveal"?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
     const add=(label,action)=>deckButton(body,label,()=>{closeResolution();action()});
     const respond=(label,result)=>add(label,()=>step(result));
     if(prompt.kind==="branch"){
       prompt.labels.forEach((label,index)=>respond(label,index));
+    }else if(prompt.kind==="look-count"){
+      for(let n=0;n<=prompt.max;n++)respond(n?n+"枚見る":"見ない",n);
     }else if(prompt.kind==="heal"){
       for(let n=0;n<=prompt.max;n++)respond(n===0?"回復しない":n+"枚回復",n);
     }else if(prompt.kind==="optional-top"){
@@ -407,19 +422,27 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     }else if(prompt.kind==="optional"){
       respond("能力を使う",true);respond("使わない",false);
     }else if(prompt.kind==="select"){
-      body.append(document.createTextNode(prompt.label+"から選んでください"));
-      const picks=new Set();
+      body.append(document.createTextNode(prompt.text??prompt.label+"から選んでください"));
+      const picks=new Set(),orderButtons=[];
       const confirm=add("選択を確定",()=>step([...picks]));confirm.disabled=prompt.min>0;
-      for(const entry of prompt.candidates){
+      for(const [candidateIndex,entry] of prompt.candidates.entries()){
         const actual={id:entry.cardNumber};
-        const b=deckButton(body,botCardInfo(actual)?.name??entry.cardNumber,()=>{
+        const b=deckButton(body,(prompt.topOrder?(candidateIndex+1)+"．":"")+(botCardInfo(actual)?.name??entry.cardNumber),()=>{
           if(picks.has(entry.uid))picks.delete(entry.uid);
           else if(picks.size<prompt.max)picks.add(entry.uid);
           b.setAttribute("aria-pressed",String(picks.has(entry.uid)));
+          if(prompt.topOrder){
+            const ordered=[...picks];
+            for(const [uid,button,label] of orderButtons){
+              const index=ordered.indexOf(uid);
+              button.textContent=index<0?label:(index+1)+"番目に戻す ／ "+label;
+            }
+          }
           b.style.outline=picks.has(entry.uid)?"2px solid #f4cf73":"";
           confirm.disabled=picks.size<prompt.min;
         });
         b.setAttribute("aria-pressed","false");
+        if(prompt.topOrder)orderButtons.push([entry.uid,b,b.textContent]);
       }
       if(prompt.min===0)respond("選ばず進む",[]);
     }else if(prompt.kind==="destination"){
@@ -530,16 +553,18 @@ function botHumanAttack(p,zone,index){
   const board=players[p],uid=board[zone][index].uid;
   const defender=players[1-p][zone].at(-1);
   selected=null;
+  let triggerChecks=1;
   runRuleOperation(done=>{
     board[zone][index].orientation=90;
     function afterEffects(){
       const attacker=board[zone].find(c=>c.uid===uid);
       if(!attacker){done();return}
+      let triggerSouls=0;
       function damage(){
         const body=showResolution("ダメージ枚数を決める",[]);
         const current=board[zone].find(card=>card.uid===uid);
         if(!current){closeResolution();done();return}
-        const attack=botStats(p,current),n=(attack.soul??1)+(defender?0:1);
+        const attack=botStats(p,current),n=(attack.soul??1)+(defender?0:1)+triggerSouls;
         const amount=deckSelect(50,n),zero=document.createElement("option");
         zero.value=0;zero.textContent="0枚";amount.prepend(zero);
         body.append(document.createTextNode(defender?"フロントアタック":"ダイレクトアタック"),amount);
@@ -551,13 +576,18 @@ function botHumanAttack(p,zone,index){
           });
         });
       }
-      let trigger;
-      botRevealTop(p,card=>{trigger=card},found=>{
-        if(!found){damage();return}
-        botResolveAttackTrigger(p,trigger,()=>board[zone].find(c=>c.uid===uid),damage);
-      });
+      function check(remaining){
+        if(!remaining){damage();return}
+        let trigger;
+        botRevealTop(p,card=>{trigger=card},found=>{
+          if(!found){damage();return}
+          if(triggerChecks>1)triggerSouls+=botDefinition(trigger)?.triggers?.filter(icon=>icon==="ソウル").length??0;
+          botResolveAttackTrigger(p,trigger,()=>board[zone].find(c=>c.uid===uid),()=>check(remaining-1));
+        });
+      }
+      check(triggerChecks);
     }
-    botDispatch(board[zone][index],"on_attack",afterEffects);
+    botDispatch(board[zone][index],"on_attack",afterEffects,p,{setTriggerChecks:n=>{triggerChecks=n}});
   });
 }
 
