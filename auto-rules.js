@@ -410,15 +410,16 @@ function autoRulePlace(p,uid,zone){
   const error=autoRuleLegalPlay(p,card,climax?"climax":"main",climax?"climax":"character");
   if(error||climax&&board.cx.length){message(error||"すでにCXをプレイしています");return false}
   selected=null;
-  runRuleOperation(done=>{
-    const cost=botDefinition(card).stats.cost;
-    autoRulePay(p,cost);
-    if(board[zone].length)botMove(board,zone,0,"waiting");
-    botMove(board,"hand",index,zone);
-    autoRuleLog(botCardInfo(card).name+"をプレイ"+(cost?"（ストック−"+cost+"）":""));
-    botDispatch(card,climax?"on_cx_play":"from_hand_to_stage",()=>resolveBoardRules(p,done),p);
-  });
+  runRuleOperation(done=>autoRuleResolvePlay(p,index,zone,done));
   return true;
+}
+function autoRuleResolvePlay(p,index,zone,done){
+  const board=players[p],card=board.hand[index],cost=botDefinition(card).stats.cost;
+  autoRulePay(p,cost);
+  if(board[zone].length)botMove(board,zone,0,"waiting");
+  botMove(board,"hand",index,zone);
+  autoRuleLog(botCardInfo(card).name+"をプレイ"+(cost?"（ストック−"+cost+"）":""));
+  botDispatch(card,zone==="cx"?"on_cx_play":"from_hand_to_stage",()=>resolveBoardRules(p,done),p);
 }
 const autoRuleEventEffects=Object.freeze({"光景":resolveKoukei});
 function autoRuleEventEffect(definition){
@@ -435,16 +436,18 @@ function autoRulePlayEvent(p,uid){
   if(error){message(error);return false}
 
   selected=null;
-  runRuleOperation(done=>{
-    autoRulePay(p,definition.stats.cost);
-    board.hand.splice(index,1);
-    effect(p,()=>{
-      card.faceUp=true;
-      board.waiting.push(card);
-      done();
-    });
-  });
+  runRuleOperation(done=>autoRuleResolveEvent(p,index,definition,effect,done));
   return true;
+}
+function autoRuleResolveEvent(p,index,definition,effect,done){
+  const board=players[p];
+  autoRulePay(p,definition.stats.cost);
+  const [card]=board.hand.splice(index,1);
+  effect(p,()=>{
+    card.faceUp=true;
+    board.waiting.push(card);
+    done();
+  });
 }
 function resolveKoukei(p,done){
   const target=1-p,rival=players[target];
@@ -604,6 +607,7 @@ function autoRuleReorderTop(p,done){
   const deck=players[p].deck;
   if(!deck.length){done();return}
   const top=deck.slice(-2).reverse();
+  if(p===1){done();return}
   const body=showResolution("山札の上"+top.length+"枚（1番が一番上）",top);
   function finish(swap){
     closeResolution();
@@ -620,16 +624,17 @@ function autoRuleReorderTop(p,done){
 function autoRuleClockSearch(p,card,effect,done){
   const board=players[p],stock=effect.clockSearchCost;
   if(board.stock.length<stock||(!board.deck.length&&!board.waiting.length)){done();return}
-  const body=showResolution(effect.category,[]);
-  deckButton(body,stock+"ストック払う",()=>{
-    closeResolution();
+  function pay(){
     autoRulePay(p,stock);
     botRevealTop(p,top=>{top.faceUp=true;board.clock.push(top)},found=>{
       if(!found||board.level.length>=4){done();return}
       autoRuleLog(stock+"ストック支払い・山札の上1枚をクロックへ");
       botGuide(card,effect,done,p,false);
     });
-  });
+  }
+  if(p===1){pay();return}
+  const body=showResolution(effect.category,[]);
+  deckButton(body,stock+"ストック払う",()=>{closeResolution();pay()});
   deckButton(body,"払わない",()=>{closeResolution();done()});
 }
 function autoRuleLookOnAttack(p,{cxId,max,trait},done){
@@ -640,18 +645,9 @@ function autoRuleLookTop(p,max,label,targetLabel,matches,done){
   const board=players[p];
   const limit=Math.min(max,board.deck.length);
   if(!limit){done();return}
-  const body=showResolution(label+"・山札を何枚見るか",[]);
-  const count=deckSelect(limit,limit);
-  body.append(count);
-  deckButton(body,"見ない",()=>{closeResolution();done()});
-  deckButton(body,"山札を見る",()=>{
-    const n=Number(count.value);
-    closeResolution();
-    if(!Number.isInteger(n)||n<1||n>limit){done();return}
+  function look(n){
     const viewed=board.deck.slice(-n).reverse();
-    const result=showResolution(label+"・"+targetLabel+"を1枚まで選ぶ",viewed);
     function finish(chosen){
-      closeResolution();
       board.deck.splice(-n);
       for(const card of viewed){
         card.faceUp=true;
@@ -660,10 +656,23 @@ function autoRuleLookTop(p,max,label,targetLabel,matches,done){
       autoRuleLog(label+"で"+n+"枚確認"+(chosen?"・"+botCardInfo(chosen).name+"を手札へ":"・手札に加えない"));
       resolveBoardRules(p,done);
     }
+    if(p===1){finish(viewed.find(matches));return}
+    const result=showResolution(label+"・"+targetLabel+"を1枚まで選ぶ",viewed);
     for(const [index,card] of viewed.entries())if(matches(card)){
-      deckButton(result,(index+1)+"．"+botCardInfo(card).name+"を手札へ",()=>finish(card));
+      deckButton(result,(index+1)+"．"+botCardInfo(card).name+"を手札へ",()=>{closeResolution();finish(card)});
     }
-    deckButton(result,"加えない",()=>finish(null));
+    deckButton(result,"加えない",()=>{closeResolution();finish(null)});
+  }
+  if(p===1){look(limit);return}
+  const body=showResolution(label+"・山札を何枚見るか",[]);
+  const count=deckSelect(limit,limit);
+  body.append(count);
+  deckButton(body,"見ない",()=>{closeResolution();done()});
+  deckButton(body,"山札を見る",()=>{
+    const n=Number(count.value);
+    closeResolution();
+    if(!Number.isInteger(n)||n<1||n>limit){done();return}
+    look(n);
   });
 }
 function autoRuleTraitLoot(p,source,effect,done){
@@ -672,13 +681,14 @@ function autoRuleTraitLoot(p,source,effect,done){
     const revealed=board.deck.at(-1);
     if(!revealed){done();return}
     const matched=hasPracticeTrait(revealed,effect.traitLoot);
-    const body=showResolution(effect.category,[revealed]);
-    deckButton(body,matched?"手札に加えて1枚捨てる":"山札の上に戻す",()=>{
-      closeResolution();
+    function apply(){
       if(!matched){done();return}
       botMove(board,"deck",board.deck.length-1,"hand");
       resolveBoardRules(p,()=>botGuide(source,{...effect,steps:discardHandSteps()},done,p,false));
-    });
+    }
+    if(p===1){apply();return}
+    const body=showResolution(effect.category,[revealed]);
+    deckButton(body,matched?"手札に加えて1枚捨てる":"山札の上に戻す",()=>{closeResolution();apply()});
   });
 }
 function autoRuleDrawAfterCost(p,count,done){
@@ -709,12 +719,14 @@ function autoRuleMillOnAttack(p,{cxId,count},done){
 
 function autoRuleTriggerCount(p,cost,done){
   if(!cost||players[p].stock.length<cost){done(1);return}
-  const body=showResolution(cost+"ストックでトリガーチェックを2回にする？",[]);
-  deckButton(body,cost+"ストック払う",()=>{
-    closeResolution();autoRulePay(p,cost);
+  function pay(){
+    autoRulePay(p,cost);
     autoRuleLog(cost+"ストック支払い・トリガーチェック2回");
     done(2);
-  });
+  }
+  if(p===1){pay();return}
+  const body=showResolution(cost+"ストックでトリガーチェックを2回にする？",[]);
+  deckButton(body,cost+"ストック払う",()=>{closeResolution();pay()});
   deckButton(body,"払わない",()=>{closeResolution();done(1)});
 }
 function autoRuleResolveReversals(reversals,done){
@@ -792,13 +804,61 @@ function autoRuleAttack(p,zone,uid,type){
     },p,{opposingUid:targetUid});
   });
 }
+function autoRuleBotMain(p,done){
+  const board=players[p];
+  const slots=["back0","back1","front0","front1","front2"];
+  function playNext(){
+    if(players.some(b=>b.level.length>=4)){done();return}
+    const slot=slots.shift();
+    if(slot){
+      if(board[slot].length){playNext();return}
+      const back=slot.startsWith("back");
+      const index=board.hand.findIndex(card=>{
+        const def=botDefinition(card);
+        const support=!!(def?.assist||def?.namedStageBuff||def?.effects?.some(effect=>effect.brainstorm));
+        return !autoRuleLegalPlay(p,card,"main","character")&&support===back;
+      });
+      if(index<0)playNext();
+      else autoRuleResolvePlay(p,index,slot,playNext);
+      return;
+    }
+    const source=[board.back0.at(-1),board.back1.at(-1)].find(card=>
+      card?.orientation===0&&botDefinition(card)?.effects?.some(effect=>effect.brainstorm&&effect.brainstorm.stock<=board.stock.length));
+    const brainstorm=botDefinition(source)?.effects.find(effect=>effect.brainstorm)?.brainstorm;
+    if(brainstorm){resolveBrainstorm(p,source,brainstorm.stock,brainstorm.reveal,playEvent);return}
+    playEvent();
+  }
+  function playEvent(){
+    if(players.some(b=>b.level.length>=4)){done();return}
+    const index=board.hand.findIndex(card=>autoRuleEventEffect(botDefinition(card))&&
+      !autoRuleLegalPlay(p,card,"main","event"));
+    if(index<0||players[1-p].stock.length<2){done();return}
+    const definition=botDefinition(board.hand[index]);
+    autoRuleResolveEvent(p,index,definition,autoRuleEventEffect(definition),done);
+  }
+  playNext();
+}
 function autoRuleBotStep(){
   const p=1,board=players[p],turn=match.turn;
   switch(turn.phase){
     case "stand": setTurnPhase("draw");break;
     case "draw": setTurnPhase("clock");break;
-    case "clock": setTurnPhase("main");break;
+    case "clock":{
+      const index=board.hand.findIndex(card=>!card.cx);
+      if(match.bot.scenario!==redBlueScenario||index<0||board.hand.length>=7||board.level.length>=3){
+        setTurnPhase("main");break;
+      }
+      runRuleOperation(done=>{
+        botMove(board,"hand",index,"clock");
+        autoRuleDrawAfterCost(p,2,()=>{setTurnPhase("main");done()});
+      });
+      break;
+    }
     case "main":{
+      if(match.bot.scenario===redBlueScenario){
+        runRuleOperation(done=>autoRuleBotMain(p,()=>{setTurnPhase("climax");done()}));
+        break;
+      }
       for(const slot of botSlots.slice(0,3)){
         const i=board.hand.findIndex(c=>!autoRuleLegalPlay(p,c,"main","character"));
         if(i<0)break;
@@ -808,7 +868,14 @@ function autoRuleBotStep(){
       }
       setTurnPhase("climax");break;
     }
-    case "climax":setTurnPhase("attack");break;
+    case "climax":{
+      const combos=botSlots.slice(0,3).map(slot=>botDefinition(board[slot].at(-1)))
+        .map(def=>def?.lookOnAttack?.cxId??def?.millOnAttack?.cxId);
+      const index=board.hand.findIndex(card=>combos.includes(card.id)&&!autoRuleLegalPlay(p,card,"climax","climax"));
+      if(match.bot.scenario!==redBlueScenario||index<0||board.cx.length){setTurnPhase("attack");break}
+      runRuleOperation(done=>autoRuleResolvePlay(p,index,"cx",()=>{setTurnPhase("attack");done()}));
+      break;
+    }
     case "attack":{
       const slot=botSlots.slice(0,3).find(s=>autoRuleAttackAllowed(p,s,board[s].at(-1)));
       if(slot)autoRuleAttack(p,slot,board[slot].at(-1).uid,players[0][autoRuleOpposite(slot)].length?"front":"direct");
@@ -843,34 +910,37 @@ function activateBrainstorm(p,source,{stock,reveal}){
     return;
   }
   selected=null;
-  runRuleOperation(done=>{
-    autoRulePay(p,stock);
-    source.orientation=90;
-    const revealed=[];
-    function finishDraw(n){
-      if(!n){done();return}
-      botRevealTop(p,card=>{card.faceUp=true;board.hand.push(card)},found=>{
-        if(found)finishDraw(n-1);else done();
+  runRuleOperation(done=>resolveBrainstorm(p,source,stock,reveal,done));
+}
+function resolveBrainstorm(p,source,stock,reveal,done){
+  const board=players[p];
+  autoRulePay(p,stock);
+  source.orientation=90;
+  const revealed=[];
+  function finishDraw(n){
+    if(!n){done();return}
+    botRevealTop(p,card=>{card.faceUp=true;board.hand.push(card)},found=>{
+      if(found)finishDraw(n-1);else done();
+    });
+  }
+  function confirm(){
+    const max=revealed.filter(card=>card.cx===true).length;
+    for(const card of revealed){card.faceUp=true;board.waiting.push(card)}
+    autoRuleLog("集中で"+revealed.length+"枚、CXが"+max+"枚（"+revealed.map(card=>botCardInfo(card).name).join("、")+"）");
+    resolveBoardRules(p,()=>{
+      if(!max){done();return}
+      if(p===1){finishDraw(max);return}
+      const body=showResolution("集中・引く枚数を選ぶ（最大"+max+"枚）",revealed);
+      for(let n=0;n<=max;n++)deckButton(body,n===0?"引かない":n+"枚引く",()=>{
+        closeResolution();
+        autoRuleLog(n===0?"集中では引かない":"集中で"+n+"枚ドロー");
+        finishDraw(n);
       });
-    }
-    function confirm(){
-      const max=revealed.filter(card=>card.cx===true).length;
-      for(const card of revealed){card.faceUp=true;board.waiting.push(card)}
-      autoRuleLog("集中で"+revealed.length+"枚、CXが"+max+"枚（"+revealed.map(card=>botCardInfo(card).name).join("、")+"）");
-      resolveBoardRules(p,()=>{
-        if(!max){done();return}
-        const body=showResolution("集中・引く枚数を選ぶ（最大"+max+"枚）",revealed);
-        for(let n=0;n<=max;n++)deckButton(body,n===0?"引かない":n+"枚引く",()=>{
-          closeResolution();
-          autoRuleLog(n===0?"集中では引かない":"集中で"+n+"枚ドロー");
-          finishDraw(n);
-        });
-      });
-    }
-    function flip(){
-      if(revealed.length===reveal){confirm();return}
-      botRevealTop(p,card=>revealed.push(card),found=>{if(found)flip();else confirm()});
-    }
-    flip();
-  });
+    });
+  }
+  function flip(){
+    if(revealed.length===reveal){confirm();return}
+    botRevealTop(p,card=>revealed.push(card),found=>{if(found)flip();else confirm()});
+  }
+  flip();
 }

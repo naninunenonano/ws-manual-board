@@ -73,7 +73,7 @@ function startBotMatch(deck,scenario){
   else if(rules)deck=Object.hasOwn(practiceTitles,scenario)?practiceDeck(botDeck,scenario):{...botDeck,title:"共通ルール確認用デッキ"};
   if(!deck){message("プレイヤー1の使用デッキを選択してください");return}
   if(!rules&&!Object.hasOwn(botScenarioNames,scenario))return;
-  const opponentDeck=scenario===bondScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["109",1]],["001"]):
+  const opponentDeck=redBlue?redBlueDeck:scenario===bondScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["109",1]],["001"]):
     scenario===backupScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["120",1]],["009"]):botDeck;
   const boards=[buildMatchBoard(deck,0),buildMatchBoard(opponentDeck,1)];
   const [own,opponent]=boards;
@@ -111,7 +111,7 @@ function startBotMatch(deck,scenario){
   }
   const snapshot={version:1,phase:opening?"mulligan":"active",screen:opening?"mulligan":"battle",
     side:0,firstPlayer:0,mulliganPlayer:0,openingHandDealt:true,decks:[deck,opponentDeck],players:boards,result:null,
-    turn:{player:0,number:opening?1:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[redBlue?"赤青デッキ50枚・初手から開始":scenario===backupScenario?"赤Lv3を前列①にプレイできます。青Lv2の助太刀は相手のフロントアタック時に使えます":scenario===waitingScenario?"青Lv0を控え室へ移動して誘発を確認。赤Lv0を出すと公開と任意ドローを順に試せます":scenario===bondScenario?"赤Lv0を出すと絆で控え室の赤Lv1を回収できます。青Lv2を前列①に出すと相手のLv3にアタックできます":scenario===stockScenario?"赤Lv3は控え室のCXが2枚以下ならLv2で登場できます。青のイベントで相手のストックを入れ替えられます":scenario===entryScenario?"手札の青Lv0で山札調整とCX回収、赤Lv0でクロックサーチを確認できます":scenario===levelThreeScenario?"青Lv3を前列①に出し、ゲートCXを置いてアタックできます":scenario===levelTwoScenario?"手札のLv2を後列①に置き、前のLv0とLv1のパワーを確認できます":scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
+    turn:{player:0,number:opening?1:rules?3:1,phase:opening?"stand":"main",drawPending:false},bot:{scenario,uses:{},...(rules?{log:[redBlue?"赤青デッキ同士・初手から開始":scenario===backupScenario?"赤Lv3を前列①にプレイできます。青Lv2の助太刀は相手のフロントアタック時に使えます":scenario===waitingScenario?"青Lv0を控え室へ移動して誘発を確認。赤Lv0を出すと公開と任意ドローを順に試せます":scenario===bondScenario?"赤Lv0を出すと絆で控え室の赤Lv1を回収できます。青Lv2を前列①に出すと相手のLv3にアタックできます":scenario===stockScenario?"赤Lv3は控え室のCXが2枚以下ならLv2で登場できます。青のイベントで相手のストックを入れ替えられます":scenario===entryScenario?"手札の青Lv0で山札調整とCX回収、赤Lv0でクロックサーチを確認できます":scenario===levelThreeScenario?"青Lv3を前列①に出し、ゲートCXを置いてアタックできます":scenario===levelTwoScenario?"手札のLv2を後列①に置き、前のLv0とLv1のパワーを確認できます":scenario===levelOneScenario?"赤はレベル置場、青はクロックにあります。手札のLv1とカムバックCXをプレイできます":scenario===practiceScenario?"後列の「仮キャラ 集中」をタップ。2枚引くと続くトリガーで両方の仮CXを確認できます":"手札の仮キャラをタップしてプレイ"]}:{})}};
   if(!writeMatch(snapshot))return;
   match=snapshot;players=boards;side=0;selected=null;mulliganSelection=new Set();
   showMatchScreen();
@@ -246,6 +246,11 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     const entering=result.state.self.stage.filter(card=>!staged.has(card.uid));
     if(entering.length>available.length){finish(result);return}
     const destinations=new Map();
+    if(p===1&&isAutoRules()){
+      entering.forEach((card,i)=>destinations.set(card.uid,available[i]));
+      finish(result,destinations);
+      return;
+    }
     function pick(index){
       if(index===entering.length){finish(result,destinations);return}
       const entry=entering[index];
@@ -264,6 +269,24 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     const next=iterator.next(answer);
     if(next.done){chooseStage(next.value);return}
     const prompt=next.value;
+    if(p===1&&isAutoRules()){
+      switch(prompt.kind){
+        case "optional":step(true);break;
+        case "select":{
+          const priority=card=>{
+            const def=botDefinition({id:card.cardNumber});
+            return Number(card.type==="climax")+Number(!!(def?.lookOnAttack||def?.millOnAttack));
+          };
+          const candidates=prompt.from.zone==="hand"?[...prompt.candidates].sort((a,b)=>priority(a)-priority(b)):prompt.candidates;
+          step(candidates.slice(0,prompt.max).map(card=>card.uid));
+          break;
+        }
+        case "destination":step(prompt.destinations[0]);break;
+        case "treasure":step(prompt.canStock);break;
+        default:step();break;
+      }
+      return;
+    }
     const body=showResolution(ability.category??"カード効果",prompt.kind==="reveal"?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
     const add=(label,action)=>deckButton(body,label,()=>{closeResolution();action()});
     const respond=(label,result)=>add(label,()=>step(result));
