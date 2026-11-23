@@ -25,6 +25,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure Pages
         uses: actions/configure-pages@v5
+      - name: Exclude paused card tools from Pages
+        run: rm -- card-registration.html card-effect-test.html
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:

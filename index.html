@@ -16,7 +16,7 @@
 #battleScreen .screen-actions button,#battleScreen .toolbar button,#battleScreen .controls button,#battleScreen .toolbar select{font-size:11px;padding:5px 6px}
 #battleScreen .notice{min-height:0;margin:3px 0;font-size:11px}
 </style><style>.bot-power{position:absolute;z-index:4;top:2px;left:2px;padding:2px 4px;border-radius:4px;background:#091426;color:white;font-size:.68rem;pointer-events:none}</style>
-</head><body><header><h1>WS 手動盤面 <small>Ver.0.52</small></h1><a href="card-registration.html" style="color:#ade0ff">カード情報・効果登録</a></header>
+</head><body><header><h1>WS 手動盤面 <small>Ver.0.52</small></h1></header>
 <main class="shell"><p id="storageWarning" role="status" hidden></p><section id="setupScreen"><h2>デッキ設定</h2><p class="muted">登録済みのデッキから、各プレイヤーが使うデッキを選択してください。同じデッキも使用できます。</p><div class="toolbar"><label>設定するプレイヤー <select id="side"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label></div><section class="player" id="importer"><h2>使用するデッキ</h2><div class="toolbar"><label>このプレイヤーが使うデッキ <select id="savedDeckSelect"></select></label><button id="loadSavedDeck">選択デッキを確認</button><button id="clearSavedDeck">選択デッキを削除</button></div><p class="muted" id="savedDeckStatus">保存デッキ：未確認</p>
 <p id="cloudDeckStatus" role="status">端末内保存を利用できます</p>
 <details id="cloudDeckControls"><summary>デッキのクラウド保存</summary>
