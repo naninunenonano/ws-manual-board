@@ -4,7 +4,7 @@ on:
   push:
     branches: [feature/photo-board-layout]
   pull_request:
-    paths: [index.html, board-layout.css, match-state.js, decklog-import.js, cloud-decks.js, online-match.js, card-images.js, card-catalog.js, card-catalog-view.js, 'card-registration.*', 'card-effect-test.*', 'card-data/**', 'effects/**', 'supabase/**', 'test/**', '.github/workflows/board-layout.yml']
+    paths: [index.html, auto-rules.js, bot-match.js, stella-effects.js, board-layout.css, match-state.js, decklog-import.js, cloud-decks.js, online-match.js, card-images.js, card-catalog.js, card-catalog-view.js, 'card-registration.*', 'card-effect-test.*', 'card-data/**', 'effects/**', 'supabase/**', 'test/**', '.github/workflows/board-layout.yml']
 
 permissions:
   contents: read

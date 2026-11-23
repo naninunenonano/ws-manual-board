@@ -77,6 +77,7 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
     context.fetch=async()=>({ok:true,text:async()=>read("card-data/catalog.json")});
   }
   vm.runInContext(read("auto-rules.js"),context);
+  vm.runInContext(read("stella-effects.js"),context);
   vm.runInContext(read("bot-match.js"),context);
   vm.runInContext(importScript,context);
   return {
@@ -1765,4 +1766,448 @@ test("ナツカのCXコンボとCXトリガー時の回復をアタック中に�
   assert.equal(page.run("ruleBusy"),false);
   page.run('botEndTurn(0)');
   assert.equal(page.run("natsukaBoard.front0[0].gainedAbilities"),undefined);
+});
+
+test("風に揺れる気持ち ナツカは1枚の時だけ風を与え、起動で同じ枠に交代する",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var windBoard=players[0],windRival=players[1];
+    var windCard=(uid,id="STS/W140-019",cx=false)=>({uid,id,cx,faceUp:true,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    windBoard.front1.push(windCard("small"));
+    windBoard.hand.push(windCard("large","STS/W140-004"));
+    windRival.front0.push(windCard("opponent"));
+    windBoard.level.push(...["l1","l2","l3"].map(uid=>windCard(uid)));
+    windBoard.deck.push(windCard("remaining"));
+    var treasure=windCard("treasure","STS/W140-032",true);
+  `);
+  assert.equal(page.run('botTriggerIcons(0,treasure).join()'),"トレジャー,風");
+  page.run('windBoard.back0.push(windCard("another"))');
+  assert.equal(page.run('botTriggerIcons(0,treasure).join()'),"トレジャー");
+  page.run('windBoard.back0.pop(); runRuleOperation(done=>botResolveAttackTrigger(0,treasure,()=>null,done))');
+  ruleButton(page,"風から解決");
+  ruleButton(page,"前列①の風に揺れる気持ち ナツカ");
+  ruleButton(page,"ストックに置かない");
+  assert.equal(page.run('windBoard.hand.at(-1).uid'),"treasure");
+  assert.equal(page.run('windRival.hand[0].uid'),"opponent");
+  page.run(`
+    windRival.back0.push(windCard("back-row"));
+    var secondTreasure=windCard("second-treasure","STS/W140-032",true);
+    runRuleOperation(done=>botResolveAttackTrigger(0,secondTreasure,()=>null,done));
+  `);
+  ruleButton(page,"トレジャーから解決");
+  ruleButton(page,"ストックに置かない");
+  ruleButton(page,"戻さない");
+  assert.equal(page.run("windBoard.hand.at(-1).uid"),"second-treasure");
+  assert.equal(page.run("windRival.back0[0].uid"),"back-row");
+  page.run('selected={p:0,z:"front1",index:0};openBotAbility()');
+  ruleButton(page,"起動・爽風の才媛 ナツカに交代");
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"同じ枠に出す");
+  assert.equal(page.run("windBoard.front1[0].uid"),"large");
+  assert.equal(page.run("windBoard.waiting.some(card=>card.uid==='small')"),true);
+  assert.equal(page.run("windBoard.front1[0].turnPowerBonus"),2000);
+  assert.equal(page.run("windBoard.stock.length"),0);
+  page.run("botEndTurn(0)");
+  assert.equal(page.run("windBoard.front1[0].turnPowerBonus"),undefined);
+});
+
+test("カナーチェは思い出に移って回収し、登場したキャラのマーカーになり、離れると思い出に戻る",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var kaBoard=players[0],kaCard=(uid,id="STS/W140-001")=>({uid,id,faceUp:true,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    kaBoard.front0.push(kaCard("ka","STS/W140-024"));
+    kaBoard.waiting.push(kaCard("salvage"));
+    selected={p:0,z:"front0",index:0};
+    openBotAbility();
+  `);
+  ruleButton(page,"起動・思い出にしてキャラを回収");
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"コストを支払う");
+  assert.equal(page.run("kaBoard.memory[0].uid"),"ka");
+  const eligible=page.get("dialogBody").children.find(el=>el.textContent.includes("レイス")&&el.onclick);
+  assert.ok(eligible);
+  eligible.onclick();
+  ruleButton(page,"選択を確定");
+  assert.equal(page.run("kaBoard.hand[0].uid"),"salvage");
+  page.run(`
+    kaBoard.waiting.push(kaCard("host"));
+    manualTransfer(0,"waiting",0,"front0");
+  `);
+  ruleButton(page,"思い出の1枚目をマーカーにする");
+  assert.equal(page.run("kaBoard.front0[0].markers[0].faceUp"),true);
+  page.run(`
+    kaBoard.deck.push(kaCard("second"),kaCard("first"));
+    runRuleOperation(done=>botDispatch(kaBoard.front0[0],"on_attack",done,0));
+  `);
+  ruleButton(page,"2枚見る");
+  ruleButton(page,"上下を入れ替える");
+  assert.equal(page.run("kaBoard.deck.map(c=>c.uid).join()"),"first,second");
+  page.run('botMove(kaBoard,"front0",0,"waiting")');
+  assert.equal(page.run("kaBoard.memory[0].uid"),"ka");
+  assert.equal(page.run("kaBoard.waiting[0].uid"),"host");
+});
+
+test("魔王ちゃんは他のキャラの最初のアタックでソウルを下げ、山札上のレベル0をストックへ置く",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var maouBoard=players[0],mkMaou=(uid,id,cx=false)=>({uid,id,cx,faceUp:true,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    maouBoard.back0.push(mkMaou("maou","STS/W140-008"));
+    maouBoard.front0.push(mkMaou("attacker","STS/W140-004"));
+    maouBoard.deck.push(mkMaou("second","STS/W140-004"),mkMaou("first","STS/W140-008"));
+    runRuleOperation(done=>botDispatch(maouBoard.back0[0],"on_attack",done));
+    runRuleOperation(done=>botDispatch(maouBoard.front0[0],"on_attack",done));
+  `);
+  ruleButton(page,"ストックに置く");
+  assert.equal(page.run("maouBoard.front0[0].botSoul"),1);
+  assert.equal(page.run("maouBoard.stock[0].uid"),"first");
+  page.run('runRuleOperation(done=>botDispatch(maouBoard.front0[0],"on_attack",done))');
+  assert.equal(page.run("maouBoard.front0[0].botSoul"),1);
+  page.run('botEndTurn(0)');
+  assert.equal(page.run("maouBoard.front0[0].botSoul"),2);
+  page.run('runRuleOperation(done=>botDispatch(maouBoard.front0[0],"on_attack",done))');
+  ruleButton(page,"元に戻す");
+  assert.equal(page.run("maouBoard.deck.at(-1).uid"),"second");
+});
+
+test("魔王ちゃんの集中は4枚をめくり、CXの枚数まで控え室からキャラを回収できる",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var maouBoard=players[0],mkMaou=(uid,id="STS/W140-008",cx=false)=>({uid,id,cx,faceUp:true,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    maouBoard.back0.push(mkMaou("maou"));
+    maouBoard.stock.push(mkMaou("pay"));
+    maouBoard.deck.push(mkMaou("remain"),mkMaou("reveal"),mkMaou("cx","STS/W140-032",true),mkMaou("reveal2"),mkMaou("reveal3"));
+    selected={p:0,z:"back0",index:0};
+    openBotAbility();
+  `);
+  ruleButton(page,"集中（1ストック・自身レスト）");
+  ruleButton(page,"魂の取引 魔王ちゃん");
+  ruleButton(page,"回収を確定");
+  assert.equal(page.run("maouBoard.back0[0].orientation"),90);
+  assert.equal(page.run("maouBoard.stock.length"),0);
+  assert.equal(page.run("maouBoard.waiting.length"),4);
+  assert.equal(page.run("maouBoard.hand[0].uid"),"pay");
+  assert.equal(page.run("maouBoard.deck[0].uid"),"remain");
+});
+
+test("コゼットが付与した能力は自分がリバースした時にバトル相手とクロック上を入れ替える",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var drinkBoard=players[0],drinkRival=players[1];
+    var drinkCard=(uid,id="BOT/W000-001")=>({uid,id,faceUp:true,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    drinkBoard.front0.push(drinkCard("cosette","STS/W140-023"));
+    drinkBoard.back0.push(drinkCard("ally"));
+    drinkRival.front2.push(drinkCard("target","STS/W140-004"));
+    drinkRival.level.push(drinkCard("level"));
+    drinkRival.clock.push(drinkCard("older"),drinkCard("top"));
+    drinkRival.deck.push(drinkCard("deck"));
+    runRuleOperation(done=>botDispatch(drinkBoard.front0[0],"from_hand_to_stage",done));
+  `);
+  ruleButton(page,"ドリンクの誘惑 コゼット");
+  ruleButton(page,"仮キャラ");
+  ruleButton(page,"選択を確定");
+  assert.equal(page.run("drinkBoard.back0[0].gainedAbilities.length"),1);
+  page.run(`
+    runRuleOperation(done=>autoRuleResolveReversals(botBattle(0,"front0","cosette","target","front2"),done));
+  `);
+  assert.equal(page.run("drinkBoard.front0[0].orientation"),180);
+  assert.equal(page.run("drinkRival.front2[0].orientation"),0);
+  ruleButton(page,"クロックを入れ替える");
+  assert.equal(page.run("drinkRival.waiting[0].uid"),"top");
+  assert.equal(page.run("drinkRival.clock.map(c=>c.uid).join()"),"older,target");
+  assert.equal(page.run("drinkRival.front2.length"),0);
+  page.run("botEndTurn(0)");
+  assert.equal(page.run("drinkBoard.back0[0].gainedAbilities"),undefined);
+});
+
+test("コゼットは相手の山札上を非公開で確認し、順番を変えない",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var coBoard=players[0], coRival=players[1];
+    var coCard=(uid,id="BOT/W000-001",cx=false)=>({uid,id,faceUp:true,cx,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    coBoard.front0.push(coCard("co","STS/W140-013"));
+    coRival.deck.push(coCard("bottom"),coCard("second"),coCard("first"));
+    runRuleOperation(done=>botDispatch(coBoard.front0[0],"from_hand_to_stage",done,0));
+  `);
+  ruleButton(page,"2枚見る");
+  ruleButton(page,"元の順番で戻す");
+  assert.equal(page.run("coRival.deck.map(c=>c.uid).join()"),"bottom,second,first");
+  assert.equal(page.run("ruleBusy"),false);
+});
+
+test("コゼットは自身を控え室に置き、双方から2枚落とし、相手の前列だけを戻せる",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var coBoard=players[0], coRival=players[1];
+    var coCard=(uid,id="BOT/W000-001",cx=false)=>({uid,id,faceUp:true,cx,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    coBoard.front0.push(coCard("co","STS/W140-013"));
+    coBoard.deck.push(coCard("a0"),coCard("a1"),coCard("a2"));
+    coRival.deck.push(coCard("b0"),coCard("b1"),coCard("b2","BOT/W000-012",true));
+    coRival.front0.push(coCard("target","STS/W140-004"));
+    coRival.back0.push(coCard("back","STS/W140-013"));
+    selected={p:0,z:"front0",index:0};
+    openBotAbility();
+  `);
+  ruleButton(page,"起動・双方の山札を落として前列を戻す");
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"コストを支払う");
+  assert.equal(page.run("coBoard.waiting.map(c=>c.uid).join()"),"co,a2,a1");
+  assert.equal(page.run("coRival.waiting.map(c=>c.uid).join()"),"b2,b1");
+  ruleButton(page,"爽風の才媛 ナツカ");
+  ruleButton(page,"選択を確定");
+  assert.equal(page.run("coRival.hand[0].uid"),"target");
+  assert.equal(page.run("coRival.back0[0].uid"),"back");
+  assert.equal(page.run("ruleBusy"),false);
+});
+
+test("コゼットは山札切れでリフレッシュを挟み、CXがなければ対象を選ばない",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var coBoard=players[0], coRival=players[1];
+    var coCard=(uid,id="BOT/W000-001")=>({uid,id,faceUp:true,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    coBoard.front0.push(coCard("co","STS/W140-013"));
+    coBoard.waiting.push(coCard("w1"),coCard("w2"),coCard("w3"));
+    coBoard.deck.push(coCard("a2"));
+    coRival.deck.push(coCard("b0"),coCard("b1"),coCard("b2"));
+    coRival.front0.push(coCard("target","STS/W140-004"));
+    selected={p:0,z:"front0",index:0};
+    openBotAbility();
+  `);
+  ruleButton(page,"起動・双方の山札を落として前列を戻す");
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"コストを支払う");
+  assert.equal(page.run("coBoard.clock.length"),1);
+  assert.equal(page.run("coBoard.waiting.length"),1);
+  assert.equal(page.run("coRival.waiting.length"),2);
+  assert.equal(page.run("coRival.front0[0].uid"),"target");
+  assert.equal(page.run("ruleBusy"),false);
+});
+
+test("アヤメの登場時は山札を選んだ順に戻して相手のストックを入れ替える",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var ayameBoard=players[0], ayameRival=players[1];
+    var ayameCard=(uid,id="BOT/W000-001",faceUp=true)=>({uid,id,faceUp,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    ayameBoard.front0.push(ayameCard("ayame","STS/W140-076"));
+    ayameBoard.deck.push(ayameCard("lower"),ayameCard("upper"));
+    ayameRival.deck.push(ayameCard("rival-deck","BOT/W000-001",false));
+    ayameRival.stock.push(ayameCard("old-stock","BOT/W000-001",false));
+    runRuleOperation(done=>botDispatch(ayameBoard.front0[0],"from_hand_to_stage",done,0));
+  `);
+  ruleButton(page,"2枚見る");
+  ruleButton(page,"2．仮キャラ");
+  ruleButton(page,"1．仮キャラ");
+  ruleButton(page,"選択を確定");
+  assert.equal(page.run("ayameBoard.deck.map(c=>c.uid).join()"),"upper,lower");
+  assert.equal(page.run("ayameRival.stock.length"),1);
+  assert.equal(page.run("ayameRival.stock[0].faceUp"),false);
+  assert.equal(page.run("ayameRival.waiting.length"),0);
+  assert.equal(page.run("[...ayameRival.stock,...ayameRival.deck].map(c=>c.uid).sort().join()"),"old-stock,rival-deck");
+  assert.equal(page.run("ruleBusy"),false);
+});
+
+test("アヤメは手札を1枚払ったアタックだけ2回トリガーし、両方のソウルを加える",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var ayameBoard=players[0], ayameRival=players[1];
+    var ayameCard=(uid,id="BOT/W000-001")=>({uid,id,faceUp:true,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    ayameBoard.front0.push(ayameCard("ayame","STS/W140-076"));
+    ayameBoard.hand.push(ayameCard("discard"),ayameCard("decline"));
+    ayameBoard.deck.push(ayameCard("later"),ayameCard("second","STS/W140-076"),ayameCard("first","STS/W140-076"));
+    for(let i=0;i<13;i++)ayameRival.deck.push(ayameCard("r"+i));
+    match.turn.phase="attack";
+    autoRuleAttack(0,"front0","ayame","direct");
+  `);
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"仮キャラ");
+  ruleButton(page,"選択を確定");
+  ruleButton(page,"コストを支払う");
+  assert.equal(page.run("ayameBoard.waiting[0].uid"),"discard");
+  assert.equal(page.run("ayameBoard.stock.map(c=>c.uid).join()"),"first,second");
+  assert.equal(page.run("ayameRival.clock.length"),5);
+  assert.equal(page.run("ruleBusy"),false);
+  page.run(`
+    ayameRival.clock.length=0;
+    ayameBoard.front1.push(ayameCard("another","STS/W140-076"));
+    ayameBoard.deck.unshift(ayameCard("bottom"));
+    autoRuleAttack(0,"front1","another","direct");
+  `);
+  ruleButton(page,"使わない");
+  assert.equal(page.run("ayameBoard.hand[0].uid"),"decline");
+  assert.equal(page.run("ayameBoard.stock.map(c=>c.uid).join()"),"first,second,later");
+  assert.equal(page.run("ayameBoard.deck[0].uid"),"bottom");
+  assert.equal(page.run("ayameRival.clock.length"),3);
+  assert.equal(page.run("ruleBusy"),false);
+});
+
+test("ステラソラのミラー戦は19種50枚を両者が使用し、初手を別々に配る",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.settle();
+  page.get("botScenario").value="stella-sora-mirror";
+  page.click("startBotBattle");
+  assert.equal(page.run("match.phase"),"mulligan");
+  assert.equal(page.run("match.decks[0].cards.length"),19);
+  assert.equal(page.run("match.decks[0].cards.reduce((sum,c)=>sum+c.num,0)"),50);
+  assert.equal(page.run("match.decks[0].cards.filter(c=>c.cx).reduce((sum,c)=>sum+c.num,0)"),8);
+  assert.equal(page.run("JSON.stringify(match.decks[0])===JSON.stringify(match.decks[1])"),true);
+  assert.equal(page.run("match.decks[0].cards.every(c=>botDefinition(c))"),true);
+  assert.equal(page.run("players.map(b=>b.hand.length).join()"),"5,5");
+  assert.equal(page.run("players.map(b=>b.deck.length).join()"),"45,45");
+  assert.equal(page.run("new Set(players.flatMap(b=>[...b.hand,...b.deck].map(c=>c.uid))).size"),100);
+  page.click("confirmMulligan");
+  assert.equal(page.run("match.phase"),"active");
+  assert.equal(page.run("match.turn.player"),0);
+});
+
+test("ヴェルジュは1枚を手札、1枚をストックに置き、解決後に思い出へ行く",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var sb=players[0],sc=(uid,no)=>({uid,id:"STS/W140-"+no,faceUp:true,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    sb.hand.push(sc("event","030"));
+    sb.stock.push(sc("pay","071"));
+    sb.front0.push(sc("sacrifice","T03"));
+    sb.deck.push(sc("remainder","T03"),sc("stock","077"),sc("hand","071"));
+    runRuleOperation(done=>autoRuleResolveEvent(0,0,botDefinition(sb.hand[0]),stellaVerge,done));
+  `);
+  ruleButton(page,"1．巡遊者 コゼット");
+  ruleButton(page,"2枚見る");
+  ruleButton(page,"1．弾む小雨 シーミャオ");
+  ruleButton(page,"1．森のうっかりさん テレサ");
+  ruleButton(page,"確認して進む");
+  assert.equal(page.run("sb.hand[0].uid"),"hand");
+  assert.equal(page.run("sb.stock[0].uid"),"stock");
+  assert.equal(page.run("sb.memory[0].uid"),"event");
+  page.run(`
+    var triggered={...sc("trigger","032"),cx:true};
+    var payment={...sc("cx-payment","031"),cx:true};
+    sb.hand.push(payment);
+    runRuleOperation(done=>botResolveAttackTrigger(0,triggered,()=>null,done));
+  `);
+  ruleButton(page,"ストックに置かない");
+  ruleButton(page,"使う");
+  ruleButton(page,"1．黎明告げる凱旋歌");
+  ruleButton(page,"2．巡遊者 コゼット");
+  assert.equal(page.run("sb.hand.at(-1).uid"),"sacrifice");
+});
+
+test("TDコゼットの登場時強化、山札公開と、リバース時の後列移動を処理する",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var sb=players[0],sc=(uid,no)=>({uid,id:"STS/W140-"+no,faceUp:true,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    sb.front0.push(sc("source","T03"));
+    sb.front1.push(sc("ally","071"));
+    players[1].front2.push(sc("rival","025"));
+    sb.deck.push(sc("remain","030"),sc("add","071"));
+    runRuleOperation(done=>botDispatch(sb.front0[0],"from_hand_to_stage",done));
+  `);
+  assert.equal(page.run("botStats(0,sb.front0[0]).power"),3500);
+  page.run('runRuleOperation(done=>botDispatch(sb.front0[0],"on_attack",done))');
+  ruleButton(page,"確認して進む");
+  ruleButton(page,"1．弾む小雨 シーミャオ");
+  assert.equal(page.run("sb.waiting.at(-1).uid"),"add");
+  page.run('runRuleOperation(done=>autoRuleResolveReversals(botBattle(0,"front0","source","rival","front2"),done))');
+  ruleButton(page,"1．弾む小雨 シーミャオ");
+  ruleButton(page,"後列①");
+  assert.equal(page.run("sb.back0[0].uid"),"ally");
+  assert.equal(page.run("sb.back0[0].orientation"),90);
+});
+
+test("巡遊者レイスは支払ったCXを回収でき、レベル0のバトル相手をクロックに置ける",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var sb=players[0],rb=players[1],sc=(uid,no,cx=false)=>({uid,id:"STS/W140-"+no,faceUp:true,cx,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    sb.front0.push(sc("source","025"));
+    sb.back0.push(sc("cost","071"));
+    sb.hand.push(sc("paid","032",true));
+    rb.front2.push(sc("rival","T03"));
+    rb.deck.push(sc("remaining","071"));
+    rb.clock.push(sc("oldclock","025"));
+    runRuleOperation(done=>botDispatch(sb.front0[0],"from_hand_to_stage",done));
+  `);
+  ruleButton(page,"使う");
+  ruleButton(page,"1．夢の先へ");
+  ruleButton(page,"1．弾む小雨 シーミャオ");
+  ruleButton(page,"1．夢の先へ");
+  assert.equal(page.run("sb.hand[0].uid"),"paid");
+  page.run('runRuleOperation(done=>autoRuleResolveReversals(botBattle(0,"front0","source","rival","front2"),done))');
+  ruleButton(page,"クロックを入れ替える");
+  assert.equal(page.run("rb.clock[0].uid"),"rival");
+  assert.equal(page.run("rb.waiting[0].uid"),"oldclock");
+});
+
+test("シーミャオは回想を持たないイベントを選べ、テレサはコストで落ちた自身を思い出にする",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var sb=players[0],sc=(uid,no)=>({uid,id:"STS/W140-"+no,faceUp:true,cx:false,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    sb.front0.push(sc("shimiao","071"));
+    sb.front1.push(sc("teresa","077"));
+    sb.deck.push(sc("remain","071"),sc("level1","030"),sc("take","030"));
+    sb.waiting.push(sc("salvage","019"));
+    sb.hand.push(sc("discard","071"));
+    runRuleOperation(done=>botDispatch(sb.front0[0],"from_hand_to_stage",done));
+  `);
+  ruleButton(page,"1枚見る");
+  ruleButton(page,"1．星ノ塔スタッフ ヴェルジュ");
+  ruleButton(page,"確認して進む");
+  ruleButton(page,"1．弾む小雨 シーミャオ");
+  assert.equal(page.run("sb.hand[0].uid"),"take");
+  assert.equal(page.run("botStats(0,sb.front0[0]).power"),3500);
+  page.run('selected={p:0,z:"front1",index:0};openBotAbility()');
+  ruleButton(page,"起動・キャラを回収してテレサを思い出へ");
+  ruleButton(page,"使う");
+  ruleButton(page,"1．星ノ塔スタッフ ヴェルジュ");
+  ruleButton(page,"1．風に揺れる気持ち ナツカ");
+  ruleButton(page,"1．森のうっかりさん テレサ");
+  assert.equal(page.run("sb.memory[0].uid"),"teresa");
+  assert.equal(page.run("sb.hand[0].uid"),"salvage");
+});
+
+test("フリージアはCXをレベル0として回収し、相手のターンだけ増加量が1500になる",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var sb=players[0],sc=(uid,no,cx=false)=>({uid,id:"STS/W140-"+no,faceUp:true,cx,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    sb.front0.push(sc("source","068"));
+    sb.deck.push(sc("reveal","032",true));
+    sb.waiting.push(sc("higher","019"));
+    sb.hand.push(sc("discard","071"));
+    runRuleOperation(done=>botDispatch(sb.front0[0],"from_hand_to_stage",done));
+  `);
+  ruleButton(page,"使う");
+  ruleButton(page,"1．弾む小雨 シーミャオ");
+  ruleButton(page,"確認して進む");
+  ruleButton(page,"1．弾む小雨 シーミャオ");
+  assert.equal(page.run("sb.hand[0].uid"),"discard");
+  assert.equal(page.run("sb.deck[0].uid"),"reveal");
+  assert.equal(page.run("botStats(0,sb.front0[0]).power"),2000);
+  page.run("match.turn.player=1");
+  assert.equal(page.run("botStats(0,sb.front0[0]).power"),3000);
 });

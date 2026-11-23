@@ -31,7 +31,7 @@ async function main() {
   }
   const asset=new Map([["/","index.html"],["/cloud-decks.js","cloud-decks.js"],["/decklog-import.js","decklog-import.js"],
     ["/card-images.js","card-images.js"],["/online-match.js","online-match.js"],["/board-layout.css","board-layout.css"],["/match-state.js","match-state.js"],
-    ...["auto-rules.js","bot-match.js","card-catalog.js","effects/engine.js","card-data/load.js","card-data/catalog.json"].map(file=>["/"+file,file])]);
+    ...["auto-rules.js","stella-effects.js","bot-match.js","card-catalog.js","effects/engine.js","card-data/load.js","card-data/catalog.json"].map(file=>["/"+file,file])]);
   const server=http.createServer((req,res)=>{
     const url=new URL(req.url,"http://localhost");
     const field=asset.get(url.pathname);
