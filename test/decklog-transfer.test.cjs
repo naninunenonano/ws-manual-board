@@ -1581,6 +1581,7 @@ test("赤青デッキは確定した50枚で初手・マリガンから開始す
   assert.equal(before.turn.number,1);
   assert.equal(before.turn.phase,"stand");
   assert.equal(before.decks[0].title,"赤青デッキ");
+  assert.deepEqual(before.decks[1],before.decks[0]);
   assert.deepEqual(before.decks[0].cards.map(({id,num})=>[id.slice(-3),num]),[
     ["101",2],["102",2],["103",2],["104",4],["105",4],["106",4],["107",2],["108",2],["109",4],["110",2],
     ["111",2],["112",2],["113",2],["114",4],["115",2],["116",2],["117",2],["118",2],["119",2],["120",2]
@@ -1591,5 +1592,39 @@ test("赤青デッキは確定した50枚で初手・マリガンから開始す
   page.click("confirmMulligan");
   assert.equal(snapshot(page).phase,"active");
   assert.equal(page.run('botDefinition({id:"BOT/W000-119"}).stats.power'),9000);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("赤青同士ではBotが登場効果と攻撃時のCXコンボを入力なしで解決する",()=>{
+  const page=launchRules("red-blue-deck");
+  page.click("confirmMulligan");
+  page.run(`finishEndTurn();setTurnPhase("main");const b=players[1];
+    for(const card of b.hand.splice(0))b.deck.unshift(card);
+    const put=(id,to)=>botMove(b,"deck",b.deck.findIndex(c=>c.id.endsWith(id)),to);
+    put("118","hand");put("106","hand");put("104","hand");put("114","hand");
+    put("101","level");put("114","deck")`);
+  page.click("botStep");
+  assert.equal(snapshot(page).turn.phase,"climax");
+  assert.ok(!page.get("dialog").open);
+  assert.ok(snapshot(page).bot.log.some(line=>line.includes("公開と手札交換")));
+  assert.ok(snapshot(page).players[1].front1.some(c=>c.id==="BOT/W000-106"));
+  page.click("botStep");
+  assert.equal(snapshot(page).players[1].cx[0].id,"BOT/W000-104");
+  page.click("botStep");
+  page.click("botStep");
+  assert.ok(snapshot(page).bot.log.some(line=>line.includes("CXコンボで")));
+  assert.ok(!page.get("dialog").open);
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+});
+
+test("赤青同士のBotが控え室誘発のコストと対象を自動で選ぶ",()=>{
+  const page=launchRules("red-blue-deck");
+  page.click("confirmMulligan");
+  page.run(`const b=players[1];const put=(id,to)=>botMove(b,"deck",b.deck.findIndex(c=>c.id.endsWith(id)),to);
+    put("114","deck");
+    runRuleOperation(done=>{put("117","waiting");done()})`);
+  assert.ok(!page.get("dialog").open);
+  assert.ok(snapshot(page).bot.log.some(line=>line.includes("Lv1以上を探すで")));
+  assert.ok(snapshot(page).players[1].hand.some(c=>c.id==="BOT/W000-114"));
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
