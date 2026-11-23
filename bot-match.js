@@ -295,63 +295,81 @@ function botResolveRecall(p,entrant,done){
   }));
   deckButton(body,"マーカーにしない",()=>{closeResolution();done()});
 }
+function botResolveTriggered(p,actions,done){
+  const pending=[...actions];
+  function next(){
+    if(!pending.length){done?.();return}
+    function resolve(index){
+      const [action]=pending.splice(index,1);
+      action.run(next);
+    }
+    if(p===1||pending.length===1){resolve(0);return}
+    const body=showResolution("次に解決する効果を選ぶ",[]);
+    for(const [index,action] of pending.entries())deckButton(body,(index+1)+"．"+action.label,()=>{
+      closeResolution();resolve(index);
+    });
+  }
+  next();
+}
 function botStageEntry(p,card,from,done){
-  botResolveRecall(p,card,()=>{
-    if(from==="hand")botDispatch(card,"from_hand_to_stage",done,p);
-    else done();
-  });
-}
-function botResolveMarkerAttack(p,card,done){
-  const current=botSlots.flatMap(slot=>players[p][slot]).find(entry=>entry.uid===card.uid);
-  if(!current||!["巡遊者","魔王"].some(trait=>matchesPracticeTrait(current,trait))){done();return}
-  const markers=(current.markers??[]).filter(marker=>marker.faceUp&&botMarkerAbility(marker.card,"marker_host_attack"));
-  function next(index){
-    if(index===markers.length){done();return}
-    autoRuleReorderTop(p,()=>next(index+1),true);
+  const actions=from==="hand"?botTriggeredActions(p,card,"from_hand_to_stage"):[];
+  if(botDefinition(card)?.type==="character"&&!card.markers?.length&&
+    players[p].memory.some(entry=>botMarkerAbility(entry,"own_character_enter_stage"))){
+    actions.push({label:"回想・マーカーを置く",run:next=>botResolveRecall(p,card,next)});
   }
-  next(0);
+  botResolveTriggered(p,actions,done);
 }
-function botOtherAttackEffects(p,attacker,done){
+function botAttackTriggeredActions(p,attacker){
   const board=players[p];
-  const sources=botSlots.flatMap(slot=>board[slot]).filter(card=>card.faceUp&&card.uid!==attacker.uid);
-  function next(index){
-    const source=sources[index];
-    if(!source){done();return}
-    const resume=()=>next(index+1);
-    const effect=botDefinition(source)?.effects?.find(entry=>entry.timing==="other_own_attack");
-    if(!effect||!botSlots.some(slot=>board[slot].some(card=>card.uid===source.uid))){resume();return}
-    const key=source.uid+":"+effect.id;
-    if((match.bot.uses[key]??0)>=effect.limit.perTurn){resume();return}
-    const current=botSlots.flatMap(slot=>board[slot]).find(card=>card.uid===attacker.uid);
-    if(!current){done();return}
-    match.bot.uses[key]=(match.bot.uses[key]??0)+1;
-    current.botSoul=(current.botSoul??botDefinition(current)?.stats?.soul??1)-1;
-    current.turnSoulBonus=(current.turnSoulBonus??0)-1;
-    const top=board.deck.at(-1);
-    if(!top){resume();return}
-    const info=botEffectCard(top);
-    const stocked=info.type==="character"&&info.level!=null&&info.level<=0;
-    function finish(){
-      if(stocked)botMove(board,"deck",board.deck.length-1,"stock");
-      resolveBoardRules(p,resume);
+  const actions=[];
+  if(["巡遊者","魔王"].some(trait=>matchesPracticeTrait(attacker,trait))){
+    for(const marker of attacker.markers??[]){
+      const effect=marker.faceUp&&botMarkerAbility(marker.card,"marker_host_attack");
+      if(effect)actions.push({label:stellaName(marker.card)+"・"+effect.category,run:next=>autoRuleReorderTop(p,next,true)});
     }
-    if(p===1){autoRuleLog("山札の上を公開："+(info.name??info.cardNumber)+(stocked?"（ストックへ）":"（元に戻す）"));finish();return}
-    const body=showResolution(effect.category,[top]);
-    deckButton(body,stocked?"ストックに置く":"元に戻す",()=>{closeResolution();finish()});
   }
-  next(0);
+  for(const slot of botSlots)for(const source of board[slot]){
+    if(!source.faceUp||source.uid===attacker.uid)continue;
+    const effect=botDefinition(source)?.effects?.find(entry=>entry.timing==="other_own_attack");
+    if(!effect)continue;
+    const key=source.uid+":"+effect.id;
+    if((match.bot.uses[key]??0)>=effect.limit.perTurn)continue;
+    actions.push({label:stellaName(source)+"・"+effect.category,run:next=>{
+      const current=botSlots.flatMap(zone=>board[zone]).find(card=>card.uid===attacker.uid);
+      if(!current){next();return}
+      function apply(use){
+        if(!use){next();return}
+        match.bot.uses[key]=(match.bot.uses[key]??0)+1;
+        current.botSoul=(current.botSoul??botDefinition(current)?.stats?.soul??1)-1;
+        current.turnSoulBonus=(current.turnSoulBonus??0)-1;
+        const top=board.deck.at(-1);
+        if(!top){next();return}
+        const info=botEffectCard(top);
+        const stocked=info.type==="character"&&info.level!=null&&info.level<=0;
+        function finish(){
+          if(stocked)botMove(board,"deck",board.deck.length-1,"stock");
+          resolveBoardRules(p,next);
+        }
+        if(p===1){
+          autoRuleLog("山札の上を公開："+(info.name??info.cardNumber)+(stocked?"（ストックへ）":"（元に戻す）"));
+          finish();return;
+        }
+        const body=showResolution(effect.category,[top]);
+        deckButton(body,stocked?"ストックに置く":"元に戻す",()=>{closeResolution();finish()});
+      }
+      if(p===1){apply(board.stock.length<2&&(botStats(p,current).soul??0)>1);return}
+      stellaConfirm(p,"魔王ちゃん・ソウル－1と山札上の公開を行う？",apply);
+    }});
+  }
+  return actions;
 }
-
-function botDispatch(card,timing,done,p=0,context={}){
+function botTriggeredActions(p,card,timing,context={}){
   const effects=botDefinition(card)?.effects?.filter(item=>item.timing===timing&&item.type==="auto"
-    &&(timing!=="on_own_climax_trigger"||card.gainedAbilities?.includes(item.id)))??[];
-  function next(i){
-    if(i===effects.length){
-      if(timing==="on_attack")botResolveMarkerAttack(p,card,()=>botOtherAttackEffects(p,card,()=>done?.()));
-      else done?.();
-      return;
-    }
-    const effect=effects[i],resume=()=>next(i+1);
+    &&(timing!=="on_own_climax_trigger"||card.gainedAbilities?.includes(item.id))
+    &&(item.id!=="t03-attack"||card.gainedAbilities?.includes("STS/W140-T03:loot"))
+    &&(!item.conditions?.length||WSEffects.triggerConditionsMet(item,botEffectBoard(p),
+      {...context,sourceUid:card.uid},findBotCard)))??[];
+  return effects.map(effect=>({label:stellaName(card)+"・"+(effect.category??effect.id),run:resume=>{
     if(Object.hasOwn(stellaActions,effect.id))stellaActions[effect.id](p,card,resume);
     else if(effect.reorderTop)autoRuleReorderTop(p,resume);
     else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
@@ -366,8 +384,12 @@ function botDispatch(card,timing,done,p=0,context={}){
       }else if(success&&effect.drawAfterCost)autoRuleDrawAfterCost(p,effect.drawAfterCost,resume);
       else resume();
     },p,!effect.steps?.some(step=>["chooseBranch","lookAndOrderTop"].includes(step.handler)),context);
-  }
-  next(0);
+  }}));
+}
+function botDispatch(card,timing,done,p=0,context={}){
+  const actions=botTriggeredActions(p,card,timing,context);
+  if(timing==="on_attack")actions.push(...botAttackTriggeredActions(p,card));
+  botResolveTriggered(p,actions,done);
 }
 function botTriggerIcons(p,card){
   const definition=botDefinition(card),icons=definition?.triggers??[];
@@ -407,9 +429,8 @@ function botResolveAttackTrigger(p,trigger,attacker,done){
   botResolveTriggerIcons(p,trigger,()=>{
     const source=attacker();
     if(trigger.cx!==true){done();return}
-    const finish=()=>stellaMemoryTrigger(p,done);
-    if(!source){finish();return}
-    botDispatch(source,"on_own_climax_trigger",finish,p,{triggerClimax:true});
+    const actions=source?botTriggeredActions(p,source,"on_own_climax_trigger",{triggerClimax:true}):[];
+    botResolveTriggered(p,[...actions,...stellaMemoryActions(p)],done);
   });
 }
 

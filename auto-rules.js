@@ -326,10 +326,15 @@ function autoRuleCollectWaiting(){
 }
 function autoRuleResolveWaiting(done){
   autoRuleCollectWaiting();
-  const entry=waitingAbilities.shift();
-  if(!entry||!isMatchActive()){done();return}
-  const {p,card}=entry;
-  resolveBoardRules(p,()=>botDispatch(card,"on_enter_waiting",()=>autoRuleResolveWaiting(done),p));
+  if(!waitingAbilities.length||!isMatchActive()){done();return}
+  const batch=waitingAbilities.splice(0);
+  const turn=match.turn.player;
+  const actions=p=>batch.filter(entry=>entry.p===p).map(({card})=>({
+    label:stellaName(card)+"・控え室に置かれた時",
+    run:next=>resolveBoardRules(p,()=>botDispatch(card,"on_enter_waiting",next,p))
+  }));
+  botResolveTriggered(turn,actions(turn),()=>botResolveTriggered(1-turn,actions(1-turn),
+    ()=>autoRuleResolveWaiting(done)));
 }
 function autoRuleStartWaiting(){
   if(!isAutoRules()||!isMatchActive())return false;
@@ -412,10 +417,10 @@ function autoRuleHandLevel(p,card,definition){
     card.faceUp&&matchesPracticeTrait(card,reduction.stageTrait)).length<reduction.count)return level;
   return Math.max(0,level-reduction.amount);
 }
-function autoRuleLegalPlay(p,card,phase,type){
+function autoRuleLegalPlay(p,card,phase,type,{planning=false}={}){
   const def=botDefinition(card),board=players[p];
   if(!def||def.type!==type)return "このカードは現在の操作ではプレイできません";
-  if(match.turn.phase!==phase||(phase!=="attack"&&match.turn.player!==p))return "現在のフェイズではプレイできません";
+  if(!planning&&(match.turn.phase!==phase||(phase!=="attack"&&match.turn.player!==p)))return "現在のフェイズではプレイできません";
   const level=autoRuleHandLevel(p,card,def),cost=def.stats.cost;
   if(!Number.isInteger(cost)||board.stock.length<cost)return "ストックが不足しています（必要 "+cost+"枚）";
   if(level!=null&&board.level.length<level)return "プレイヤーのレベルが不足しています（必要 Lv"+level+"）";
@@ -539,14 +544,9 @@ function autoRuleHandMenu(p,index){
 }
 
 function autoRuleDispatchBoard(p,timing,done){
-  const cards=botSlots.flatMap(zone=>players[p][zone]).filter(card=>card.faceUp);
-  function next(index){
-    if(index===cards.length){done();return}
-    const card=cards[index];
-    if(!botSlots.some(zone=>players[p][zone].some(c=>c.uid===card.uid))){next(index+1);return}
-    botDispatch(card,timing,()=>next(index+1),p);
-  }
-  next(0);
+  const actions=botSlots.flatMap(zone=>players[p][zone]).filter(card=>card.faceUp)
+    .flatMap(card=>botTriggeredActions(p,card,timing));
+  botResolveTriggered(p,actions,done);
 }
 function autoRuleDraw(p){
   match.turn.drawPending=true;
@@ -793,9 +793,7 @@ function autoRuleResolveReversals(reversals,done){
       ...(stellaIs(source,"T03")?[{owner,source,retreat:true}]:[])
     ];
   });
-  function next(){
-    const effect=pending.shift();
-    if(!effect){done();return}
+  function resolve(effect,next){
     const {owner,target,slot,zone,stock=0}=effect;
     const rival=players[1-owner];
     if(effect.retreat){stellaT03Retreat(owner,effect.source,next);return}
@@ -828,7 +826,13 @@ function autoRuleResolveReversals(reversals,done){
     deckButton(body,stock+"ストック払う",()=>{closeResolution();moveReversed()});
     deckButton(body,"払わない",()=>{closeResolution();next()});
   }
-  next();
+  const turn=match.turn.player;
+  const actions=p=>pending.filter(effect=>effect.owner===p).map(effect=>({
+    label:effect.retreat?stellaName(effect.source)+"・後列へ移動":
+      stellaName(effect.target)+"を"+labels[effect.clockSwap?"clock":effect.zone]+"へ",
+    run:next=>resolve(effect,next)
+  }));
+  botResolveTriggered(turn,actions(turn),()=>botResolveTriggered(1-turn,actions(1-turn),done));
 }
 function autoRuleAttack(p,zone,uid,type){
   const board=players[p],rival=players[1-p],opposite=autoRuleOpposite(zone);
@@ -903,11 +907,16 @@ function autoRuleBotMain(p,done){
     if(slot){
       if(board[slot].length){playNext();return}
       const back=slot.startsWith("back");
-      const index=board.hand.findIndex(card=>{
-        const def=botDefinition(card);
-        const support=!!(def?.assist||def?.namedStageBuff||def?.effects?.some(effect=>effect.brainstorm));
-        return !autoRuleLegalPlay(p,card,"main","character")&&support===back;
-      });
+      const playable=board.hand.map((card,index)=>({card,index,definition:botDefinition(card)}))
+        .filter(({card})=>!autoRuleLegalPlay(p,card,"main","character"));
+      const isSupport=({definition:def})=>!!(def?.assist||def?.namedStageBuff||def?.effects?.some(effect=>effect.brainstorm));
+      let candidate=playable.find(entry=>isSupport(entry)===back);
+      if(match.bot.scenario===stellaScenario){
+        const frontCount=botSlots.slice(0,3).filter(zone=>board[zone].length).length;
+        if(back&&!frontCount&&playable.length===1)candidate=undefined;
+        if(!back&&!candidate&&!frontCount)candidate=playable[0];
+      }
+      const index=candidate?.index??-1;
       if(index<0)playNext();
       else autoRuleResolvePlay(p,index,slot,playNext);
       return;
@@ -921,13 +930,28 @@ function autoRuleBotMain(p,done){
       botDefinition(card).stats.level>=1)){stellaTeresa(p,teresa,playEvent);return}
     playEvent();
   }
+  function ensureAttacker(){
+    if(match.bot.scenario!==stellaScenario||players.some(b=>b.level.length>=4)){done();return}
+    const front=botSlots.slice(0,3),ready=card=>card?.faceUp&&card.orientation===0;
+    if(front.some(slot=>ready(board[slot].at(-1)))){done();return}
+    const target=front.find(slot=>!board[slot].length)??front[0];
+    const playable=board.hand.findIndex(card=>!autoRuleLegalPlay(p,card,"main","character"));
+    if(playable>=0){autoRuleResolvePlay(p,playable,target,done);return}
+    const rear=["back0","back1"].find(slot=>ready(board[slot].at(-1)));
+    if(rear&&!board[target].length)botMove(board,rear,board[rear].length-1,target);
+    done();
+  }
   function playEvent(){
     if(players.some(b=>b.level.length>=4)){done();return}
-    const index=board.hand.findIndex(card=>autoRuleEventEffect(botDefinition(card))&&
-      !autoRuleLegalPlay(p,card,"main","event"));
-    if(index<0||!stellaIs(board.hand[index],"030")&&players[1-p].stock.length<2){done();return}
+    const frontCount=botSlots.slice(0,3).filter(slot=>board[slot].length).length;
+    const hasRear=["back0","back1"].some(slot=>board[slot].length);
+    const index=board.hand.findIndex(card=>{
+      if(!autoRuleEventEffect(botDefinition(card))||autoRuleLegalPlay(p,card,"main","event"))return false;
+      return stellaIs(card,"030")?(hasRear||frontCount>1):players[1-p].stock.length>=2;
+    });
+    if(index<0){ensureAttacker();return}
     const definition=botDefinition(board.hand[index]);
-    autoRuleResolveEvent(p,index,definition,autoRuleEventEffect(definition),done);
+    autoRuleResolveEvent(p,index,definition,autoRuleEventEffect(definition),ensureAttacker);
   }
   playNext();
 }
@@ -937,7 +961,14 @@ function autoRuleBotStep(){
     case "stand": setTurnPhase("draw");break;
     case "draw": setTurnPhase("clock");break;
     case "clock":{
-      const index=board.hand.findIndex(card=>!card.cx);
+      let index=board.hand.findIndex(card=>!card.cx);
+      if(match.bot.scenario===stellaScenario){
+        const playable=card=>!autoRuleLegalPlay(p,card,"main","character",{planning:true});
+        const available=board.hand.filter(playable).length;
+        const spare=board.hand.findIndex(card=>!card.cx&&!playable(card));
+        if(spare>=0)index=spare;
+        else if(available===1)index=board.hand.filter(card=>card.cx).length>1?board.hand.findIndex(card=>card.cx):-1;
+      }
       if(!isDeckMirror(match.bot.scenario)||index<0||board.hand.length>=7||board.level.length>=3){
         setTurnPhase("main");break;
       }

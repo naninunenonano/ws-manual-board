@@ -129,7 +129,10 @@ function stellaT03Retreat(p,source,done){
 }
 function stellaReis(p,source,done){
   const board=players[p],others=stellaStage(p).filter(card=>card.uid!==source.uid);
-  if(!others.length||!board.hand.some(card=>card.cx)){done();return}
+  const sacrifices=p===1?others.filter(card=>
+    ["back0","back1"].some(slot=>board[slot].includes(card))||
+    botSlots.slice(0,3).some(slot=>board[slot].some(entry=>entry.uid!==card.uid&&entry.orientation===0))):others;
+  if(!sacrifices.length||!board.hand.some(card=>card.cx)){done();return}
   stellaChoose(p,"使うなら、控え室に置く手札のCXを選ぶ",board.hand.filter(card=>card.cx),cx=>{
     if(!cx){done();return}
     function pay(card){
@@ -140,7 +143,7 @@ function stellaReis(p,source,done){
       if(eligible.length===1){stellaMove(board,"waiting",eligible[0],"hand");done();return}
       stellaSalvage(p,entry=>entry.cx,done);
     }
-    stellaChoose(p,"続けて、控え室に置く舞台のキャラを選ぶ",others,pay,{optional:true});
+    stellaChoose(p,"続けて、控え室に置く舞台のキャラを選ぶ",sacrifices,pay,{optional:true});
   },{optional:true});
 }
 function stellaShimiao(p,source,done){
@@ -180,24 +183,28 @@ function stellaTeresa(p,source,done){
 }
 function stellaVerge(p,done){
   const board=players[p];
-  stellaChoose(p,"ヴェルジュ・控え室に置く舞台のキャラ",stellaStage(p),card=>{
+  const stage=stellaStage(p);
+  const back=["back0","back1"].flatMap(slot=>board[slot]).filter(card=>card.faceUp);
+  const candidates=p===1?(back.length?back:stage.length>1?stage:[]):stage;
+  stellaChoose(p,"ヴェルジュ・控え室に置く舞台のキャラ",candidates,card=>{
     if(!card){done("memory");return}
     stellaMove(board,botSlots.find(slot=>board[slot].includes(card)),card,"waiting");
     stellaLookAndTake(p,4,entry=>stellaAlly(entry)||botDefinition(entry)?.type==="event",true,()=>done("memory"));
   },{optional:true});
 }
-function stellaMemoryTrigger(p,done){
-  const board=players[p],events=board.memory.filter(card=>stellaIs(card,"030"));
-  function next(index){
-    if(index===events.length){done();return}
-    const resume=()=>next(index+1);
-    if(!board.hand.some(card=>card.cx)){resume();return}
-    stellaConfirm(p,"記憶・手札のCX1枚を控え室に置いてキャラを回収する？",use=>{
-      if(use)stellaDiscard(p,()=>stellaSalvage(p,stellaAlly,resume),true);
-      else resume();
-    });
-  }
-  next(0);
+function stellaMemoryActions(p){
+  const board=players[p];
+  if(!board.hand.some(card=>card.cx))return [];
+  return board.memory.filter(card=>stellaIs(card,"030")).map(card=>({
+    label:stellaName(card)+"・記憶でキャラを回収",
+    run:done=>{
+      if(!board.hand.some(entry=>entry.cx)){done();return}
+      stellaConfirm(p,"記憶・手札のCX1枚を控え室に置いてキャラを回収する？",use=>{
+        if(use)stellaDiscard(p,()=>stellaSalvage(p,stellaAlly,done),true);
+        else done();
+      });
+    }
+  }));
 }
 const stellaActions={
   "t03-entry":stellaT03,"t03-attack":stellaT03Attack,"reis-cx":stellaReis,

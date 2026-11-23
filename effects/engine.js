@@ -518,6 +518,18 @@ const WSEffects = (() => {
       max:params.max??params.count,phase:entry.phase};
   }
 
+  function triggerConditionsMet(effect,board,choices,findCard){
+    try {
+      const ctx={board,choices,findCard,selections:new Map()};
+      return (effect.conditions??[]).every(({handler,params})=>{
+        const condition=conditions.get(handler);
+        return condition?.valid(params)&&condition.run(ctx,params);
+      });
+    } catch {
+      return false;
+    }
+  }
+
   function* execute(effect, board, choices, guided, findCard) {
     const log=[];
     let working, at=null;
@@ -742,7 +754,7 @@ const WSEffects = (() => {
     return actual.status===expected?.status && equal(actual.state,expected.state);
   }
 
-  return {zones,sides,emptyBoard,validateBoard,cardsIn,effectiveTags,matchTags,inspect,run,guide,compare,continuousModifiers,continuousStatBonus,
+  return {zones,sides,emptyBoard,validateBoard,cardsIn,effectiveTags,matchTags,inspect,triggerConditionsMet,run,guide,compare,continuousModifiers,continuousStatBonus,
     describe:(entry)=>entry.implementation?.valid(entry.step.params)
       ? entry.implementation.describe(entry.step.params):String(entry.step?.handler??"未確認"),
     handlers:()=>[...operations,...conditions].map(([id,entry])=>({id,label:entry.label}))};

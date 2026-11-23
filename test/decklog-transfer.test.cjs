@@ -1252,6 +1252,7 @@ test("青の仮Lv0：山札上2枚を入れ替え、1ストックと手札のCX�
   const page=launchRules("practice-entry");
   const before=snapshot(page).players[0];
   assert.equal(page.run('autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-110").uid,"back0")'),true);
+  ruleButton(page,"1．仮キャラ 山札調整・CX回収・登場時・山札の上2枚");
   ruleButton(page,"上下を入れ替える");
   ruleButton(page,"能力を使う");
   ruleButton(page,"コストを支払う");
@@ -1454,6 +1455,7 @@ test("赤Lv0の2つの登場時能力は順に解決し、2つ目は特徴持ち
   page.run('ruleSampleCards["004"].allTags=false');
   const before=snapshot(page).players[0];
   page.run('autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-118").uid,"back0")');
+  ruleButton(page,"1．仮キャラ 特徴公開・手札交換・登場時・《巡遊者》公開と手札交換");
   assert.match(page.get("dialogTitle").textContent,/公開と手札交換/);
   ruleButton(page,"手札に加えて1枚捨てる");
   ruleButton(page,"レベル1の仮キャラ");
@@ -1474,6 +1476,7 @@ test("赤Lv0：山札上に特徴がなければ元に戻し、控え室など�
   const page=launchRules("practice-waiting");
   page.run('ruleSampleCards["001"]={allTags:false};autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-118").uid,"back0")');
   const before=page.run("players[0].deck.at(-1).uid");
+  ruleButton(page,"1．仮キャラ 特徴公開・手札交換・登場時・《巡遊者》公開と手札交換");
   ruleButton(page,"山札の上に戻す");
   ruleButton(page,"使わない");
   assert.equal(snapshot(page).players[0].deck.at(-1).uid,before);
@@ -1862,6 +1865,11 @@ test("魔王ちゃんは他のキャラの最初のアタックでソウルを�
     runRuleOperation(done=>botDispatch(maouBoard.back0[0],"on_attack",done));
     runRuleOperation(done=>botDispatch(maouBoard.front0[0],"on_attack",done));
   `);
+  ruleButton(page,"使わない");
+  assert.equal(page.run("maouBoard.deck.at(-1).uid"),"first");
+  assert.equal(page.run("maouBoard.front0[0].botSoul"),undefined);
+  page.run('runRuleOperation(done=>botDispatch(maouBoard.front0[0],"on_attack",done))');
+  ruleButton(page,"使う");
   ruleButton(page,"ストックに置く");
   assert.equal(page.run("maouBoard.front0[0].botSoul"),1);
   assert.equal(page.run("maouBoard.stock[0].uid"),"first");
@@ -1870,6 +1878,7 @@ test("魔王ちゃんは他のキャラの最初のアタックでソウルを�
   page.run('botEndTurn(0)');
   assert.equal(page.run("maouBoard.front0[0].botSoul"),2);
   page.run('runRuleOperation(done=>botDispatch(maouBoard.front0[0],"on_attack",done))');
+  ruleButton(page,"使う");
   ruleButton(page,"元に戻す");
   assert.equal(page.run("maouBoard.deck.at(-1).uid"),"second");
 });
@@ -2231,4 +2240,68 @@ test("黎明の刻 レイスは2回のカード選択でコストと山札サー
   assert.equal(page.run("rb.clock[0].uid"),"clock-cost");
   assert.equal(page.run("rb.stock.length"),0);
   assert.equal(page.run("rb.hand[0].uid"),"wanted");
+});
+
+test("同時に発動した回想と魔王ちゃんの解決順を選べる",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var b=players[0],mkOrder=(uid,no)=>({uid,id:"STS/W140-"+no,cx:false,faceUp:true,orientation:0});
+    for(const zone of zones)b[zone]=[];
+    var striker=mkOrder("atk","071");
+    striker.markers=[{card:mkOrder("marker","024"),faceUp:true}];
+    b.front0.push(striker);
+    b.back0.push(mkOrder("maou","008"));
+    b.deck.push(mkOrder("lv0","025"),mkOrder("lv3","004"));
+    runRuleOperation(done=>botDispatch(striker,"on_attack",done));
+  `);
+  assert.equal(page.get("dialogTitle").textContent,"次に解決する効果を選ぶ");
+  const marker=page.get("dialogBody").children.find(el=>el.textContent.startsWith("1．カリスマ教師の気苦労 カナーチェ"));
+  assert.ok(marker);
+  marker.onclick();
+  ruleButton(page,"2枚見る");
+  ruleButton(page,"上下を入れ替える");
+  ruleButton(page,"使う");
+  ruleButton(page,"ストックに置く");
+  assert.equal(page.run("b.stock[0].uid"),"lv0");
+});
+
+test("ステラソラBotは唯一出せる魔王ちゃんをクロックにせず前列に出す",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.settle();
+  page.get("botScenario").value="stella-sora-mirror";
+  page.click("startBotBattle");
+  page.click("confirmMulligan");
+  page.run(`
+    finishEndTurn();
+    var b=players[1],mkMain=(uid,no)=>({uid,id:"STS/W140-"+no,cx:no==="032",faceUp:true,orientation:0});
+    for(const zone of zones)b[zone]=[];
+    b.hand.push(mkMain("only","008"),mkMain("cx","032"));
+    b.deck.push(mkMain("remaining","004"));
+    setTurnPhase("clock");
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("b.clock.length"),0);
+  assert.equal(page.run("match.turn.phase"),"main");
+  page.run("autoRuleBotStep()");
+  assert.equal(page.run("b.front0[0].uid"),"only");
+  assert.equal(page.run("match.turn.phase"),"climax");
+});
+
+test("ステラソラBotは手札から出せなくても、攻撃可能な後列キャラを前列に移す",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.settle();
+  page.get("botScenario").value="stella-sora-mirror";
+  page.click("startBotBattle");
+  page.click("confirmMulligan");
+  page.run(`
+    finishEndTurn();
+    var b=players[1];
+    for(const zone of zones)b[zone]=[];
+    b.back0.push({uid:"rear",id:"STS/W140-008",faceUp:true,orientation:0});
+    setTurnPhase("main");
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("b.front0[0].uid"),"rear");
+  assert.equal(page.run("b.back0.length"),0);
 });
