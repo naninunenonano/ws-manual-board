@@ -174,6 +174,32 @@ async function checkProducts(browser,url) {
   console.log("Catalog: product generation and filter, explicit variants, original source, keyword test state and pending effect passed");
 }
 
+async function checkOtoha(browser,url){
+  const page=await browser.newPage(devices["iPhone 13"]);
+  const $=id=>page.locator("#"+id);
+  await page.goto(url+"/card-effect-test.html?card=STS%2FW140-003&effect=on-play-draw-deploy-or-heal");
+  await $("testCardStatus").getByText(/長夜無明 オトハ/).waitFor();
+  await $("loadOtoha").click();
+  const self=$("boardEditor").locator("section").first();
+  await self.locator('[data-key="self.hand"]').getByText(/Lv 2/).waitFor();
+  await self.locator('[data-key="self.stage"]').getByText(/パワー 11000/).waitFor();
+  await $("runEffectTest").click();
+  await $("effectChoices").getByRole("button",{name:"クロックの上から1枚まで控え室へ",exact:true}).click();
+  await $("effectChoices").getByRole("button",{name:"行う",exact:true}).click();
+  await $("effectResult").getByText("解決",{exact:true}).waitFor();
+  await self.getByText("クロック （1枚）",{exact:true}).waitFor();
+  await $("loadOtoha").click();
+  await $("runEffectTest").click();
+  await $("effectChoices").getByRole("button",{name:/1枚まで引き/}).click();
+  await $("effectChoices").getByRole("button",{name:"行う",exact:true}).click();
+  await $("effectChoices").getByRole("button",{name:/コスト1のキャラ/}).click();
+  await $("effectChoices").getByRole("button",{name:"選択を確定",exact:true}).click();
+  await $("effectResult").getByText("解決",{exact:true}).waitFor();
+  await self.getByText("舞台 （3枚）",{exact:true}).waitFor();
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.close();
+}
+
 async function checkSoloBoard(browser,url) {
   const page=await browser.newPage(devices["iPhone 13"]);
   const $=id=>page.locator("#"+id);
@@ -275,6 +301,7 @@ async function main() {
     const url="http://127.0.0.1:"+server.address().port;
     await checkEffects(browser,url);
     await checkProducts(browser,url);
+    await checkOtoha(browser,url);
     await checkSoloBoard(browser,url);
     await checkFirenPractice(browser,url);
     const page = await browser.newPage({...devices["iPhone 13"],acceptDownloads:true});

@@ -401,6 +401,209 @@
       "name": "鋼に宿る優しき心 フィレン"
     },
     {
+      "cardNumber": "STS/W140-003",
+      "name": "長夜無明 オトハ",
+      "reading": "ムミョウジョウヤ オトハ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "RR",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 3,
+        "cost": 2,
+        "power": 6000,
+        "soul": 2
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "巡遊者"
+      ],
+      "keywords": [],
+      "flavorText": "夜は秘密を隠しんすにも、大掃除にも、うってつけの時間でありんす",
+      "effects": [
+        {
+          "id": "memory-early-play",
+          "category": "記憶・早出し",
+          "type": "continuous",
+          "timing": "in_hand",
+          "optional": false,
+          "description": "思い出とマーカーの合計が3枚以上なら、手札でレベル－1。",
+          "sourceText": "【永】 記憶 あなたの、思い出とマーカー置場のカードの合計が3枚以上なら、あなたの手札のこのカードのレベルを－1。",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "hand"
+              }
+            },
+            {
+              "handler": "memoryMarkerCount",
+              "params": {
+                "side": "self",
+                "min": 3
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "modifyLevel",
+              "params": {
+                "selection": "@source",
+                "amount": -1
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "marker-power",
+          "category": "マーカー参照",
+          "type": "continuous",
+          "timing": "on_stage",
+          "optional": false,
+          "description": "このカードの下にマーカーがあればパワー＋5000。",
+          "sourceText": "【永】 このカードの下にマーカーがあるなら、このカードのパワーを＋5000。",
+          "conditions": [
+            {
+              "handler": "sourceMarkerCount",
+              "params": {
+                "side": "self",
+                "min": 1
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "modifyPower",
+              "params": {
+                "selection": "@source",
+                "amount": 5000
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "on-play-draw-deploy-or-heal",
+          "category": "登場時・選択効果",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "description": "手札から登場時、1枚まで引いてコスト1以下のキャラを1枚まで登場させるか、クロックの上から1枚まで回復する。",
+          "sourceText": "【自】 このカードが手札から舞台に置かれた時、次の2つの効果のうちあなたが選んだ1つを行う。『あなたは1枚まで引き、自分の手札のコスト1以下のキャラを1枚まで選び、舞台の好きな枠に置く。』『あなたは自分のクロックの上から1枚を、控え室に置いてよい。』",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "chooseBranch",
+              "params": {
+                "choiceKey": "entryMode",
+                "branches": [
+                  {
+                    "label": "1枚まで引き、コスト1以下のキャラを舞台へ",
+                    "steps": [
+                      {
+                        "handler": "optionalTopMove",
+                        "params": {
+                          "from": {
+                            "side": "self",
+                            "zone": "deck"
+                          },
+                          "to": {
+                            "side": "self",
+                            "zone": "hand"
+                          },
+                          "choiceKey": "draw",
+                          "label": "山札から1枚引く"
+                        }
+                      },
+                      {
+                        "handler": "selectCards",
+                        "params": {
+                          "from": {
+                            "side": "self",
+                            "zone": "hand"
+                          },
+                          "as": "deploy",
+                          "count": 1,
+                          "min": 0,
+                          "cardType": "character",
+                          "maxCost": 1
+                        }
+                      },
+                      {
+                        "handler": "move",
+                        "params": {
+                          "from": {
+                            "side": "self",
+                            "zone": "hand"
+                          },
+                          "to": {
+                            "side": "self",
+                            "zone": "stage"
+                          },
+                          "selection": "deploy",
+                          "replaceStage": true
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "label": "クロックの上から1枚まで控え室へ",
+                    "steps": [
+                      {
+                        "handler": "optionalTopMove",
+                        "params": {
+                          "from": {
+                            "side": "self",
+                            "zone": "clock"
+                          },
+                          "to": {
+                            "side": "self",
+                            "zone": "waiting"
+                          },
+                          "choiceKey": "heal",
+                          "label": "クロックの上から1枚を控え室へ置く"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        }
+      ]
+    },
+    {
       "cardNumber": "STS/W140-031",
       "variants": [
         "STS/W140-031",
