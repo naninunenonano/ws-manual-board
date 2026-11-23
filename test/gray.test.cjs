@@ -78,3 +78,20 @@ test("Gray includes itself in X and may keep any one viewed card without reveali
   board.self.deck.pop();board.self.deck.pop();
   assert.deepEqual(Effects.guide(enter,board,opts,find).next().value,{kind:"look-count",max:1});
 });
+
+test("Gray refreshes after moving the last viewed cards to their destinations",()=>{
+  const board=Effects.emptyBoard();
+  board.self.stage.push(source(),unit("unknown",{traits:null}));
+  board.self.deck.push(unit("last"));
+  const guide=Effects.guide(enter,board,opts,find);
+  assert.deepEqual(guide.next().value,{kind:"look-count",max:1});
+  assert.equal(guide.next(1).value.privateLook,true);
+  const refresh=guide.next([]).value;
+  assert.equal(refresh.kind,"deck-empty");
+  assert.deepEqual(ids(refresh.state.self.deck),[]);
+  assert.deepEqual(ids(refresh.state.self.waiting),["last"]);
+  refresh.state.self.clock.push(refresh.state.self.waiting.pop());
+  const result=guide.next(refresh.state).value;
+  assert.equal(result.status,"success");
+  assert.deepEqual(ids(result.state.self.clock),["last"]);
+});

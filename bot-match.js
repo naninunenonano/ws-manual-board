@@ -371,6 +371,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     }
     if(prompt.kind==="deck-empty"){
       if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
+      abortable=false;
       resolveBoardRules(p,()=>step(botEffectBoard(p)));
       return;
     }

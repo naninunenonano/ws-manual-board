@@ -301,7 +301,7 @@ const WSEffects = (() => {
   register(conditions,"otherStageTraitCount","他の舞台の特徴枚数条件",
     validStageTraitCount, p=>"他の舞台に条件を満たすキャラが"+p.min+"枚以上",
     (ctx,p)=>stageTraitCount(ctx,p,ctx.choices.sourceUid)>=p.min,["side","min","traits"]);
-  const lookLimit=(ctx,p)=>Math.min(stageTraitCount(ctx,p),pile(ctx,{side:p.side,zone:"deck"}).length);
+  const lookLimit=(ctx,p)=>Math.min(stageTraitCount(ctx,p,undefined,false),pile(ctx,{side:p.side,zone:"deck"}).length);
   operation("lookTopByStageTraits","舞台の特徴枚数まで山札を確認",p=>knownKey(sides,p.side)&&validFilter(p.traits)
     &&word(p.amountKey)&&word(p.pickKey)&&p.amountKey!==p.pickKey,
     p=>sides[p.side]+"の舞台の《"+p.traits.names.join("》・《")+"》の条件に合うキャラの数まで山札を見て、1枚まで手札に加え、残りを控え室へ",
@@ -546,7 +546,9 @@ const WSEffects = (() => {
           const branch=params.branches[details.branch];
           pending.splice(index+1,0,...instructions({steps:branch.steps}));
         }
-        if(guided&&handler==="optionalTopMove"&&params.from.zone==="deck"&&details.cards.length&&!pile(context,params.from).length){
+        const movedFromDeck=handler==="lookTopByStageTraits"?{side:params.side,zone:"deck"}
+          :handler==="optionalTopMove"&&params.from.zone==="deck"?params.from:null;
+        if(guided&&movedFromDeck&&details.cards.length&&!pile(context,movedFromDeck).length){
           const refreshed=yield {kind:"deck-empty",state:working};
           if(refreshed){validateBoard(refreshed);working=context.board=structuredClone(refreshed);}
         }
