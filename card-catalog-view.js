@@ -4,7 +4,7 @@
   const $=id=>document.getElementById(id);
   const region=$("formalResults");
   const node=(tag,value)=>{const el=document.createElement(tag);el.textContent=value;return el;};
-  const timing={in_hand:"手札にある間",on_stage:"舞台にいる間",on_play:"登場時",on_attack:"アタック時",on_reverse:"リバース時",manual:"任意のタイミング",from_hand_to_stage:"手札から舞台に置かれた時",main_phase:"メインフェイズ"};
+  const timing={on_own_climax_trigger:"獲得後・このカードがCXをトリガーした時",in_hand:"手札にある間",on_stage:"舞台にいる間",on_play:"登場時",on_attack:"アタック時",on_reverse:"リバース時",manual:"任意のタイミング",from_hand_to_stage:"手札から舞台に置かれた時",main_phase:"メインフェイズ"};
   const type={auto:"自動能力",activated:"起動能力",continuous:"永続能力"};
   let catalog;
   const tags = values => values==null?"未確認":values.join("、")||"なし";

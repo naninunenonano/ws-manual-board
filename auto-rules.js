@@ -598,6 +598,7 @@ function autoRuleAskAttack(p,zone,index){
 }
 
 function autoRuleStageChange(card,from,to,owner){
+  if(isStageZone(from)&&!isStageZone(to))delete card.gainedAbilities;
   if(!isAutoRules()||isStageZone(from)===isStageZone(to))return;
   delete card.botEntryBattleBuff;
   delete card.botBackupReverse;
@@ -830,7 +831,10 @@ function autoRuleAttack(p,zone,uid,type){
         function resolve(){
           if(current())autoRuleAddTurnStat(current(),"soul",souls);
           autoRuleLog("トリガー "+botCardInfo(revealed).name+(souls?"（ソウル＋"+souls+"）":""));
-          botTriggerEffect(p,revealed,()=>trigger(remaining-1));
+          botResolveAttackTrigger(p,revealed,current,()=>{
+            if(rival.level.length>=4||board.level.length>=4)done();
+            else trigger(remaining-1);
+          });
         }
         if(match.bot.scenario!==redBlueScenario){resolve();return}
         const body=showResolution((p===side?"自分":"Bot")+"のトリガーチェック",[revealed]);
@@ -842,6 +846,7 @@ function autoRuleAttack(p,zone,uid,type){
       });
     }
     botDispatch(attacker,"on_attack",()=>{
+      if(rival.level.length>=4||board.level.length>=4){done();return}
       const definition=botDefinition(attacker);
       const check=()=>autoRuleTriggerCount(p,definition?.extraTriggerCost,trigger);
       const afterLook=()=>{

@@ -163,7 +163,7 @@
     const spent=usage.filter(entry=>(used.get(usageKey(entry.card.uid))??0)>=ability.limit.perTurn).length;
     $("turnUsed").textContent=ability?.limit?.perTurn?"ターン"+ability.limit.perTurn+"回 ／ 使用済み "+spent+"枚":"";
     $("undoBoard").disabled=!undo||!!session;
-    for(const id of ["nextTurn","resetEffectTest","loadPractice","loadFiren","loadOtoha","loadSample","testEffect","testCard","testProduct"])$(id).disabled=!!session||(id==="testEffect"&&!ability);
+    for(const id of ["nextTurn","resetEffectTest","loadPractice","loadFiren","loadOtoha","loadNatsuka","loadSample","testEffect","testCard","testProduct"])$(id).disabled=!!session||(id==="testEffect"&&!ability);
     $("placeCard").querySelectorAll("input,select,button").forEach(el=>el.disabled=!!session);
     $("cancelEffect").hidden=!session;
     $("restoreStart").hidden=!lastStart||!!session;
@@ -232,6 +232,7 @@
   };
   function moveEntry(entry,dest,position){
     const source=entry.host?.markers??board[entry.side][entry.zone];
+    if(entry.zone==="stage"&&dest.zone!=="stage")delete entry.card.gainedAbilities;
     source.splice(source.indexOf(entry.card),1);
     const target=dest.host?(dest.host.markers??=[]):dest.pile;
     if(position==="bottom")target.unshift(entry.card);
@@ -281,7 +282,9 @@
     }
     if(firenPractice)board.self.waiting.push(...board.self.cx.splice(0));
     practiceSide="self";
-    turn++;used.clear();undo=null;clearResults();render();
+    turn++;used.clear();
+    for(const {card} of WSEffects.cardsIn(board))delete card.gainedAbilities;
+    undo=null;clearResults();render();
   };
 
   function reisCheckKind(ability=effect()){
@@ -315,6 +318,7 @@
     if(entry.effects?.some(item=>item.id===abilityId))$("testEffect").value=abilityId;
     $("testCardStatus").textContent=entry.cardNumber+" ／ "+(entry.name??"名称未確認")+(sample?" ／ 架空のテスト例":"");
     $("loadPractice").hidden=entry.cardNumber!=="STS/W140-001";
+    $("loadNatsuka").hidden=entry.cardNumber!=="STS/W140-004";
     $("loadOtoha").hidden=entry.cardNumber!=="STS/W140-003";
     readEffect();
   }
@@ -363,6 +367,30 @@
     $("boardStatus").textContent="手札のフィレンから舞台へ。凱旋歌をCX置場に出したら、舞台のフィレンでアタックできます。";
     $("testBoardHeading").tabIndex=-1;
     $("testBoardHeading").focus();
+    clearResults();
+  };
+  $("loadNatsuka").onclick=()=>{
+    if(session||card?.cardNumber!=="STS/W140-004")return;
+    const dream=findFormalCard("STS/W140-032");
+    if(!dream)return;
+    firenPractice=false;practiceSide="self";
+    changeBoard(()=>{
+      board=WSEffects.emptyBoard();used.clear();turn=1;selected=null;
+      const attacker=formalCard(card);
+      attacker.markers=[temporaryCard({name:"獲得条件のマーカー"})];
+      board.self.stage.push(attacker,temporaryCard({name:"別の《巡遊者》",traits:["巡遊者"]}));
+      board.self.hand.push(formalCard(card),temporaryCard({name:"CXコンボの手札コスト"}));
+      board.self.cx.push(formalCard(dream));
+      board.self.deck.push(formalCard(dream));
+      board.self.clock.push(temporaryCard({name:"クロックの下"}),temporaryCard({name:"クロックの上"}));
+      for(let index=1;index<=4;index++)board.opponent.deck.push(temporaryCard({name:"相手の山札のカード"+index}));
+    });
+    for(const zone of ["hand","stage","cx","clock"]){
+      $("boardEditor").querySelector('[data-key="self.'+zone+'"]').open=true;
+    }
+    $("testEffect").value="on-attack-dream-combo";
+    readEffect();
+    $("boardStatus").textContent="テスト開始でCXコンボを解決し、次に「CXトリガー時・2ダメージか回復」で獲得能力を確認できます。";
     clearResults();
   };
   $("loadOtoha").onclick=()=>{
@@ -441,7 +469,7 @@
   }
 
   function focusOperation(){$("choiceHeading").focus()}
-  function begin(uid,start=snapshot(),entered=false){
+  function begin(uid,start=snapshot(),entered=false,context={}){
     const ability=effect(),review=WSFormalCards.review(ability);
     if(review.status!=="ready"){
       session=null;render();
@@ -449,8 +477,8 @@
       return;
     }
     clearResults();
-    lastStart={state:start,uid,entered};
-    session={iterator:WSEffects.guide(ability,board,{sourceUid:uid,usedThisTurn:used.get(usageKey(uid))??0},findFormalCard),
+    lastStart={state:start,uid,entered,context};
+    session={iterator:WSEffects.guide(ability,board,{...context,sourceUid:uid,usedThisTurn:used.get(usageKey(uid))??0},findFormalCard),
       before:copy(board),uid,ability,chosen:{}};
     render();
     focusOperation();
@@ -479,7 +507,12 @@
     }
     const step=next.value;
     focusOperation();
-    if(step.kind==="deck-empty"){advance();return}
+    if(step.kind==="deck-empty"||step.kind==="damage"){advance();return}
+    if(step.kind==="heal"){
+      panel.append(node("p","クロックの上から回復する枚数を選んでください。"),
+        ...Array.from({length:step.max+1},(_,n)=>button(n?n+"枚回復":"回復しない",()=>advance(n))));
+      return;
+    }
     if(step.kind==="branch"){
       panel.append(node("p","行う効果を1つ選んでください。"),
         ...step.labels.map((text,index)=>button(text,()=>advance(index))));
@@ -592,18 +625,24 @@
     const ability=effect();
     if(!ability||session)return;
     if(WSFormalCards.review(ability).status!=="ready"){begin(null);return}
-    const ongoing=["in_hand","on_stage"].includes(ability.timing);
+    const ongoing=["in_hand","on_stage","on_attack","on_own_climax_trigger"].includes(ability.timing);
     if(sample||ability.timing==="manual"||!isOnPlay(ability)&&ability.type!=="activated"&&!ongoing){begin(null);return}
     const entering=isOnPlay(ability),zone=entering||ability.timing==="in_hand"?"hand":"stage";
     const candidates=board.self[zone].filter(matches);
     if(!candidates.length){
       $("effectChoices").replaceChildren(node("p","自分の"+zones[zone]+"にテスト対象のカードを配置してください。"));return;
     }
-    if(candidates.length===1){if(entering)enterFromHand(candidates[0].uid);else begin(candidates[0].uid);return}
+    const start=uid=>{
+      if(entering){enterFromHand(uid);return}
+      if(ability.timing==="on_own_climax_trigger"){
+        begin(uid,snapshot(),false,{triggerClimax:board.self.deck.at(-1)?.type==="climax"});
+      }else begin(uid);
+    };
+    if(candidates.length===1){start(candidates[0].uid);return}
     session={};render();focusOperation();
     chooseCards({text:entering?"手札から舞台に出すカードを選んでください。":"能力を使う舞台のカードを選んでください。",
       candidates,min:1,max:1,confirm:entering?"舞台に登場させる":"このカードの能力を使う"},
-      ([uid])=>{if(entering)enterFromHand(uid);else begin(uid)});
+      ([uid])=>start(uid));
   };
   $("togglePracticeTurn").onclick=()=>{
     practiceSide=practiceSide==="self"?"opponent":"self";
@@ -643,7 +682,7 @@
     restore(previous.state);
     if(previous.trigger)$("checkTrigger").click();
     else if(previous.entered)enterFromHand(previous.uid);
-    else begin(previous.uid);
+    else begin(previous.uid,snapshot(),false,previous.context);
   };
 
   function renderVerification(resolved,actual){

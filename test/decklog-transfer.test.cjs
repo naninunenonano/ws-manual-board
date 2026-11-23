@@ -1730,3 +1730,39 @@ test("オトハをLv2でプレイし、登場時のドロー後にリフレッ�
   assert.equal(page.run("testOtohaBoard.stock.length"),0);
   assert.equal(page.run("ruleBusy"),false);
 });
+
+test("ナツカのCXコンボとCXトリガー時の回復をアタック中に解決する",async()=>{
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    var natsukaBoard=players[0], natsukaRival=players[1];
+    var makeNatsukaCard=(uid,id,cx=false)=>({uid,id,cx,faceUp:true,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+    natsukaBoard.front0.push({...makeNatsukaCard("natsuka","STS/W140-004"),
+      markers:[{card:makeNatsukaCard("marker","BOT/W000-001"),faceUp:false}]});
+    natsukaBoard.back0.push(makeNatsukaCard("ally","STS/W140-001"));
+    natsukaBoard.cx.push(makeNatsukaCard("dream","STS/W140-032R",true));
+    natsukaBoard.hand.push(makeNatsukaCard("discard","BOT/W000-001"));
+    for(const uid of ["old","close","top"])natsukaBoard.clock.push(makeNatsukaCard(uid,"BOT/W000-001"));
+    natsukaBoard.deck.push(makeNatsukaCard("remain","BOT/W000-001"),makeNatsukaCard("trigger","BOT/W000-012",true));
+    for(let i=0;i<8;i++)natsukaRival.deck.push(makeNatsukaCard("r"+i,"BOT/W000-001"));
+    natsukaRival.deck.push(makeNatsukaCard("cancel","BOT/W000-012",true));
+    match.turn.phase="attack";
+    autoRuleAttack(0,"front0","natsuka","direct");
+  `);
+  ruleButton(page,"能力を使う");
+  ruleButton(page,"仮キャラ");
+  ruleButton(page,"選択を確定");
+  ruleButton(page,"コストを支払う");
+  assert.equal(page.run("natsukaRival.waiting[0].uid"),"cancel");
+  assert.equal(page.run("natsukaBoard.waiting[0].uid"),"discard");
+  assert.equal(page.run("natsukaBoard.stock[0].uid"),"trigger");
+  ruleButton(page,"クロックの上から2枚まで回復");
+  ruleButton(page,"2枚回復");
+  assert.equal(page.run("natsukaBoard.clock.map(c=>c.uid).join()"),"old");
+  assert.equal(page.run("natsukaRival.clock.length"),4);
+  assert.equal(page.run("match.bot.uses['natsuka:cx-trigger-damage-or-heal']"),1);
+  assert.equal(page.run("ruleBusy"),false);
+  page.run('botEndTurn(0)');
+  assert.equal(page.run("natsukaBoard.front0[0].gainedAbilities"),undefined);
+});
