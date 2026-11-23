@@ -434,6 +434,27 @@ function botResolveAttackTrigger(p,trigger,attacker,done){
   });
 }
 
+function botShowLookStep(prompt,respond){
+  const seen=prompt.cards.length;
+  const prefix=prompt.side==="opponent"?"相手の":"";
+  const label=seen?prefix+"山札の上から"+seen+"枚目（上限"+prompt.max+"枚）":prefix+"山札を上から1枚ずつ見る（上限"+prompt.max+"枚）";
+  const visible=prompt.cards.slice(-1).map(card=>card.id?card:{id:card.cardNumber});
+  const body=showResolution(label,visible,effectChoiceImageUrl);
+  function choose(text,more){deckButton(body,text,()=>{closeResolution();respond(more)})}
+  if(prompt.canContinue)choose(seen?"次の1枚を見る":"1枚見る",true);
+  choose(!seen?"見ない":prompt.side==="opponent"?"元の順番で戻す":"ここでやめる",false);
+}
+function botLookUpTo(p,max,done){
+  const iterator=WSEffects.lookUpTo(players[p].deck,max);
+  function next(more){
+    const step=iterator.next(more);
+    if(step.done){done(step.value);return}
+    if(p===1)next(true);
+    else botShowLookStep(step.value,next);
+  }
+  next();
+}
+
 function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const key=card.uid+":"+ability.id;
   const reisSearch=ability.id==="on-play-waiting-okaken";
@@ -541,6 +562,14 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       abortable=false;
       render();
     }
+    if(prompt.kind==="look-next"){
+      if(p===1&&isAutoRules())step(prompt.canContinue);
+      else botShowLookStep(prompt,more=>{
+        if(more)abortable=false;
+        step(more);
+      });
+      return;
+    }
     if(simpleReis&&(prompt.kind==="cost"||prompt.kind==="optional"&&reisSearch)){
       step(prompt.kind==="optional"?true:undefined);
       return;
@@ -565,7 +594,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
           step(candidates.slice(0,prompt.max).map(card=>card.uid));
           break;
         }
-        case "look-count":case "private-look-count":case "heal":step(prompt.max);break;
+        case "heal":step(prompt.max);break;
         case "destination":step(prompt.destinations[0]);break;
         case "treasure":step(prompt.canStock);break;
         default:step();break;
@@ -577,19 +606,12 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       (reisSearch?"ストック1枚を払い、クロックの下に置くカードを選ぶ":"思い出に置く回想キャラを選ぶ"):
       "山札からレベル1以下のキャラを1枚まで選ぶ"):ability.category??"カード効果";
     const visibleCards=!cardChoices&&prompt.kind==="select"&&prompt.committedState?prompt.candidates:
-      ["reveal","private-look"].includes(prompt.kind)?prompt.cards:[];
+      prompt.kind==="reveal"?prompt.cards:[];
     const body=showResolution(title,prompt.kind==="treasure"?[card]:visibleCards.map(c=>({id:c.cardNumber})));
     const add=(label,action)=>deckButton(body,label,()=>{closeResolution();action()});
     const respond=(label,result)=>add(label,()=>step(result));
     if(prompt.kind==="branch"){
       prompt.labels.forEach((label,index)=>respond(label,index));
-    }else if(prompt.kind==="private-look-count"){
-      body.append(document.createTextNode("相手の山札を上から何枚見るか選んでください。"));
-      for(let n=0;n<=prompt.max;n++)respond(n?n+"枚見る":"見ない",n);
-    }else if(prompt.kind==="private-look"){
-      respond("元の順番で戻す");
-    }else if(prompt.kind==="look-count"){
-      for(let n=0;n<=prompt.max;n++)respond(n?n+"枚見る":"見ない",n);
     }else if(prompt.kind==="heal"){
       for(let n=0;n<=prompt.max;n++)respond(n===0?"回復しない":n+"枚回復",n);
     }else if(prompt.kind==="optional-top"){

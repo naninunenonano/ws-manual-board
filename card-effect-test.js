@@ -539,9 +539,13 @@
     const step=next.value;
     focusOperation();
     if(step.kind==="deck-empty"||step.kind==="damage"){advance();return}
-    if(step.kind==="look-count"){
-      panel.append(node("p","山札を上から何枚見るか選んでください。"),
-        ...Array.from({length:step.max+1},(_,n)=>button(n?n+"枚見る":"見ない",()=>advance(n))));
+    if(step.kind==="look-next"){
+      const seen=step.cards.length;
+      const prefix=step.side==="opponent"?"相手の":"";
+      panel.append(node("p",seen?prefix+"山札の上から"+seen+"枚目 ／ "+name(step.cards.at(-1)):
+        prefix+"山札を上から1枚ずつ見る（最大"+step.max+"枚）"));
+      if(step.canContinue)panel.append(button(seen?"次の1枚を見る":"1枚見る",()=>advance(true)));
+      panel.append(button(!seen?"見ない":step.side==="opponent"?"元の順番で戻す":"ここでやめる",()=>advance(false)));
       return;
     }
     if(step.kind==="heal"){
@@ -578,17 +582,6 @@
     }
     if(step.kind==="optional"){
       panel.append(node("p","この能力を使いますか？"),button("能力を使用する",()=>advance(true)),button("能力を使用しない",()=>advance(false)));
-      return;
-    }
-    if(step.kind==="private-look-count"){
-      panel.append(node("p","相手の山札を上から何枚見るか選んでください。"),
-        ...Array.from({length:step.max+1},(_,n)=>button(n?n+"枚見る":"見ない",()=>advance(n))));
-      return;
-    }
-    if(step.kind==="private-look"){
-      const list=node("ol");
-      for(const entry of step.cards)list.append(node("li",name(entry)));
-      panel.append(list,button("元の順番で戻す",()=>advance()));
       return;
     }
     if(step.kind==="reveal"){

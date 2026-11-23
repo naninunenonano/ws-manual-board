@@ -459,7 +459,8 @@ async function checkLevelOnePractice(browser,url){
   await page.locator('#boards .zone[data-p="0"][data-z="front0"]').tap({position:{x:14,y:10}});
   await page.locator("#autoAttack").tap();
   await button("ダイレクトアタック").tap();
-  await button("山札を見る").tap();
+  await button("1枚見る").tap();
+  for(let n=1;n<4;n++)await button("次の1枚を見る").tap();
   await page.getByRole("button",{name:/^1．.*を手札へ$/}).tap();
   assert.match(await page.locator("#botStatus").innerText(),/CXコンボで4枚確認/);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);

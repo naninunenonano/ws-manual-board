@@ -530,6 +530,18 @@ const WSEffects = (() => {
     }
   }
 
+  function* lookUpTo(deck,max,{side="self",review=false}={}){
+    const limit=Math.min(deck.length,max), cards=[];
+    while(cards.length<limit){
+      const more=yield {kind:"look-next",side,cards:cards.slice(),max:limit,canContinue:true};
+      if(more===false)return cards;
+      if(more!==true)fail("次のカードを見るか選んでください","needs-choice");
+      cards.push(deck[deck.length-1-cards.length]);
+    }
+    if(review&&cards.length)yield {kind:"look-next",side,cards:cards.slice(),max:limit,canContinue:false};
+    return cards;
+  }
+
   function* execute(effect, board, choices, guided, findCard) {
     const log=[];
     let working, at=null;
@@ -565,12 +577,7 @@ const WSEffects = (() => {
         if(handler==="bounceFrontAfterMill"&&!log.some(step=>step.handler==="millDeckTop"&&step.climax))continue;
         if(guided){
           if(handler==="lookOpponentTop"){
-            const deck=pile(context,{side:"opponent",zone:"deck"}),max=Math.min(deck.length,params.max);
-            if(max){
-              const n=yield {kind:"private-look-count",max};
-              if(!count(n)||n>max)fail("見る枚数を選んでください","needs-choice");
-              if(n)yield {kind:"private-look",cards:deck.slice(-n).reverse()};
-            }
+            yield* lookUpTo(pile(context,{side:"opponent",zone:"deck"}),params.max,{side:"opponent",review:true});
           }
           if(handler==="bounceFrontAfterMill"){
             const candidates=frontBounceTargets(context);
@@ -578,29 +585,19 @@ const WSEffects = (() => {
               candidates,min:0,max:Math.min(candidates.length,params.max),phase:entry.phase,committedState:working}:[];
           }
           if(handler==="lookAndOrderTop"){
-            const from={side:params.side,zone:"deck"},deck=pile(context,from);
-            const max=Math.min(params.max,deck.length);
-            if(max){
-              const n=yield {kind:"look-count",max};
-              if(!count(n)||n>max)fail("見る枚数を選んでください","needs-choice");
-              choices.lookCount=n;
-              if(n)choices.topOrder=yield {kind:"select",label:"見たカード",from,
-                candidates:deck.slice(-n).reverse(),min:0,max:n,topOrder:true,
-                text:"山札の上に戻すカードを、一番上に置くものから順に選んでください。残りは控え室に置きます。"};
-            }
+            const from={side:params.side,zone:"deck"};
+            const viewed=yield* lookUpTo(pile(context,from),params.max,{side:params.side});
+            choices.lookCount=viewed.length;
+            if(viewed.length)choices.topOrder=yield {kind:"select",label:"見たカード",from,
+              candidates:viewed,min:0,max:viewed.length,topOrder:true,
+              text:"山札の上に戻すカードを、一番上に置くものから順に選んでください。残りは控え室に置きます。"};
           }
           if(handler==="lookTopByStageTraits"){
-            const max=lookLimit(context,params);
-            if(max){
-              const amount=yield {kind:"look-count",max};
-              if(!count(amount)||amount>max)fail("山札を見る枚数を選んでください","needs-choice");
-              choices[params.amountKey]=amount;
-              if(amount){
-                const from={side:params.side,zone:"deck"};
-                choices[params.pickKey]=yield {kind:"select",label:"見たカード",from,
-                  candidates:pile(context,from).slice(-amount).reverse(),min:0,max:1,phase:entry.phase,privateLook:true};
-              }
-            }
+            const from={side:params.side,zone:"deck"};
+            const viewed=yield* lookUpTo(pile(context,from),lookLimit(context,params),{side:params.side});
+            choices[params.amountKey]=viewed.length;
+            if(viewed.length)choices[params.pickKey]=yield {kind:"select",label:"見たカード",from,
+              candidates:viewed,min:0,max:1,phase:entry.phase,privateLook:true};
           }
           if(handler==="healUpTo"){
             const max=Math.min(params.max,pile(context,{side:params.side,zone:"clock"}).length);
@@ -754,7 +751,7 @@ const WSEffects = (() => {
     return actual.status===expected?.status && equal(actual.state,expected.state);
   }
 
-  return {zones,sides,emptyBoard,validateBoard,cardsIn,effectiveTags,matchTags,inspect,triggerConditionsMet,run,guide,compare,continuousModifiers,continuousStatBonus,
+  return {zones,sides,emptyBoard,validateBoard,cardsIn,effectiveTags,matchTags,inspect,triggerConditionsMet,run,guide,lookUpTo,compare,continuousModifiers,continuousStatBonus,
     describe:(entry)=>entry.implementation?.valid(entry.step.params)
       ? entry.implementation.describe(entry.step.params):String(entry.step?.handler??"未確認"),
     handlers:()=>[...operations,...conditions].map(([id,entry])=>({id,label:entry.label}))};

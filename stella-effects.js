@@ -18,7 +18,7 @@ const stellaName=card=>botCardInfo(card)?.name??card.id;
 function stellaChoose(p,title,cards,done,{optional=false,shown=[]}={}){
   if(!cards.length){
     if(p===1||!shown.length){done(null);return}
-    const body=showResolution(title+"・選べるカードなし",shown);
+    const body=showResolution(title+"・選べるカードなし",shown,effectChoiceImageUrl);
     deckButton(body,"確認して進む",()=>{closeResolution();done(null)});
     return;
   }
@@ -68,15 +68,6 @@ function stellaShow(p,title,cards,done){
   const body=showResolution(title,cards);
   deckButton(body,"確認して進む",()=>{closeResolution();done()});
 }
-function stellaLook(p,max,done){
-  const deck=players[p].deck,limit=Math.min(max,deck.length);
-  if(!limit){done([]);return}
-  if(p===1){done(deck.slice(-limit).reverse());return}
-  const body=showResolution("山札を上から何枚見るか",[]);
-  for(let n=0;n<=limit;n++)deckButton(body,n?n+"枚見る":"見ない",()=>{
-    closeResolution();done(n?deck.slice(-n).reverse():[]);
-  });
-}
 function stellaRevealTop(p,done){
   resolveBoardRules(p,()=>{
     const top=players[p].deck.at(-1);
@@ -85,7 +76,7 @@ function stellaRevealTop(p,done){
 }
 function stellaLookAndTake(p,max,filter,stockSecond,done){
   const board=players[p];
-  stellaLook(p,max,viewed=>{
+  botLookUpTo(p,max,viewed=>{
     const candidates=viewed.filter(filter);
     stellaChoose(p,"手札に加えるカード",candidates,hand=>{
       function finish(stock){

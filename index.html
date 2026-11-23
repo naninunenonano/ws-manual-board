@@ -645,7 +645,7 @@ function openDeckTemporary(p,mode,count,fromBottom=false,serverRevealed=false){
  }
  renderTemp();d.showModal();
 }
-function showResolution(title,cards){
+function showResolution(title,cards,imageUrl=officialImageUrl){
  const dialog=document.getElementById("dialog"),body=document.getElementById("dialogBody");
  dialog.classList.remove("zoom-mode");
  document.getElementById("dialogTitle").textContent=title;
@@ -658,7 +658,7 @@ function showResolution(title,cards){
      const item=document.createElement("li");
      item.className="carddetail";
      item.style.cssText="display:grid;width:min(136px,38vw);gap:4px;overflow-wrap:anywhere";
-     if(addCardImage(item,card,card.id)&&item.firstElementChild)item.firstElementChild.style.cssText="width:100%;aspect-ratio:0.71;object-fit:contain";
+     if(addCardImage(item,card,card.id,imageUrl)&&item.firstElementChild)item.firstElementChild.style.cssText="width:100%;aspect-ratio:0.71;object-fit:contain";
      else appendPracticeCardFace(item,card);
      const label=document.createElement("span");
      label.textContent=(index+1)+"．"+(isAutoRules()?botCardInfo(card)?.name??card.id:card.id);
@@ -1516,12 +1516,12 @@ document.getElementById("clockSkip").onclick=()=>{if(match?.turn?.phase==="clock
 
 </script>
 <script src="card-catalog.js?v=5"></script>
-<script src="effects/engine.js?v=trigger-order-1"></script>
+<script src="effects/engine.js?v=stepwise-look-1"></script>
 <script src="card-data/load.js?v=2"></script>
 <script src="match-state.js?v=practice-mulligan"></script>
-<script src="auto-rules.js?v=trigger-order-1"></script>
-<script src="stella-effects.js?v=3"></script>
-<script src="bot-match.js?v=trigger-order-1"></script>
+<script src="auto-rules.js?v=stepwise-look-1"></script>
+<script src="stella-effects.js?v=4"></script>
+<script src="bot-match.js?v=stepwise-look-1"></script>
 <script src="cloud-decks.js?v=0.52"></script>
 <script src="online-match.js?v=0.52-encore"></script>
 <script src="decklog-import.js?v=0.52"></script>

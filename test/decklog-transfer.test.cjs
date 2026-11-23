@@ -1105,9 +1105,10 @@ test("仮Lv1：赤はレベル置場、青はクロックの色でプレイで�
   page.run('setTurnPhase("climax")');
   assert.equal(page.run('autoRulePlace(0,players[0].hand.find(c=>c.id==="BOT/W000-104").uid,"cx")'),true);
   page.run('setTurnPhase("attack");autoRuleAttack(0,"front0",players[0].front0[0].uid,"direct")');
-  assert.match(page.get("dialogTitle").textContent,/山札を何枚見るか/);
+  assert.match(page.get("dialogTitle").textContent,/山札を上から1枚ずつ見る/);
   const before=page.run("players[0].deck.length");
-  ruleButton(page,"山札を見る");
+  ruleButton(page,"1枚見る");
+  for(let n=1;n<4;n++)ruleButton(page,"次の1枚を見る");
   assert.match(page.get("dialogTitle").textContent,/巡遊者/);
   assert.equal(page.get("dialogBody").children.some(el=>el.textContent.startsWith("2．")&&el.textContent.endsWith("を手札へ")),false);
   const option=page.get("dialogBody").children.find(el=>el.textContent?.startsWith("1．")&&el.textContent.endsWith("を手札へ"));
@@ -1436,7 +1437,8 @@ test("青Lv0は舞台と手札の両方から控え室に置かれた時に誘�
   ruleButton(page,"能力を使う");
   ruleButton(page,"仮カウンター");
   ruleButton(page,"選択を確定");
-  ruleButton(page,"山札を見る");
+  ruleButton(page,"1枚見る");
+  for(let n=1;n<4;n++)ruleButton(page,"次の1枚を見る");
   assert.ok(!page.get("dialogBody").children.some(el=>el.textContent.startsWith("1．")&&el.textContent.endsWith("を手札へ")));
   ruleButton(page,"3．仮イベント 光景を手札へ");
   const after=snapshot(page).players[0];
@@ -1845,7 +1847,8 @@ test("カナーチェは思い出に移って回収し、登場したキャラ�
     kaBoard.deck.push(kaCard("second"),kaCard("first"));
     runRuleOperation(done=>botDispatch(kaBoard.front0[0],"on_attack",done,0));
   `);
-  ruleButton(page,"2枚見る");
+  ruleButton(page,"1枚見る");
+  ruleButton(page,"次の1枚を見る");
   ruleButton(page,"上下を入れ替える");
   assert.equal(page.run("kaBoard.deck.map(c=>c.uid).join()"),"first,second");
   page.run('botMove(kaBoard,"front0",0,"waiting")');
@@ -1948,7 +1951,8 @@ test("コゼットは相手の山札上を非公開で確認し、順番を変�
     coRival.deck.push(coCard("bottom"),coCard("second"),coCard("first"));
     runRuleOperation(done=>botDispatch(coBoard.front0[0],"from_hand_to_stage",done,0));
   `);
-  ruleButton(page,"2枚見る");
+  ruleButton(page,"1枚見る");
+  ruleButton(page,"次の1枚を見る");
   ruleButton(page,"元の順番で戻す");
   assert.equal(page.run("coRival.deck.map(c=>c.uid).join()"),"bottom,second,first");
   assert.equal(page.run("ruleBusy"),false);
@@ -2019,7 +2023,8 @@ test("アヤメの登場時は山札を選んだ順に戻して相手のスト�
     ayameRival.stock.push(ayameCard("old-stock","BOT/W000-001",false));
     runRuleOperation(done=>botDispatch(ayameBoard.front0[0],"from_hand_to_stage",done,0));
   `);
-  ruleButton(page,"2枚見る");
+  ruleButton(page,"1枚見る");
+  ruleButton(page,"次の1枚を見る");
   ruleButton(page,"2．仮キャラ");
   ruleButton(page,"1．仮キャラ");
   ruleButton(page,"選択を確定");
@@ -2099,7 +2104,9 @@ test("ヴェルジュは1枚を手札、1枚をストックに置き、解決後
     runRuleOperation(done=>autoRuleResolveEvent(0,0,botDefinition(sb.hand[0]),stellaVerge,done));
   `);
   ruleButton(page,"1．巡遊者 コゼット");
-  ruleButton(page,"2枚見る");
+  ruleButton(page,"1枚見る");
+  ruleButton(page,"次の1枚を見る");
+  ruleButton(page,"ここでやめる");
   ruleButton(page,"1．弾む小雨 シーミャオ");
   ruleButton(page,"1．森のうっかりさん テレサ");
   ruleButton(page,"確認して進む");
@@ -2180,10 +2187,13 @@ test("シーミャオは回想を持たないイベントを選べ、テレサ�
     runRuleOperation(done=>botDispatch(sb.front0[0],"from_hand_to_stage",done));
   `);
   ruleButton(page,"1枚見る");
+  assert.match(page.get("dialogTitle").textContent,/上から1枚目/);
+  ruleButton(page,"ここでやめる");
   ruleButton(page,"1．星ノ塔スタッフ ヴェルジュ");
   ruleButton(page,"確認して進む");
   ruleButton(page,"1．弾む小雨 シーミャオ");
   assert.equal(page.run("sb.hand[0].uid"),"take");
+  assert.equal(page.run("sb.deck.at(-1).uid"),"level1");
   assert.equal(page.run("botStats(0,sb.front0[0]).power"),3500);
   page.run('selected={p:0,z:"front1",index:0};openBotAbility()');
   ruleButton(page,"起動・キャラを回収してテレサを思い出へ");
@@ -2259,7 +2269,8 @@ test("同時に発動した回想と魔王ちゃんの解決順を選べる",asy
   const marker=page.get("dialogBody").children.find(el=>el.textContent.startsWith("1．カリスマ教師の気苦労 カナーチェ"));
   assert.ok(marker);
   marker.onclick();
-  ruleButton(page,"2枚見る");
+  ruleButton(page,"1枚見る");
+  ruleButton(page,"次の1枚を見る");
   ruleButton(page,"上下を入れ替える");
   ruleButton(page,"使う");
   ruleButton(page,"ストックに置く");

@@ -185,8 +185,9 @@ async function checkGray(browser,url){
   await self.locator('[data-key="self.stage"]').getByText(/パワー 10000/).waitFor();
   await $("runEffectTest").click();
   const panel=$("effectChoices");
-  await panel.getByRole("button",{name:"5枚見る",exact:true}).waitFor();
-  await panel.getByRole("button",{name:"2枚見る",exact:true}).click();
+  await panel.getByRole("button",{name:"1枚見る",exact:true}).click();
+  await panel.getByRole("button",{name:"次の1枚を見る",exact:true}).click();
+  await panel.getByRole("button",{name:"ここでやめる",exact:true}).click();
   await panel.getByRole("button",{name:/山札の上から2枚目/}).click();
   await panel.getByRole("button",{name:"選択を確定",exact:true}).click();
   await $("effectResult").getByText("解決",{exact:true}).waitFor();

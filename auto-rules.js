@@ -651,9 +651,9 @@ function autoRuleReorderTop(p,done,chooseCount=false){
   const deck=players[p].deck;
   if(!deck.length){done();return}
   if(p===1){done();return}
-  function look(count){
-    const top=deck.slice(-count).reverse();
-    const body=showResolution("山札の上"+top.length+"枚（1番が一番上）",top);
+  function look(top){
+    if(!top.length){done();return}
+    const body=showResolution("山札の上"+top.length+"枚（1番が一番上）",top,effectChoiceImageUrl);
     function finish(swap){
       closeResolution();
       if(swap){
@@ -666,10 +666,8 @@ function autoRuleReorderTop(p,done,chooseCount=false){
     deckButton(body,"この順番にする",()=>finish(false));
     if(top.length===2)deckButton(body,"上下を入れ替える",()=>finish(true));
   }
-  if(!chooseCount){look(2);return}
-  const body=showResolution("回想・自分の山札を上から何枚見るか",[]);
-  for(let n=1;n<=Math.min(2,deck.length);n++)deckButton(body,n+"枚見る",()=>{closeResolution();look(n)});
-  deckButton(body,"見ない",()=>{closeResolution();done()});
+  if(chooseCount)botLookUpTo(p,2,look);
+  else look(deck.slice(-2).reverse());
 }
 function autoRuleClockSearch(p,card,effect,done){
   const board=players[p],stock=effect.clockSearchCost;
@@ -693,10 +691,9 @@ function autoRuleLookOnAttack(p,{cxId,max,trait},done){
 }
 function autoRuleLookTop(p,max,label,targetLabel,matches,done){
   const board=players[p];
-  const limit=Math.min(max,board.deck.length);
-  if(!limit){done();return}
-  function look(n){
-    const viewed=board.deck.slice(-n).reverse();
+  botLookUpTo(p,max,viewed=>{
+    const n=viewed.length;
+    if(!n){done();return}
     function finish(chosen){
       board.deck.splice(-n);
       for(const card of viewed){
@@ -714,17 +711,6 @@ function autoRuleLookTop(p,max,label,targetLabel,matches,done){
       button.disabled=!eligible;
     }
     deckButton(result,"加えない",()=>{closeResolution();finish(null)});
-  }
-  if(p===1){look(limit);return}
-  const body=showResolution(label+"・山札を何枚見るか",[]);
-  const count=deckSelect(limit,limit);
-  body.append(count);
-  deckButton(body,"見ない",()=>{closeResolution();done()});
-  deckButton(body,"山札を見る",()=>{
-    const n=Number(count.value);
-    closeResolution();
-    if(!Number.isInteger(n)||n<1||n>limit){done();return}
-    look(n);
   });
 }
 function autoRuleTraitLoot(p,source,effect,done){
