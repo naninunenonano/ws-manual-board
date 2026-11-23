@@ -239,7 +239,7 @@ function botStats(p,card){
     if(power!=null)power+=bonus.power;
     if(soul!=null)soul+=bonus.soul;
   }else if(own.cx.length&&botCatalog){
-    const bonus=WSEffects.continuousModifiers(botEffectBoard(p)).find(entry=>entry.uid===card.uid);
+    const bonus=WSEffects.continuousModifiers(botEffectBoard(p),"self",number=>WSFormalCards.find(botCatalog,number)).find(entry=>entry.uid===card.uid);
     if(bonus){power=bonus.power;soul=bonus.soul;}
   }
   if(match.turn?.player===p&&power!=null){

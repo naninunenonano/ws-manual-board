@@ -442,15 +442,31 @@ const WSEffects = (() => {
   }
 
   // Continuous CX modifiers are calculated, never written into printed card stats.
-  function continuousModifiers(board,side="self") {
+  function continuousModifiers(board,side,findCard) {
     validateBoard(board);
     if(!knownKey(sides,side))fail("プレイヤーを確認してください","invalid");
-    const active=board[side].cx.filter(c=>["STS/W140-031","STS/W140-031R"].includes(c.cardNumber)).length;
-    return board[side].stage.filter(c=>c.type==="character").map(card=>({
-      uid:card.uid,powerBonus:active*1000,soulBonus:active,
-      power:integer(card.power)?card.power+active*1000:null,
-      soul:integer(card.soul)?card.soul+active:null
-    }));
+    const relative=side==="self"?board:{self:board.opponent,opponent:board.self};
+    const modifiers=new Map(relative.self.stage.filter(card=>card.type==="character")
+      .map(card=>[card.uid,{uid:card.uid,powerBonus:0,soulBonus:0,power:card.power??null,soul:card.soul??null}]));
+    for(const cx of relative.self.cx){
+      for(const effect of findCard(cx.cardNumber)?.effects??[]){
+        if(effect.type!=="continuous"||effect.timing!=="while_in_cx")continue;
+        const result=run(effect,relative,{sourceUid:cx.uid});
+        if(result.status!=="success")continue;
+        for(const step of result.log){
+          if(step.handler!=="continuousCxBuff")continue;
+          for(const uid of step.cards){
+            const stat=modifiers.get(uid);
+            if(!stat)continue;
+            stat.powerBonus+=step.powerBonus;
+            stat.soulBonus+=step.soulBonus;
+            if(integer(stat.power))stat.power+=step.powerBonus;
+            if(integer(stat.soul))stat.soul+=step.soulBonus;
+          }
+        }
+      }
+    }
+    return [...modifiers.values()];
   }
 
   function equal(a,b) {
