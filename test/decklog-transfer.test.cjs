@@ -1595,7 +1595,7 @@ test("赤青デッキは確定した50枚で初手・マリガンから開始す
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
 
-test("赤青同士ではBotが登場効果と攻撃時のCXコンボを入力なしで解決する",()=>{
+test("赤青同士ではBotの効果選択を自動で処理し、トリガーの確認だけを挟む",()=>{
   const page=launchRules("red-blue-deck");
   page.click("confirmMulligan");
   page.run(`finishEndTurn();setTurnPhase("main");const b=players[1];
@@ -1611,7 +1611,10 @@ test("赤青同士ではBotが登場効果と攻撃時のCXコンボを入力な
   page.click("botStep");
   assert.equal(snapshot(page).players[1].cx[0].id,"BOT/W000-104");
   page.click("botStep");
+  assert.equal(page.get("dialogTitle").textContent,"Botのトリガーチェック");
+  ruleButton(page,"確認して進む");
   page.click("botStep");
+  ruleButton(page,"確認して進む");
   assert.ok(snapshot(page).bot.log.some(line=>line.includes("CXコンボで")));
   assert.ok(!page.get("dialog").open);
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
@@ -1641,4 +1644,23 @@ test("赤青デッキの初手とカード詳細に、画像なしで名前・�
   page.run('showCardDetail({id:"BOT/W000-119"})');
   assert.match(page.get("dialogTitle").textContent,/早出し・助太刀封じ/);
   assert.match(flatten(page.get("dialogBody")),/パワー9000.+助太刀不可.+1ストック/);
+});
+
+test("赤青同士の自分のトリガーを確認するまでストックに置かない",()=>{
+  const page=launchRules("red-blue-deck");
+  page.click("confirmMulligan");
+  page.run(`const own=players[0];
+    while(own.hand.length)botMove(own,"hand",0,"deck");
+    const put=(n,z)=>botMove(own,"deck",own.deck.findIndex(c=>c.id.endsWith(n)),z);
+    put("101","front0");put("104","deck");
+    setTurnPhase("attack");autoRuleAttack(0,"front0",own.front0[0].uid,"direct")`);
+  assert.equal(page.get("dialogTitle").textContent,"自分のトリガーチェック");
+  const [list,note]=page.get("dialogBody").children;
+  assert.equal(list.children[0].children[0].dataset.cardNumber,"104");
+  assert.match(note.textContent,/カムバック/);
+  assert.equal(page.run("players[0].stock.length"),0);
+  ruleButton(page,"確認して進む");
+  ruleButton(page,"選ばず進む");
+  assert.equal(snapshot(page).players[0].stock.at(-1).id,"BOT/W000-104");
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });

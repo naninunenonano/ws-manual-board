@@ -806,10 +806,20 @@ function autoRuleAttack(p,zone,uid,type){
       let revealed;
       botRevealTop(p,card=>{revealed=card},found=>{
         if(!found){counter();return}
-        const souls=(botDefinition(revealed)?.triggers??[]).filter(icon=>icon==="ソウル").length;
-        if(current())autoRuleAddTurnStat(current(),"soul",souls);
-        autoRuleLog("トリガー "+botCardInfo(revealed).name+(souls?"（ソウル＋"+souls+"）":""));
-        botTriggerEffect(p,revealed,()=>trigger(remaining-1));
+        const icons=botDefinition(revealed)?.triggers??[];
+        const souls=icons.filter(icon=>icon==="ソウル").length;
+        function resolve(){
+          if(current())autoRuleAddTurnStat(current(),"soul",souls);
+          autoRuleLog("トリガー "+botCardInfo(revealed).name+(souls?"（ソウル＋"+souls+"）":""));
+          botTriggerEffect(p,revealed,()=>trigger(remaining-1));
+        }
+        if(match.bot.scenario!==redBlueScenario){resolve();return}
+        const body=showResolution((p===side?"自分":"Bot")+"のトリガーチェック",[revealed]);
+        const note=document.createElement("p");
+        note.className="trigger-icons";
+        note.textContent="トリガーアイコン："+(icons.join("・")||"なし");
+        body.append(note);
+        deckButton(body,"確認して進む",()=>{closeResolution();resolve()});
       });
     }
     botDispatch(attacker,"on_attack",()=>{

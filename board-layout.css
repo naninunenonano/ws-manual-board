@@ -228,3 +228,49 @@ button.zone-fan-card[data-clock-index] {
   text-align: center;
   overflow-wrap: anywhere;
 }
+
+.practice-card-face {
+  --practice-ink: #9dc4ec;
+  --practice-paper: #1d3554;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  aspect-ratio: 5 / 7;
+  overflow: hidden;
+  border: 2px solid var(--practice-ink);
+  border-radius: 5px;
+  background: radial-gradient(ellipse at center, transparent 37%, var(--practice-paper) 38%),
+    linear-gradient(140deg, var(--practice-paper), var(--practice-ink));
+  color: #fff;
+  line-height: 1;
+  container-type: inline-size;
+}
+.practice-card-face[data-color="red"] { --practice-ink: #ff938b; --practice-paper: #6e232d; }
+.practice-card-face[data-color="blue"] { --practice-ink: #85cbff; --practice-paper: #144675; }
+.practice-face-mark { font-size: 39cqw; text-shadow: 0 1px 5px #172034; }
+.practice-face-rank, .practice-face-code {
+  position: absolute;
+  font-size: clamp(9px, 19cqw, 18px);
+  font-weight: 800;
+}
+.practice-face-rank { inset: 3px auto auto 3px; }
+.practice-face-code { inset: auto 3px 3px auto; }
+.zone .practice-card-face { border-radius: 3px; }
+.active .hand .practice-hand-card { padding: 0; }
+.modalcards .practice-card-face { height: auto; }
+#dialogBody > .practice-card-face { width: 100px; height: auto; margin: 0 auto 10px; }
+.trigger-icons { font-size: 15px; font-weight: bold; }
+.board[data-player="1"] .zone-fan-card .practice-card-face { transform: rotate(180deg); }
+.practice-hand-name {
+  position: absolute;
+  inset: auto 2px 13px;
+  padding: 2px;
+  border-radius: 3px;
+  background: #172034ea;
+  color: #fff;
+  font-size: 9px;
+  line-height: 1.2;
+}
