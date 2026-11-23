@@ -174,6 +174,27 @@ async function checkProducts(browser,url) {
   console.log("Catalog: product generation and filter, explicit variants, original source, keyword test state and pending effect passed");
 }
 
+async function checkGray(browser,url){
+  const page=await browser.newPage(devices["iPhone 13"]);
+  const $=id=>page.locator("#"+id);
+  await page.goto(url+"/card-effect-test.html?card=STS%2FW140-094");
+  await $("testCardStatus").getByText(/巡遊者 グレイ/).waitFor();
+  await $("loadGray").click();
+  const self=$("boardEditor").locator("section").first();
+  await self.locator('[data-key="self.hand"]').getByText(/Lv 2/).waitFor();
+  await self.locator('[data-key="self.stage"]').getByText(/パワー 10000/).waitFor();
+  await $("runEffectTest").click();
+  const panel=$("effectChoices");
+  await panel.getByRole("button",{name:"5枚見る",exact:true}).waitFor();
+  await panel.getByRole("button",{name:"2枚見る",exact:true}).click();
+  await panel.getByRole("button",{name:/山札の上から2枚目/}).click();
+  await panel.getByRole("button",{name:"選択を確定",exact:true}).click();
+  await $("effectResult").getByText("解決",{exact:true}).waitFor();
+  await self.getByText("控え室 （1枚）",{exact:true}).waitFor();
+  await self.locator('[data-key="self.hand"]').getByText("山札の上から2枚目",{exact:true}).waitFor();
+  await page.close();
+}
+
 async function checkNatsuka(browser,url){
   const page=await browser.newPage(devices["iPhone 13"]);
   const $=id=>page.locator("#"+id);
@@ -334,6 +355,7 @@ async function main() {
     await checkProducts(browser,url);
     await checkOtoha(browser,url);
     await checkNatsuka(browser,url);
+    await checkGray(browser,url);
     await checkSoloBoard(browser,url);
     await checkFirenPractice(browser,url);
     const page = await browser.newPage({...devices["iPhone 13"],acceptDownloads:true});
