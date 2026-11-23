@@ -365,7 +365,7 @@ function renderZone(p, z, cards) {
     bindCardTaps(el,()=>zoneClick(p,z),()=>{if(cards.length){if(p===side)openList(p,z);else if(match?.online||match?.bot)openOnlinePublicList(p,z)}});
   }else el.onclick=()=>zoneClick(p,z);
   let actionContainer = el;
-  if (z === "clock" && cards.length && (p === side || match?.bot || match?.online)) {
+  if (z === "clock" && cards.length && (p === side || match?.bot)) {
     actionContainer = document.createElement("div");
     actionContainer.className = "clock-actions";
     const action = (label, handler) => {
@@ -940,6 +940,14 @@ function openOnlinePublicList(p,z){
  dialog.classList.remove("zoom-mode");
  document.getElementById("dialogTitle").textContent="相手の"+labels[z];
  body.replaceChildren();
+ if(!match?.bot){
+   for(const card of players[p][z]){
+     if(card.faceUp)deckButton(body,card.id,()=>{dialog.close();showCardDetail(card)});
+     else{const hidden=document.createElement("p");hidden.textContent="裏向き";body.append(hidden)}
+   }
+   dialog.showModal();
+   return;
+ }
  const list=document.createElement("div");
  list.className="modalcards";
  players[p][z].forEach((card,index)=>{
