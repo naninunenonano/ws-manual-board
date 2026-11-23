@@ -67,3 +67,23 @@ test("number, title and product filters are independent and group JSON preserves
   assert.deepEqual(C.selectCards([a,b,c],{title:""}),[c]);
   assert.deepEqual(C.checked(C.parseJson(JSON.stringify(catalog(a,b,c)))),catalog(a,b,c));
 });
+
+test("rarity suffixes share definitions and search results while image URLs keep the printing",()=>{
+  const {officialImageUrl}=require("../card-images.js");
+  const basic={cardNumber:"STS/W140-T03"}, other={cardNumber:"STS/W140-T04"};
+  for(const suffix of ["R","S","SP","SSP"]){
+    const print=basic.cardNumber+suffix;
+    assert.equal(C.findCard([basic,other],print.toLowerCase()),basic);
+    assert.deepEqual(C.selectCards([basic,other],{number:print}),[basic]);
+    assert.match(officialImageUrl(print),new RegExp("_t03"+suffix.toLowerCase()+"\\.png$"));
+  }
+  assert.equal(C.findCard([basic,other],basic.cardNumber+"A"),undefined);
+  assert.equal(C.findCard([other],basic.cardNumber+"R"),undefined);
+  const explicit={cardNumber:basic.cardNumber+"SP"};
+  const alias={...other,variants:[basic.cardNumber+"SSP"]};
+  const find=number=>C.findCard([basic,explicit,alias],number);
+  assert.equal(find(explicit.cardNumber),explicit);
+  assert.equal(find(basic.cardNumber+"SSP"),alias);
+  assert.equal(C.sameCardNumber(basic.cardNumber,explicit.cardNumber,find),false);
+  assert.equal(C.sameCardNumber(other.cardNumber,basic.cardNumber+"SSP",find),true);
+});

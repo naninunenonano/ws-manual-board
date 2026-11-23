@@ -70,9 +70,9 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
   vm.runInContext(read("card-images.js"),context);
   vm.runInContext(boardScript,context);
   vm.runInContext(matchScript,context);
+  vm.runInContext(read("card-catalog.js"),context);
   if(botFixture){
     vm.runInContext(read("effects/engine.js"),context);
-    vm.runInContext(read("card-catalog.js"),context);
     vm.runInContext(read("card-data/load.js"),context);
     context.fetch=async()=>({ok:true,text:async()=>read("card-data/catalog.json")});
   }

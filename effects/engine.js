@@ -1,6 +1,7 @@
 "use strict";
 
 const WSEffects = (() => {
+  const catalog = typeof module==="object"?require("../card-catalog.js"):CardCatalog;
   const zones = {deck:"山札",hand:"手札",stage:"舞台",clock:"クロック",level:"レベル置場",
     stock:"ストック",waiting:"控え室",memory:"思い出",cx:"CX置場"};
   const sides = {self:"自分",opponent:"相手"};
@@ -23,8 +24,9 @@ const WSEffects = (() => {
   const tagList = value => Array.isArray(value)?value:[];
   const typeMatch = (card,type) => type===undefined || card.type===type;
   const levelMatch = (card,maxLevel) => maxLevel===undefined || (integer(card.level) && card.level<=maxLevel);
-  const matching = (card,p) => typeMatch(card,p.cardType)&&levelMatch(card,p.maxLevel)
-    && (!p.cardNumbers || p.cardNumbers.includes(card.cardNumber))
+  const sameNumber = (ctx,left,right) => catalog.sameCardNumber(left,right,ctx.findCard);
+  const matching = (ctx,card,p) => typeMatch(card,p.cardType)&&levelMatch(card,p.maxLevel)
+    && (!p.cardNumbers || p.cardNumbers.some(number=>sameNumber(ctx,card.cardNumber,number)))
     && (!p.traits || checkTags(card,"traits",p.traits))
     && (!p.keywords || checkTags(card,"keywords",p.keywords))
     && (!p.excludeUid || card.uid!==p.excludeUid);
@@ -161,7 +163,7 @@ const WSEffects = (() => {
       if (!Array.isArray(picks) || picks.length>(p.count) || picks.length<(p.min??p.count) || new Set(picks).size!==picks.length
           || !picks.every(id=>available.has(id))) fail("選択「"+p.as+"」の枚数・対象を確認してください","needs-choice");
       for(const uid of picks){
-        if(!matching(available.get(uid),{...p,excludeUid:p.excludeUid==="@source"||p.excludeSource?ctx.choices.sourceUid:p.excludeUid}))fail("選択「"+p.as+"」はカード条件に合いません","needs-choice");
+        if(!matching(ctx,available.get(uid),{...p,excludeUid:p.excludeUid==="@source"||p.excludeSource?ctx.choices.sourceUid:p.excludeUid}))fail("選択「"+p.as+"」はカード条件に合いません","needs-choice");
       }
       for(const uid of picks)for(const kind of ["traits","keywords"]){
         if(p[kind]&&!checkTags(available.get(uid),kind,p[kind]))fail("選択「"+p.as+"」は"+tagFields[kind][2]+"の条件に合いません","needs-choice");
@@ -176,7 +178,7 @@ const WSEffects = (() => {
     (ctx,p)=>{const picks=ctx.choices[p.as];if(!Array.isArray(picks)||picks.length>p.max||new Set(picks).size!==picks.length)
       fail("山札検索の選択を指定してください","needs-choice");
       const available=new Map(pile(ctx,{side:p.side,zone:"deck"}).map(c=>[c.uid,c]));
-      if(!picks.every(uid=>available.has(uid)&&matching(available.get(uid),p)))
+      if(!picks.every(uid=>available.has(uid)&&matching(ctx,available.get(uid),p)))
         fail("山札検索の対象が条件に合いません","needs-choice");
       ctx.selections.set(p.as,[...picks]);return [...picks];},
     ["side","as","max","cardType","maxLevel"]);
@@ -197,7 +199,7 @@ const WSEffects = (() => {
       const deck=pile(ctx,{side:p.side,zone:"deck"}),amount=p.count??1;
       if(deck.length<amount)fail(sides[p.side]+"の山札が"+amount+"枚必要です");
       const revealed=deck.slice(-amount).reverse(),moved=[],returned=[];
-      for(const card of revealed)(matching(card,p)?moved:returned).push(card);
+      for(const card of revealed)(matching(ctx,card,p)?moved:returned).push(card);
       deck.splice(-amount);
       pile(ctx,p.to??{side:p.side,zone:"hand"}).push(...moved);
       if(p.returnPosition==="bottom")deck.unshift(...returned.slice().reverse());
@@ -214,7 +216,7 @@ const WSEffects = (() => {
       return deck.map(c=>c.uid);},["side"]);
   operation("selectNamed","同名カード選択",p=>ref(p.from)&&word(p.as)&&word(p.cardNumber)&&count(p.count)&&p.count>0,
     p=>zoneLabel(p.from)+"から指定カードを"+p.count+"枚選ぶ",
-    (ctx,p)=>{const ids=ctx.choices[p.as],available=new Map(pile(ctx,p.from).filter(c=>c.cardNumber.replace(/(?:SP|S)$/,"")===p.cardNumber).map(c=>[c.uid,c]));
+    (ctx,p)=>{const ids=ctx.choices[p.as],available=new Map(pile(ctx,p.from).filter(c=>sameNumber(ctx,c.cardNumber,p.cardNumber)).map(c=>[c.uid,c]));
       if(!Array.isArray(ids)||ids.length!==p.count||new Set(ids).size!==ids.length||!ids.every(id=>available.has(id)))fail("同名カードを選択してください","needs-choice");
       ctx.selections.set(p.as,[...ids]);return [...ids];},["from","as","cardNumber","count"]);
   operation("modifyLevel","レベル増減",p=>word(p.selection)&&integer(p.amount)&&(p.untilTurnEnd===undefined||typeof p.untilTurnEnd==="boolean"),
@@ -238,7 +240,7 @@ const WSEffects = (() => {
   register(conditions,"cxName","CX置場のカード名",
     p=>knownKey(sides,p.side)&&word(p.name)&&(p.cardNumbers===undefined||(Array.isArray(p.cardNumbers)&&p.cardNumbers.length>0&&p.cardNumbers.every(word))),
     p=>"CX置場に「"+p.name+"」がある",
-    (ctx,p)=>pile(ctx,{side:p.side,zone:"cx"}).some(c=>p.cardNumbers?p.cardNumbers.includes(c.cardNumber):c.name===p.name),["side","name","cardNumbers"]);
+    (ctx,p)=>pile(ctx,{side:p.side,zone:"cx"}).some(c=>p.cardNumbers?p.cardNumbers.some(number=>sameNumber(ctx,c.cardNumber,number)):c.name===p.name),["side","name","cardNumbers"]);
   operation("continuousCxBuff","CX永続修正の参照",p=>knownKey(sides,p.side)&&integer(p.power)&&integer(p.soul),
     p=>"CXがある間キャラ全体にパワー"+p.power+"、ソウル"+p.soul,
     (ctx,p)=>{const source=ctx.choices.sourceUid;
@@ -354,13 +356,13 @@ const WSEffects = (() => {
     const from=params.from??{side:params.side,zone:"deck"};
     const filter={...params,excludeUid:params.excludeUid==="@source"||params.excludeSource?context.choices.sourceUid:params.excludeUid};
     const candidates=pile(context,from).filter(card=>{
-      try{return matching(card,filter)&&(handler!=="selectNamed"||card.cardNumber.replace(/(?:SP|S)$/,"")===params.cardNumber)}catch(error){if(error.status==="unconfirmed")return false;throw error}
+      try{return matching(context,card,filter)&&(handler!=="selectNamed"||sameNumber(context,card.cardNumber,params.cardNumber))}catch(error){if(error.status==="unconfirmed")return false;throw error}
     });
     return {kind:"select",label:zoneLabel(from),from,candidates,min:handler==="searchDeck"?0:params.min??params.count,
       max:params.max??params.count,phase:entry.phase};
   }
 
-  function* execute(effect, board, choices, guided) {
+  function* execute(effect, board, choices, guided, findCard) {
     const log=[];
     let working, at=null;
     const result=(status,message="")=>({status,state:working??null,log,message});
@@ -371,7 +373,7 @@ const WSEffects = (() => {
       const {issues,entries}=inspect(effect);
       if (issues.length) return {...result(issues.some(issue=>issue.status==="invalid")?"invalid":"unsupported",
         issues.map(issue=>issue.message).join(" ／ ")),issues};
-      const context={board:working,choices,selections:new Map()};
+      const context={board:working,choices,findCard,selections:new Map()};
       if(effect.limit?.perTurn){const used=choices.usedThisTurn??0;if(!count(used))fail("使用回数が不正です","invalid");
         if(used>=effect.limit.perTurn)return result("condition-not-met","このターンの使用回数上限です");}
       for (const entry of entries) {
@@ -433,12 +435,12 @@ const WSEffects = (() => {
     }
   }
 
-  function run(effect,board,choices={}) {
-    return execute(effect,board,choices,false).next().value;
+  function run(effect,board,choices={},findCard) {
+    return execute(effect,board,choices,false,findCard).next().value;
   }
 
-  function guide(effect,board,choices={}) {
-    return execute(effect,board,{...choices},true);
+  function guide(effect,board,choices={},findCard) {
+    return execute(effect,board,{...choices},true,findCard);
   }
 
   // Continuous CX modifiers are calculated, never written into printed card stats.

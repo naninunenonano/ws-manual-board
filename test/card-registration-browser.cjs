@@ -84,7 +84,7 @@ async function checkProducts(browser,url) {
   assert.equal(await $("formalResults").locator("summary").count(),1);
   await $("formalResults").getByText(/TEST\/S002-001/).waitFor();
   await $("formalProduct").selectOption(wraith.product);
-  await $("formalNumber").fill("sts/w140-001sp");
+  await $("formalNumber").fill("sts/w140-001ssp");
   assert.equal(await $("formalResults").locator("summary").count(),1);
   await $("formalResults").locator("summary").click();
   await $("formalResults").getByText("STS/W140-001S、STS/W140-001SP",{exact:true}).waitFor();
@@ -92,7 +92,7 @@ async function checkProducts(browser,url) {
   assert.deepEqual(await $("formalResults").locator(".effect-original").allTextContents(),wraith.effects.map(effect=>effect.sourceText));
   assert.equal(await $("formalResults").getByText(/テスト実行可能/).count(),3);
   assert.equal(await $("formalResults").getByText(/未実装あり/).count(),0);
-  await page.goto(url+"/card-effect-test.html?card=STS%2FW140-001SP");
+  await page.goto(url+"/card-effect-test.html?card=STS%2FW140-001SSP");
   await $("testCardStatus").getByText(/STS\/W140-001 ／/).waitFor();
   await page.getByText("カードを配置",{exact:true}).click();
   await $("placeNumber").selectOption("STS/W140-001SP");

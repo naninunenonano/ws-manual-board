@@ -377,7 +377,7 @@ function autoRuleBuff(p,card){
     for(const slot of botSlots){
       const source=live[slot].at(-1);
       const buff=source?.faceUp?botDefinition(source)?.namedStageBuff:null;
-      if(buff?.cardNumbers.includes(card.id))totals.power+=buff.power;
+      if(buff?.cardNumbers.some(number=>sameBotCardNumber(number,card.id)))totals.power+=buff.power;
     }
   }
   if(!live.cx.length)return totals;
@@ -385,7 +385,7 @@ function autoRuleBuff(p,card){
   for(const cx of players[p].cx){
     for(const effect of botDefinition(cx)?.effects??[]){
       if(effect.type!=="continuous"||effect.timing!=="while_in_cx")continue;
-      const result=WSEffects.run(effect,board,{sourceUid:cx.uid});
+      const result=WSEffects.run(effect,board,{sourceUid:cx.uid},findBotCard);
       if(result.status!=="success")continue;
       for(const step of result.log){
         if(step.handler==="continuousCxBuff"&&step.cards?.includes(card.uid)){
@@ -673,7 +673,7 @@ function autoRuleClockSearch(p,card,effect,done){
   deckButton(body,"払わない",()=>{closeResolution();done()});
 }
 function autoRuleLookOnAttack(p,{cxId,max,trait},done){
-  if(!players[p].cx.some(cx=>cx.id===cxId)){done();return}
+  if(!players[p].cx.some(cx=>sameBotCardNumber(cx.id,cxId))){done();return}
   autoRuleLookTop(p,max,"CXコンボ","《"+trait+"》のキャラ",card=>matchesPracticeTrait(card,trait),done);
 }
 function autoRuleLookTop(p,max,label,targetLabel,matches,done){
@@ -734,7 +734,7 @@ function autoRuleDrawAfterCost(p,count,done){
 }
 
 function autoRuleMillOnAttack(p,{cxId,count},done){
-  if(!players[p].cx.some(cx=>cx.id===cxId)){done();return}
+  if(!players[p].cx.some(cx=>sameBotCardNumber(cx.id,cxId))){done();return}
   const target=1-p,board=players[target];
   let moved=0,climaxes=0;
   function next(){
@@ -916,7 +916,7 @@ function autoRuleBotStep(){
     case "climax":{
       const combos=botSlots.slice(0,3).map(slot=>botDefinition(board[slot].at(-1)))
         .map(def=>def?.lookOnAttack?.cxId??def?.millOnAttack?.cxId);
-      const index=board.hand.findIndex(card=>combos.includes(card.id)&&!autoRuleLegalPlay(p,card,"climax","climax"));
+      const index=board.hand.findIndex(card=>combos.some(number=>sameBotCardNumber(number,card.id))&&!autoRuleLegalPlay(p,card,"climax","climax"));
       if(match.bot.scenario!==redBlueScenario||index<0||board.cx.length){setTurnPhase("attack");break}
       runRuleOperation(done=>autoRuleResolvePlay(p,index,"cx",()=>{setTurnPhase("attack");done()}));
       break;

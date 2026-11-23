@@ -18,9 +18,11 @@ function botDefinition(card){
     return {name:card.cx?"BotのCX":"Botの練習キャラ",type:card.cx?"climax":"character",
       stats:{level:0,cost:0,power:2500,soul:1},traits:[],keywords:[]};
   }
-  if(botCatalog&&card)return WSFormalCards.find(botCatalog,card.id);
+  if(card)return findBotCard(card.id);
   return null;
 }
+const findBotCard=number=>botCatalog?WSFormalCards.find(botCatalog,number):undefined;
+const sameBotCardNumber=(left,right)=>CardCatalog.sameCardNumber(left,right,findBotCard);
 function botCardInfo(card){
   const def=botDefinition(card);
   if(!def)return cardCatalog[card.id]||null;
@@ -239,14 +241,14 @@ function botStats(p,card){
     if(power!=null)power+=bonus.power;
     if(soul!=null)soul+=bonus.soul;
   }else if(own.cx.length&&botCatalog){
-    const bonus=WSEffects.continuousModifiers(botEffectBoard(p),"self",number=>WSFormalCards.find(botCatalog,number)).find(entry=>entry.uid===card.uid);
+    const bonus=WSEffects.continuousModifiers(botEffectBoard(p),"self",findBotCard).find(entry=>entry.uid===card.uid);
     if(bonus){power=bonus.power;soul=bonus.soul;}
   }
   if(match.turn?.player===p&&power!=null){
     const effect=botDefinition(card)?.effects?.find(item=>item.timing==="own_turn"&&item.type==="continuous");
     const key=effect?.steps?.find(step=>step.handler==="selectCards")?.params.as;
     if(key){
-      const result=WSEffects.run(effect,botEffectBoard(p),{sourceUid:card.uid,[key]:[card.uid]});
+      const result=WSEffects.run(effect,botEffectBoard(p),{sourceUid:card.uid,[key]:[card.uid]},findBotCard);
       if(result.status==="success"){
         const modified=result.state.self.stage.find(entry=>entry.uid===card.uid);
         if(modified)power+=modified.power-original.power;
@@ -279,7 +281,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const key=card.uid+":"+ability.id;
   const iterator=WSEffects.guide(ability,botEffectBoard(p),{
     ...context,sourceUid:card.uid,usedThisTurn:match.bot.uses[key]??0
-  });
+  },findBotCard);
   function finish(result,destinations=new Map()){
     const success=result.status==="success"&&botApplyEffect(result.state,destinations,p);
     if(success&&ability.limit?.perTurn)match.bot.uses[key]=(match.bot.uses[key]??0)+1;
