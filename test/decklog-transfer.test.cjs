@@ -1628,3 +1628,17 @@ test("赤青同士のBotが控え室誘発のコストと対象を自動で選�
   assert.ok(snapshot(page).players[1].hand.some(c=>c.id==="BOT/W000-114"));
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
+
+test("赤青デッキの初手とカード詳細に、画像なしで名前・性能・効果を表示する",()=>{
+  const page=launchRules("red-blue-deck");
+  const flatten=node=>[node.textContent,...node.children.flatMap(flatten)].join(" ");
+  const rows=page.get("mulliganCards").children;
+  assert.equal(rows.length,5);
+  for(const row of rows)assert.match(flatten(row),/仮.+トリガー.+残す/);
+  rows[0].onclick();
+  assert.match(flatten(page.get("mulliganCards").children[0]),/交換$/);
+  page.click("confirmMulligan");
+  page.run('showCardDetail({id:"BOT/W000-119"})');
+  assert.match(page.get("dialogTitle").textContent,/早出し・助太刀封じ/);
+  assert.match(flatten(page.get("dialogBody")),/パワー9000.+助太刀不可.+1ストック/);
+});

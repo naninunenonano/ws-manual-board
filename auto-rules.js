@@ -80,32 +80,42 @@ function discardHandSteps(trait){
   ];
 }
 const practiceCards={
-  "101":{name:"仮キャラ 3000",color:"red",stats:{level:0,cost:0,power:3000,soul:1}},
-  "102":{name:"仮キャラ 応援",color:"blue",stats:{level:0,cost:0,power:1000,soul:1},assist:{power:500}},
-  "103":{name:"仮キャラ 集中",color:"blue",stats:{level:0,cost:0,power:1500,soul:1},effects:[
+  "101":{abilityText:["効果なし。"],
+    name:"仮キャラ 3000",color:"red",stats:{level:0,cost:0,power:3000,soul:1}},
+  "102":{abilityText:["応援：このカードの前のキャラはパワー＋500。"],
+    name:"仮キャラ 応援",color:"blue",stats:{level:0,cost:0,power:1000,soul:1},assist:{power:500}},
+  "103":{abilityText:["集中：1ストックとこのカードのレストで、山札の上から5枚を控え室へ。出たCXの数まで引く。"],
+    name:"仮キャラ 集中",color:"blue",stats:{level:0,cost:0,power:1500,soul:1},effects:[
     ruleEffect("draw-brainstorm","集中（1ストック・自身レスト）","main",[],{
       type:"activated",brainstorm:{stock:1,reveal:5}
     })
   ]},
-  "104":{...practiceClimax,name:"仮CX カムバック",color:"red",triggers:["カムバック"],effects:[
+  "104":{...practiceClimax,abilityText:["CX置場：自分のキャラ全員にパワー＋1000、ソウル＋1。", "トリガー：控え室からキャラを1枚まで手札へ。"],
+    name:"仮CX カムバック",color:"red",triggers:["カムバック"],effects:[
     ...practiceClimax.effects,salvageTrigger("カムバック","character")
   ]},
-  "105":{...practiceClimax,name:"仮CX ゲート",color:"blue",triggers:["ゲート"],effects:[
+  "105":{...practiceClimax,abilityText:["CX置場：自分のキャラ全員にパワー＋1000、ソウル＋1。", "トリガー：控え室からCXを1枚まで手札へ。"],
+    name:"仮CX ゲート",color:"blue",triggers:["ゲート"],effects:[
     ...practiceClimax.effects,salvageTrigger("ゲート","climax")
   ]},
-  "106":{name:"仮キャラ カムバック連動",color:"red",triggers:[],stats:{level:1,cost:0,power:5000,soul:1},
+  "106":{abilityText:["アタック時：赤CX「カムバック」があれば山札の上を4枚まで見る。《巡遊者》のキャラを1枚まで手札に加え、残りを控え室へ。"],
+    name:"仮キャラ カムバック連動",color:"red",triggers:[],stats:{level:1,cost:0,power:5000,soul:1},
     lookOnAttack:{cxId:"BOT/W000-104",max:4,trait:practiceTrait}},
-  "107":{name:"仮キャラ ダブルトリガー",color:"blue",triggers:[],stats:{level:1,cost:0,power:4000,soul:1},
+  "107":{abilityText:["他の《巡遊者》が2体以上ならパワー＋1000。", "アタック時：1ストックを払うとトリガーチェックが2回になる。"],
+    name:"仮キャラ ダブルトリガー",color:"blue",triggers:[],stats:{level:1,cost:0,power:4000,soul:1},
     otherTraitBuff:{trait:practiceTrait,count:2,power:1000},extraTriggerCost:1},
-  "108":{name:"仮キャラ レベル応援",color:"red",stats:{level:2,cost:1,power:5000,soul:1},
+  "108":{abilityText:["レベル応援：このカードの前のキャラに、そのキャラのレベル×500のパワーを加える。"],
+    name:"仮キャラ レベル応援",color:"red",stats:{level:2,cost:1,power:5000,soul:1},
     triggers:["ソウル"],assist:{powerPerLevel:500}},
-  "109":{name:"仮キャラ ゲート連動",color:"blue",stats:{level:3,cost:2,power:10000,soul:2},
+  "109":{abilityText:["登場時：クロックの一番上を控え室へ。", "アタック時：青CX「ゲート」があれば相手の山札下4枚を控え室へ。そこに含まれるCXの数だけダメージ。"],
+    name:"仮キャラ ゲート連動",color:"blue",stats:{level:3,cost:2,power:10000,soul:2},
     triggers:["ソウル"],effects:[
       ruleEffect("heal-on-play","登場時・クロック回復","from_hand_to_stage",[
         ruleStep("move",{from:{side:"self",zone:"clock"},to:{side:"self",zone:"waiting"},count:1,end:"top"})
       ],{conditions:[ruleStep("zoneCount",{from:{side:"self",zone:"clock"},min:1})]})
     ],millOnAttack:{cxId:"BOT/W000-105",count:4}},
-  "110":{name:"仮キャラ 山札調整・CX回収",color:"blue",stats:{level:0,cost:0,power:500,soul:1},
+  "110":{abilityText:["登場時：山札の上2枚を好きな順番に並べる。", "登場時：1ストックと手札のCX1枚を払うと、控え室のCX1枚を手札へ。"],
+    name:"仮キャラ 山札調整・CX回収",color:"blue",stats:{level:0,cost:0,power:500,soul:1},
     triggers:["ソウル"],effects:[
       ruleEffect("reorder-on-play","登場時・山札の上2枚","from_hand_to_stage",[],{reorderTop:true}),
       ruleEffect("cx-recover-on-play","登場時・CX回収","from_hand_to_stage",[
@@ -117,7 +127,8 @@ const practiceCards={
         ruleStep("move",{from:ownZone("hand"),to:ownZone("waiting"),selection:"discardCX"})
       ]})
     ]},
-  "111":{name:"仮キャラ クロックサーチ",color:"red",stats:{level:0,cost:0,power:1500,soul:1},
+  "111":{abilityText:["登場時：1ストックを払い、山札の上1枚をクロックへ置くと、山札からLv1以下を1枚まで手札に加えられる。", "アタック時：自分の舞台の《巡遊者》のキャラ1体にパワー＋1000。"],
+    name:"仮キャラ クロックサーチ",color:"red",stats:{level:0,cost:0,power:1500,soul:1},
     triggers:[],effects:[
       ruleEffect("clock-search-on-play","登場時・Lv1以下をサーチ","from_hand_to_stage",[
         ruleStep("searchDeck",{side:"self",as:"search",max:1,maxLevel:1}),
@@ -130,7 +141,8 @@ const practiceCards={
         ruleStep("modifyPower",{selection:"boost",amount:1000})
       ])
     ]},
-  "112":{name:"仮キャラ 早出し・クロックストック",color:"red",
+  "112":{abilityText:["控え室のCXが2枚以下なら手札でLv2。他の《巡遊者》1体につきパワー＋500。", "登場時：手札を1枚捨てると、クロックの一番上をストックへ。"],
+    name:"仮キャラ 早出し・クロックストック",color:"red",
     stats:{level:3,cost:2,power:8500,soul:2},triggers:["ソウル"],
     handLevelReduction:{maxWaitingCX:2,amount:1},otherTraitBuff:{trait:practiceTrait,powerPerCard:500},
     effects:[ruleEffect("clock-to-stock-on-play","登場時・クロックをストックへ","from_hand_to_stage",[
@@ -142,29 +154,37 @@ const practiceCards={
       ruleStep("selectCards",{from:ownZone("hand"),as:"discard",count:1}),
       ruleStep("move",{from:ownZone("hand"),to:ownZone("waiting"),selection:"discard"})
     ]})]},
-  "113":{name:"仮イベント 光景",type:"event",color:"blue",
+  "113":{abilityText:["相手のストックをすべて控え室へ。相手の山札の上から同じ枚数を相手のストックに置く。"],
+    name:"仮イベント 光景",type:"event",color:"blue",
     stats:{level:2,cost:1,power:null,soul:null},triggers:[],eventEffect:"光景"},
-  "114":{name:"仮キャラ 赤Lv1 5500",color:"red",stats:{level:1,cost:0,power:5500,soul:1},triggers:[]},
-  "115":{name:"仮キャラ 絆・指定キャラ強化",color:"red",stats:{level:0,cost:0,power:500,soul:1},triggers:[],
+  "114":{abilityText:["効果なし。"],
+    name:"仮キャラ 赤Lv1 5500",color:"red",stats:{level:1,cost:0,power:5500,soul:1},triggers:[]},
+  "115":{abilityText:["赤Lv1・5500（114）にパワー＋1000。", "登場時：手札を1枚捨てると、控え室の114を1枚手札へ。"],
+    name:"仮キャラ 絆・指定キャラ強化",color:"red",stats:{level:0,cost:0,power:500,soul:1},triggers:[],
     namedStageBuff:{cardNumbers:bondTargetNumbers,power:1000},effects:[discardBond(bondTargetNumbers)]},
-  "116":{name:"仮キャラ Lv3への攻撃",color:"blue",stats:{level:2,cost:1,power:7500,soul:1},triggers:["ソウル"],
+  "116":{abilityText:["アタック時：正面のキャラがLv3なら、そのターン中パワー＋6000。"],
+    name:"仮キャラ Lv3への攻撃",color:"blue",stats:{level:2,cost:1,power:7500,soul:1},triggers:["ソウル"],
     effects:[ruleEffect("attack-opposing-level","アタック時・正面Lv3ならパワー＋6000","on_attack",[rulePower(6000)],{
       conditions:[ruleStep("opposingLevel",{level:3})]
     })]},
-  "117":{name:"仮キャラ サイド不可・控え室誘発",color:"blue",stats:{level:0,cost:0,power:2500,soul:1},triggers:[],
+  "117":{abilityText:["サイドアタック不可。", "控え室に置かれた時：手札を1枚捨てると、山札の上を4枚まで見てLv1以上を1枚まで手札へ。残りは控え室へ。"],
+    name:"仮キャラ サイド不可・控え室誘発",color:"blue",stats:{level:0,cost:0,power:2500,soul:1},triggers:[],
     cannotSideAttack:true,effects:[ruleEffect("waiting-look","控え室に置かれた時・Lv1以上を探す","on_enter_waiting",
       discardHandSteps(),{optional:true,conditions:[ruleStep("zoneCount",{from:ownZone("hand"),min:1})],
         lookTop:{max:4,targetLabel:"Lv1以上のカード",minLevel:1}})]},
-  "118":{name:"仮キャラ 特徴公開・手札交換",color:"red",stats:{level:0,cost:0,power:1000,soul:1},triggers:[],effects:[
+  "118":{abilityText:["登場時：山札の上1枚を公開。《巡遊者》なら手札に加えて手札1枚を捨てる。", "登場時：手札から《巡遊者》を1枚捨てると1枚引く。"],
+    name:"仮キャラ 特徴公開・手札交換",color:"red",stats:{level:0,cost:0,power:1000,soul:1},triggers:[],effects:[
     ruleEffect("trait-console-loot","登場時・《"+practiceTrait+"》公開と手札交換","from_hand_to_stage",[],{traitLoot:practiceTrait}),
     ruleEffect("trait-discard-draw","登場時・《"+practiceTrait+"》を捨ててドロー","from_hand_to_stage",
       discardHandSteps(practiceTrait),{optional:true,drawAfterCost:1,
         conditions:[ruleStep("zoneCount",{from:ownZone("hand"),min:1,traits:{names:[practiceTrait],mode:"any"}})]})
   ]},
-  "119":{name:"仮キャラ 早出し・助太刀封じ",color:"red",stats:{level:3,cost:2,power:9000,soul:2},triggers:["ソウル"],
+  "119":{abilityText:["舞台に《巡遊者》が4体以上いれば手札でLv2。", "登場時：相手ターン終了までパワー＋4500。このカードとのバトル中は助太刀不可。", "バトル相手をリバースさせた時：1ストックを払うと、相手キャラをクロックへ。"],
+    name:"仮キャラ 早出し・助太刀封じ",color:"red",stats:{level:3,cost:2,power:9000,soul:2},triggers:["ソウル"],
     handLevelReduction:{stageTrait:practiceTrait,count:4,amount:1},
     entryBattleBuff:{power:4500,blocksBackup:true,untilOpponentEnd:true},reverseMove:{zone:"clock",stock:1}},
-  "120":{name:"仮キャラ 助太刀3000・思い出送り",color:"blue",stats:{level:2,cost:1,power:2500,soul:1},triggers:["ソウル"],
+  "120":{abilityText:["助太刀：1ストックと手札のこのカードを控え室に置き、フロントされた自分のキャラにパワー＋3000。", "そのキャラがバトル相手をリバースさせた時、リバースした相手を思い出へ。"],
+    name:"仮キャラ 助太刀3000・思い出送り",color:"blue",stats:{level:2,cost:1,power:2500,soul:1},triggers:["ソウル"],
     backup:{power:3000,reverseMove:{zone:"memory"}}}
 };
 
@@ -473,7 +493,9 @@ function autoRuleHandMenu(p,index){
   const card=players[p].hand[index],definition=botDefinition(card),type=definition?.type,phase=match.turn.phase;
   const playableEvent=autoRuleEventEffect(definition);
   if(!(phase==="main"&&(type==="character"||playableEvent)||phase==="climax"&&type==="climax"))return false;
-  const body=showResolution(botCardInfo(card).name,[card]);
+  const details=botCardDetails(card);
+  const body=showResolution(botCardInfo(card).name,details?[]:[card]);
+  if(details)appendBotCardDetails(body,details);
   setRuleModal(false);
   const level=autoRuleHandLevel(players[p],definition);
   if(level!==definition.stats.level)body.append(document.createTextNode("手札ではLv"+level));
