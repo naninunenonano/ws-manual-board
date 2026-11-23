@@ -105,7 +105,7 @@ const WSEffects = (() => {
     if (source===destination) fail("同じ領域への移動は指定できません");
     let moving;
     if (selection) {
-      const uids = context.selections.get(selection);
+      const uids = selection==="@source"&&context.choices.sourceUid?[context.choices.sourceUid]:context.selections.get(selection);
       if (!uids) fail("選択「"+selection+"」がありません");
       moving = source.filter(card=>uids.includes(card.uid));
       if (moving.length!==uids.length) fail("選んだカードが指定元の領域にありません");
@@ -210,14 +210,15 @@ const WSEffects = (() => {
     && (p.maxCost===undefined||count(p.maxCost))
     && (p.cardNumbers===undefined||names(p.cardNumbers)&&p.cardNumbers.length>0)
     && (p.excludeUid===undefined||word(p.excludeUid))
-    && (p.excludeSource===undefined||typeof p.excludeSource==="boolean"),
+    && (p.excludeSource===undefined||typeof p.excludeSource==="boolean")
+    && (p.allowNoTarget===undefined||p.allowNoTarget===true&&p.count===1),
     p=>zoneLabel(p.from)+"から"+p.count+"枚を選ぶ（"+(p.cardNumbers?.join("、")??p.as)+"）"+
       ["traits","keywords"].filter(kind=>p[kind]).map(kind=>" ／ "+tagFields[kind][2]+" "+filterLabel(p[kind])).join(""),
     (ctx,p)=>{
-      const picks = Object.hasOwn(ctx.choices,p.as) ? ctx.choices[p.as] : (p.count===0 ? [] : undefined);
-      if (picks===undefined) fail("選択「"+p.as+"」に"+p.count+"枚指定してください","needs-choice");
       const available = new Map(pile(ctx,p.from).map(card=>[card.uid,card]));
-      if (!Array.isArray(picks) || picks.length>(p.count) || picks.length<(p.min??p.count) || new Set(picks).size!==picks.length
+      const minimum=p.allowNoTarget?selectionRequest(ctx,{step:{handler:"selectCards",params:p}}).min:p.min??p.count;
+      const picks=ctx.choices[p.as]??(minimum===0&&p.allowNoTarget||p.count===0?[]:undefined);
+      if (!Array.isArray(picks) || picks.length>(p.count) || picks.length<minimum || new Set(picks).size!==picks.length
           || !picks.every(id=>available.has(id))) fail("選択「"+p.as+"」の枚数・対象を確認してください","needs-choice");
       for(const uid of picks){
         if(!matching(ctx,available.get(uid),{...p,excludeUid:p.excludeUid==="@source"||p.excludeSource?ctx.choices.sourceUid:p.excludeUid}))fail("選択「"+p.as+"」はカード条件に合いません","needs-choice");
@@ -227,7 +228,7 @@ const WSEffects = (() => {
       }
       ctx.selections.set(p.as,[...picks]);
       return [...picks];
-    },["from","as","count","min","traits","keywords","cardType","maxLevel","maxCost","cardNumbers","excludeUid","excludeSource"]);
+    },["from","as","count","min","traits","keywords","cardType","maxLevel","maxCost","cardNumbers","excludeUid","excludeSource","allowNoTarget"]);
   operation("searchDeck","山札検索",p=>knownKey(sides,p.side)&&word(p.as)&&count(p.max)&&
     (p.cardType===undefined||["character","event","climax"].includes(p.cardType))&&
     (p.maxLevel===undefined||integer(p.maxLevel)),
@@ -322,6 +323,9 @@ const WSEffects = (() => {
       return n>=(p.min??0)&&n<=(p.max??Infinity);},["side","min","max"]);
   register(conditions,"sourceInZone","このカードの領域",ref, p=>"このカードが"+zoneLabel(p)+"にある",
     (ctx,p)=>pile(ctx,p).some(card=>card.uid===ctx.choices.sourceUid),["side","zone"]);
+  register(conditions,"sourceStanding","このカードがスタンド",p=>knownKey(sides,p.side),()=>"このカードがスタンドしている",
+    (ctx,p)=>pile(ctx,{side:p.side,zone:"stage"}).some(card=>card.uid===ctx.choices.sourceUid&&
+      card.faceUp!==false&&(card.orientation??0)===0),["side"]);
   register(conditions,"sourceMarkerCount","このカードのマーカー枚数",
     p=>knownKey(sides,p.side)&&count(p.min), p=>"このカードの下にマーカーが"+p.min+"枚以上",
     (ctx,p)=>{
@@ -410,7 +414,7 @@ const WSEffects = (() => {
         if(selections.has(step.params.as))issues.push({status:"invalid",message:at+" の選択IDが重複しています"});
         selections.add(step.params.as);
       }else if (step.params.selection && !selections.has(step.params.selection) &&
-        !(step.params.selection==="@source"&&["modifyPower","modifySoul","modifyLevel"].includes(step.handler))){
+        !(step.params.selection==="@source"&&["move","modifyPower","modifySoul","modifyLevel"].includes(step.handler))){
         issues.push({status:"invalid",message:at+" が未定義の選択 "+step.params.selection+" を参照しています"});
       }
     }
@@ -425,7 +429,7 @@ const WSEffects = (() => {
     const candidates=pile(context,from).filter(card=>{
       try{return matching(context,card,filter)&&(handler!=="selectNamed"||sameNumber(context,card.cardNumber,params.cardNumber))}catch(error){if(error.status==="unconfirmed")return false;throw error}
     });
-    return {kind:"select",label:zoneLabel(from),from,candidates,min:handler==="searchDeck"?0:params.min??params.count,
+    return {kind:"select",label:zoneLabel(from),from,candidates,min:handler==="searchDeck"||params.allowNoTarget&&!candidates.length?0:params.min??params.count,
       max:params.max??params.count,phase:entry.phase};
   }
 
@@ -484,7 +488,7 @@ const WSEffects = (() => {
           if(request){
             if(request.candidates.length<request.min)
               fail(request.label+"に条件を満たすカードが"+request.min+"枚必要です","condition-not-met");
-            const picks=yield request;
+            const picks=params.allowNoTarget&&!request.candidates.length?[]:yield request;
             if(!Array.isArray(picks)||!picks.every(uid=>request.candidates.some(card=>card.uid===uid)))
               fail("有効なカードを選んでください","needs-choice");
             Object.defineProperty(choices,params.as,{value:picks,configurable:true,writable:true,enumerable:true});
@@ -507,6 +511,10 @@ const WSEffects = (() => {
         const details=Array.isArray(outcome)?{cards:outcome}:outcome;
         if(handler==="revealTop"||handler==="revealSelection")details.revealed=details.cards;
         log.push({phase:entry.phase,handler,ok:true,...details});
+        if(guided&&entry.phase==="costs"&&handler==="move"&&params.selection==="@source"&&params.from.zone==="stage"){
+          const applied=yield {kind:"commit-cost",state:working};
+          if(applied){validateBoard(applied);working=context.board=structuredClone(applied);}
+        }
         if(handler==="chooseBranch"){
           const branch=params.branches[details.branch];
           pending.splice(index+1,0,...instructions({steps:branch.steps}));

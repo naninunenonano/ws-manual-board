@@ -85,7 +85,7 @@ function botMove(board,from,index,to,position="top"){
   if(isStageZone(from)&&!isStageZone(to)){
     card.orientation=0;
     for(const marker of card.markers??[]){
-      marker.card.faceUp=true;board.waiting.push(marker.card);
+      marker.card.faceUp=true;board[botMarkerExitZone(marker)].push(marker.card);
     }
     delete card.markers;
   }
@@ -173,7 +173,7 @@ function startBotMatch(deck,scenario){
 
 function botEffectCard(card){
   const def=botDefinition(card);
-  return {uid:card.uid,cardNumber:card.id,name:def?.name??null,type:def?.type??(card.cx?"climax":null),
+  return {uid:card.uid,cardNumber:card.id,faceUp:card.faceUp,orientation:card.orientation,name:def?.name??null,type:def?.type??(card.cx?"climax":null),
     level:card.botLevel??def?.stats?.level??null,cost:def?.stats?.cost??null,power:card.botPower??def?.stats?.power??null,
     soul:card.botSoul??def?.stats?.soul??null,turnLevelBonus:card.turnLevelBonus??0,
     traits:def?.traits??null,keywords:def?.keywords??null,allTags:def?.allTags??false,markers:card.markers??[],gainedAbilities:card.gainedAbilities??[]};
@@ -205,7 +205,7 @@ function botApplyEffect(state,destinations,p){
     }
   }
   const next=Object.fromEntries(zones.map(zone=>[zone,[]]));
-  const markers=[];
+  const releasedMarkers={waiting:[],memory:[]};
   for(const [zone,cards] of Object.entries(state.self)){
     for(const entry of cards){
       const old=all.get(entry.uid);
@@ -219,7 +219,7 @@ function botApplyEffect(state,destinations,p){
       }
       if(zone!=="stage"&&isStageZone(old.zone)){
         card.orientation=0;
-        markers.push(...(card.markers??[]).map(marker=>({...marker.card,faceUp:true})));
+        for(const marker of card.markers??[])releasedMarkers[botMarkerExitZone(marker)].push({...marker.card,faceUp:true});
         delete card.markers;
       }
       const target=zone==="stage"?slots.get(entry.uid):zone;
@@ -230,7 +230,7 @@ function botApplyEffect(state,destinations,p){
       next[target].push(card);
     }
   }
-  next.waiting.push(...markers);
+  for(const [zone,cards] of Object.entries(releasedMarkers))next[zone].push(...cards);
   Object.assign(board,next);
   return true;
 }
@@ -263,11 +263,59 @@ function botStats(p,card){
   return {power,soul};
 }
 
+function botMarkerAbility(card,timing){
+  return botDefinition(card)?.effects?.find(effect=>effect.timing===timing);
+}
+function botMarkerExitZone(marker){
+  return match?.bot&&botMarkerAbility(marker.card,"leave_marker")?"memory":"waiting";
+}
+function botResolveRecall(p,entrant,done){
+  const board=players[p];
+  const current=botSlots.flatMap(slot=>board[slot]).find(card=>card.uid===entrant.uid);
+  if(!current||botDefinition(current)?.type!=="character"||current.markers?.length){done();return}
+  const choices=board.memory.filter(card=>botMarkerAbility(card,"own_character_enter_stage"));
+  if(!choices.length){done();return}
+  function attach(card){
+    const index=board.memory.findIndex(entry=>entry.uid===card.uid);
+    if(index>=0&&!current.markers?.length){
+      const [marker]=board.memory.splice(index,1);
+      marker.faceUp=true;
+      current.markers=[{card:marker,faceUp:true}];
+    }
+    done();
+  }
+  if(p===1){attach(choices[0]);return}
+  const body=showResolution("回想・登場したキャラの下に置く",[current,...choices]);
+  choices.forEach((card,index)=>deckButton(body,"思い出の"+(index+1)+"枚目をマーカーにする",()=>{
+    closeResolution();attach(card);
+  }));
+  deckButton(body,"マーカーにしない",()=>{closeResolution();done()});
+}
+function botStageEntry(p,card,from,done){
+  botResolveRecall(p,card,()=>{
+    if(from==="hand")botDispatch(card,"from_hand_to_stage",done,p);
+    else done();
+  });
+}
+function botResolveMarkerAttack(p,card,done){
+  const current=botSlots.flatMap(slot=>players[p][slot]).find(entry=>entry.uid===card.uid);
+  if(!current||!["巡遊者","魔王"].some(trait=>matchesPracticeTrait(current,trait))){done();return}
+  const markers=(current.markers??[]).filter(marker=>marker.faceUp&&botMarkerAbility(marker.card,"marker_host_attack"));
+  function next(index){
+    if(index===markers.length){done();return}
+    autoRuleReorderTop(p,()=>next(index+1),true);
+  }
+  next(0);
+}
 function botDispatch(card,timing,done,p=0,context={}){
   const effects=botDefinition(card)?.effects?.filter(item=>item.timing===timing&&item.type==="auto"
     &&(timing!=="on_own_climax_trigger"||card.gainedAbilities?.includes(item.id)))??[];
   function next(i){
-    if(i===effects.length){done?.();return}
+    if(i===effects.length){
+      if(timing==="on_attack")botResolveMarkerAttack(p,card,()=>done?.());
+      else done?.();
+      return;
+    }
     const effect=effects[i],resume=()=>next(i+1);
     if(effect.reorderTop)autoRuleReorderTop(p,resume);
     else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
@@ -307,7 +355,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       if(index===entered.length){done?.(true);return}
       const entry=entered[index];
       const current=players[p][destinations.get(entry.uid)].find(card=>card.uid===entry.uid);
-      if(current)botDispatch(current,"from_hand_to_stage",()=>dispatch(index+1),p);
+      if(current)botStageEntry(p,current,"hand",()=>dispatch(index+1));
       else dispatch(index+1);
     }
     resolveBoardRules(p,()=>dispatch(0));
@@ -362,6 +410,13 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     const next=iterator.next(answer);
     if(next.done){chooseStage(next.value);return}
     const prompt=next.value;
+    if(prompt.kind==="commit-cost"){
+      if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
+      abortable=false;
+      render();
+      step(botEffectBoard(p));
+      return;
+    }
     if(prompt.kind==="damage"){
       if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
       abortable=false;
@@ -635,7 +690,8 @@ function renderBotControls(){
 }
 function botDefinitionForAbilities(card){
   if(!card||match.turn.player!==0||match.turn.phase!=="main"||ruleBusy)return [];
-  return (botDefinition(card)?.effects??[]).filter(ability=>ability.type==="activated");
+  return (botDefinition(card)?.effects??[]).filter(ability=>ability.type==="activated"&&
+    (!ability.conditions?.some(step=>step.handler==="sourceStanding")||card.faceUp!==false&&(card.orientation??0)===0));
 }
 
 function runBotTurnStep(){
@@ -652,7 +708,7 @@ function runBotTurnStep(){
       for(const slot of botSlots.slice(0,3)){
         const index=board.hand.findIndex(card=>card.cx!==true);
         if(index<0)break;
-        if(!board[slot].length)botMove(board,"hand",index,slot);
+        if(!board[slot].length)botResolveRecall(1,botMove(board,"hand",index,slot),()=>{});
       }
       botMessage("Botが空いている前列に練習キャラを出しました");updateBoard();
       break;

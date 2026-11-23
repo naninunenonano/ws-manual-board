@@ -956,6 +956,157 @@
           "implementationStatus": "implemented"
         }
       ]
+    },
+    {
+      "cardNumber": "STS/W140-024",
+      "name": "カリスマ教師の気苦労 カナーチェ",
+      "reading": "カリスマキョウシノキグロウ カナーチェ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "U",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 2,
+        "cost": 1,
+        "power": 7000,
+        "soul": 1
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "巡遊者",
+        "恩恵意志"
+      ],
+      "keywords": [
+        "回想"
+      ],
+      "flavorText": "キミといると、勉強になるな。教師になってからは中々味わえない体験だ",
+      "effects": [
+        {
+          "id": "salvage",
+          "category": "起動・思い出にしてキャラを回収",
+          "type": "activated",
+          "timing": "main",
+          "optional": true,
+          "sourceText": "【起】［【スタンド】しているこのカードを思い出にする］ あなたは自分の控え室の、《巡遊者》か《魔王》のキャラを1枚選び、手札に戻す。",
+          "conditions": [
+            {
+              "handler": "sourceStanding",
+              "params": {
+                "side": "self"
+              }
+            }
+          ],
+          "costs": [
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "stage"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "memory"
+                },
+                "selection": "@source"
+              }
+            }
+          ],
+          "target": null,
+          "steps": [
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "as": "salvage",
+                "count": 1,
+                "allowNoTarget": true,
+                "cardType": "character",
+                "traits": {
+                  "mode": "any",
+                  "names": [
+                    "巡遊者",
+                    "魔王"
+                  ]
+                }
+              }
+            },
+            {
+              "handler": "move",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "waiting"
+                },
+                "to": {
+                  "side": "self",
+                  "zone": "hand"
+                },
+                "selection": "salvage"
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "recall-attach",
+          "category": "回想・思い出からマーカーにする",
+          "type": "auto",
+          "timing": "own_character_enter_stage",
+          "optional": true,
+          "sourceText": "【永】 回想 （【自】 これが思い出にあるなら、あなたのキャラが舞台以外から舞台に置かれた時、その下にマーカーがないなら、これを表でその下のマーカーにしてよい。 【自】 これがマーカー置場から離れた時、これを思い出にする）",
+          "conditions": [],
+          "costs": [],
+          "target": null,
+          "steps": null,
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "recall-return",
+          "category": "回想・マーカーを離れたら思い出へ",
+          "type": "auto",
+          "timing": "leave_marker",
+          "optional": false,
+          "sourceText": "【自】 これがマーカー置場から離れた時、これを思い出にする",
+          "conditions": [],
+          "costs": [],
+          "target": null,
+          "steps": null,
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "marker-attack",
+          "category": "マーカー・アタック時に山札を並べ替え",
+          "type": "auto",
+          "timing": "marker_host_attack",
+          "optional": false,
+          "sourceText": "【自】 マーカー置場にこのカードがあるなら、このマーカーを持つ舞台の、《巡遊者》か《魔王》のキャラがアタックした時、あなたは自分の山札を上から2枚まで見て、山札の上に好きな順番で置く。",
+          "conditions": [],
+          "costs": [],
+          "target": null,
+          "steps": null,
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        }
+      ]
     }
   ]
 }
