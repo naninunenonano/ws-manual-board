@@ -274,3 +274,26 @@ button.zone-fan-card[data-clock-index] {
   font-size: 9px;
   line-height: 1.2;
 }
+
+#dialogBody:has(> .effect-card-choice) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: start;
+}
+#dialogBody:has(> .effect-card-choice) > :is(p, ol) { flex-basis: 100%; }
+#dialogBody .effect-card-choice {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  width: calc((100% - 12px) / 3);
+  min-width: 0;
+  padding: 5px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+#dialogBody .effect-card-choice img {
+  width: 100%;
+  aspect-ratio: 0.71;
+  object-fit: contain;
+}

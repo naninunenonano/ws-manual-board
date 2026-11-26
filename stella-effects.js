@@ -18,13 +18,21 @@ const stellaName=card=>botCardInfo(card)?.name??card.id;
 function stellaChoose(p,title,cards,done,{optional=false,shown=[]}={}){
   if(!cards.length){
     if(p===1||!shown.length){done(null);return}
-    const body=showResolution(title+"・選べるカードなし",shown);
+    const body=showResolution(title+"・選べるカードなし",shown,effectChoiceImageUrl);
     deckButton(body,"確認して進む",()=>{closeResolution();done(null)});
     return;
   }
   if(p===1){done(cards[0]);return}
-  const body=showResolution(title,shown.length?shown:cards);
-  for(const [index,card] of cards.entries())deckButton(body,(index+1)+"．"+stellaName(card),()=>{
+  const body=showResolution(title,shown.length?[]:cards);
+  if(shown.length){
+    for(const card of shown){
+      const index=cards.indexOf(card);
+      const button=effectCardButton(body,card,index<0?stellaName(card):(index+1)+"．"+stellaName(card),()=>{
+        closeResolution();done(card);
+      });
+      button.disabled=index<0;
+    }
+  }else for(const [index,card] of cards.entries())deckButton(body,(index+1)+"．"+stellaName(card),()=>{
     closeResolution();done(card);
   });
   if(optional)deckButton(body,"選ばない",()=>{closeResolution();done(null)});
@@ -60,15 +68,6 @@ function stellaShow(p,title,cards,done){
   const body=showResolution(title,cards);
   deckButton(body,"確認して進む",()=>{closeResolution();done()});
 }
-function stellaLook(p,max,done){
-  const deck=players[p].deck,limit=Math.min(max,deck.length);
-  if(!limit){done([]);return}
-  if(p===1){done(deck.slice(-limit).reverse());return}
-  const body=showResolution("山札を上から何枚見るか",[]);
-  for(let n=0;n<=limit;n++)deckButton(body,n?n+"枚見る":"見ない",()=>{
-    closeResolution();done(n?deck.slice(-n).reverse():[]);
-  });
-}
 function stellaRevealTop(p,done){
   resolveBoardRules(p,()=>{
     const top=players[p].deck.at(-1);
@@ -77,7 +76,7 @@ function stellaRevealTop(p,done){
 }
 function stellaLookAndTake(p,max,filter,stockSecond,done){
   const board=players[p];
-  stellaLook(p,max,viewed=>{
+  botLookUpTo(p,max,viewed=>{
     const candidates=viewed.filter(filter);
     stellaChoose(p,"手札に加えるカード",candidates,hand=>{
       function finish(stock){
@@ -121,14 +120,22 @@ function stellaT03Retreat(p,source,done){
 }
 function stellaReis(p,source,done){
   const board=players[p],others=stellaStage(p).filter(card=>card.uid!==source.uid);
-  if(!others.length||!board.hand.some(card=>card.cx)){done();return}
-  stellaConfirm(p,"CXと他の舞台のキャラを控え室に置いてCXを回収する？",use=>{
-    if(!use){done();return}
-    stellaDiscard(p,()=>stellaChoose(p,"控え室に置く舞台のキャラ",others,card=>{
+  const sacrifices=p===1?others.filter(card=>
+    ["back0","back1"].some(slot=>board[slot].includes(card))||
+    botSlots.slice(0,3).some(slot=>board[slot].some(entry=>entry.uid!==card.uid&&entry.orientation===0))):others;
+  if(!sacrifices.length||!board.hand.some(card=>card.cx)){done();return}
+  stellaChoose(p,"使うなら、控え室に置く手札のCXを選ぶ",board.hand.filter(card=>card.cx),cx=>{
+    if(!cx){done();return}
+    function pay(card){
+      if(!card){done();return}
+      stellaMove(board,"hand",cx,"waiting");
       stellaMove(board,botSlots.find(slot=>board[slot].includes(card)),card,"waiting");
+      const eligible=board.waiting.filter(entry=>entry.cx);
+      if(eligible.length===1){stellaMove(board,"waiting",eligible[0],"hand");done();return}
       stellaSalvage(p,entry=>entry.cx,done);
-    }),true);
-  });
+    }
+    stellaChoose(p,"続けて、控え室に置く舞台のキャラを選ぶ",sacrifices,pay,{optional:true});
+  },{optional:true});
 }
 function stellaShimiao(p,source,done){
   stellaLookAndTake(p,3,card=>{
@@ -167,24 +174,28 @@ function stellaTeresa(p,source,done){
 }
 function stellaVerge(p,done){
   const board=players[p];
-  stellaChoose(p,"ヴェルジュ・控え室に置く舞台のキャラ",stellaStage(p),card=>{
+  const stage=stellaStage(p);
+  const back=["back0","back1"].flatMap(slot=>board[slot]).filter(card=>card.faceUp);
+  const candidates=p===1?(back.length?back:stage.length>1?stage:[]):stage;
+  stellaChoose(p,"ヴェルジュ・控え室に置く舞台のキャラ",candidates,card=>{
     if(!card){done("memory");return}
     stellaMove(board,botSlots.find(slot=>board[slot].includes(card)),card,"waiting");
     stellaLookAndTake(p,4,entry=>stellaAlly(entry)||botDefinition(entry)?.type==="event",true,()=>done("memory"));
   },{optional:true});
 }
-function stellaMemoryTrigger(p,done){
-  const board=players[p],events=board.memory.filter(card=>stellaIs(card,"030"));
-  function next(index){
-    if(index===events.length){done();return}
-    const resume=()=>next(index+1);
-    if(!board.hand.some(card=>card.cx)){resume();return}
-    stellaConfirm(p,"記憶・手札のCX1枚を控え室に置いてキャラを回収する？",use=>{
-      if(use)stellaDiscard(p,()=>stellaSalvage(p,stellaAlly,resume),true);
-      else resume();
-    });
-  }
-  next(0);
+function stellaMemoryActions(p){
+  const board=players[p];
+  if(!board.hand.some(card=>card.cx))return [];
+  return board.memory.filter(card=>stellaIs(card,"030")).map(card=>({
+    label:stellaName(card)+"・記憶でキャラを回収",
+    run:done=>{
+      if(!board.hand.some(entry=>entry.cx)){done();return}
+      stellaConfirm(p,"記憶・手札のCX1枚を控え室に置いてキャラを回収する？",use=>{
+        if(use)stellaDiscard(p,()=>stellaSalvage(p,stellaAlly,done),true);
+        else done();
+      });
+    }
+  }));
 }
 const stellaActions={
   "t03-entry":stellaT03,"t03-attack":stellaT03Attack,"reis-cx":stellaReis,

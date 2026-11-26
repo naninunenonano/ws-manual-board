@@ -295,63 +295,81 @@ function botResolveRecall(p,entrant,done){
   }));
   deckButton(body,"マーカーにしない",()=>{closeResolution();done()});
 }
+function botResolveTriggered(p,actions,done){
+  const pending=[...actions];
+  function next(){
+    if(!pending.length){done?.();return}
+    function resolve(index){
+      const [action]=pending.splice(index,1);
+      action.run(next);
+    }
+    if(p===1||pending.length===1){resolve(0);return}
+    const body=showResolution("次に解決する効果を選ぶ",[]);
+    for(const [index,action] of pending.entries())deckButton(body,(index+1)+"．"+action.label,()=>{
+      closeResolution();resolve(index);
+    });
+  }
+  next();
+}
 function botStageEntry(p,card,from,done){
-  botResolveRecall(p,card,()=>{
-    if(from==="hand")botDispatch(card,"from_hand_to_stage",done,p);
-    else done();
-  });
-}
-function botResolveMarkerAttack(p,card,done){
-  const current=botSlots.flatMap(slot=>players[p][slot]).find(entry=>entry.uid===card.uid);
-  if(!current||!["巡遊者","魔王"].some(trait=>matchesPracticeTrait(current,trait))){done();return}
-  const markers=(current.markers??[]).filter(marker=>marker.faceUp&&botMarkerAbility(marker.card,"marker_host_attack"));
-  function next(index){
-    if(index===markers.length){done();return}
-    autoRuleReorderTop(p,()=>next(index+1),true);
+  const actions=from==="hand"?botTriggeredActions(p,card,"from_hand_to_stage"):[];
+  if(botDefinition(card)?.type==="character"&&!card.markers?.length&&
+    players[p].memory.some(entry=>botMarkerAbility(entry,"own_character_enter_stage"))){
+    actions.push({label:"回想・マーカーを置く",run:next=>botResolveRecall(p,card,next)});
   }
-  next(0);
+  botResolveTriggered(p,actions,done);
 }
-function botOtherAttackEffects(p,attacker,done){
+function botAttackTriggeredActions(p,attacker){
   const board=players[p];
-  const sources=botSlots.flatMap(slot=>board[slot]).filter(card=>card.faceUp&&card.uid!==attacker.uid);
-  function next(index){
-    const source=sources[index];
-    if(!source){done();return}
-    const resume=()=>next(index+1);
-    const effect=botDefinition(source)?.effects?.find(entry=>entry.timing==="other_own_attack");
-    if(!effect||!botSlots.some(slot=>board[slot].some(card=>card.uid===source.uid))){resume();return}
-    const key=source.uid+":"+effect.id;
-    if((match.bot.uses[key]??0)>=effect.limit.perTurn){resume();return}
-    const current=botSlots.flatMap(slot=>board[slot]).find(card=>card.uid===attacker.uid);
-    if(!current){done();return}
-    match.bot.uses[key]=(match.bot.uses[key]??0)+1;
-    current.botSoul=(current.botSoul??botDefinition(current)?.stats?.soul??1)-1;
-    current.turnSoulBonus=(current.turnSoulBonus??0)-1;
-    const top=board.deck.at(-1);
-    if(!top){resume();return}
-    const info=botEffectCard(top);
-    const stocked=info.type==="character"&&info.level!=null&&info.level<=0;
-    function finish(){
-      if(stocked)botMove(board,"deck",board.deck.length-1,"stock");
-      resolveBoardRules(p,resume);
+  const actions=[];
+  if(["巡遊者","魔王"].some(trait=>matchesPracticeTrait(attacker,trait))){
+    for(const marker of attacker.markers??[]){
+      const effect=marker.faceUp&&botMarkerAbility(marker.card,"marker_host_attack");
+      if(effect)actions.push({label:stellaName(marker.card)+"・"+effect.category,run:next=>autoRuleReorderTop(p,next,true)});
     }
-    if(p===1){autoRuleLog("山札の上を公開："+(info.name??info.cardNumber)+(stocked?"（ストックへ）":"（元に戻す）"));finish();return}
-    const body=showResolution(effect.category,[top]);
-    deckButton(body,stocked?"ストックに置く":"元に戻す",()=>{closeResolution();finish()});
   }
-  next(0);
+  for(const slot of botSlots)for(const source of board[slot]){
+    if(!source.faceUp||source.uid===attacker.uid)continue;
+    const effect=botDefinition(source)?.effects?.find(entry=>entry.timing==="other_own_attack");
+    if(!effect)continue;
+    const key=source.uid+":"+effect.id;
+    if((match.bot.uses[key]??0)>=effect.limit.perTurn)continue;
+    actions.push({label:stellaName(source)+"・"+effect.category,run:next=>{
+      const current=botSlots.flatMap(zone=>board[zone]).find(card=>card.uid===attacker.uid);
+      if(!current){next();return}
+      function apply(use){
+        if(!use){next();return}
+        match.bot.uses[key]=(match.bot.uses[key]??0)+1;
+        current.botSoul=(current.botSoul??botDefinition(current)?.stats?.soul??1)-1;
+        current.turnSoulBonus=(current.turnSoulBonus??0)-1;
+        const top=board.deck.at(-1);
+        if(!top){next();return}
+        const info=botEffectCard(top);
+        const stocked=info.type==="character"&&info.level!=null&&info.level<=0;
+        function finish(){
+          if(stocked)botMove(board,"deck",board.deck.length-1,"stock");
+          resolveBoardRules(p,next);
+        }
+        if(p===1){
+          autoRuleLog("山札の上を公開："+(info.name??info.cardNumber)+(stocked?"（ストックへ）":"（元に戻す）"));
+          finish();return;
+        }
+        const body=showResolution(effect.category,[top]);
+        deckButton(body,stocked?"ストックに置く":"元に戻す",()=>{closeResolution();finish()});
+      }
+      if(p===1){apply(board.stock.length<2&&(botStats(p,current).soul??0)>1);return}
+      stellaConfirm(p,"魔王ちゃん・ソウル－1と山札上の公開を行う？",apply);
+    }});
+  }
+  return actions;
 }
-
-function botDispatch(card,timing,done,p=0,context={}){
+function botTriggeredActions(p,card,timing,context={}){
   const effects=botDefinition(card)?.effects?.filter(item=>item.timing===timing&&item.type==="auto"
-    &&(timing!=="on_own_climax_trigger"||card.gainedAbilities?.includes(item.id)))??[];
-  function next(i){
-    if(i===effects.length){
-      if(timing==="on_attack")botResolveMarkerAttack(p,card,()=>botOtherAttackEffects(p,card,()=>done?.()));
-      else done?.();
-      return;
-    }
-    const effect=effects[i],resume=()=>next(i+1);
+    &&(timing!=="on_own_climax_trigger"||card.gainedAbilities?.includes(item.id))
+    &&(item.id!=="t03-attack"||card.gainedAbilities?.includes("STS/W140-T03:loot"))
+    &&(!item.conditions?.length||WSEffects.triggerConditionsMet(item,botEffectBoard(p),
+      {...context,sourceUid:card.uid},findBotCard)))??[];
+  return effects.map(effect=>({label:stellaName(card)+"・"+(effect.category??effect.id),run:resume=>{
     if(Object.hasOwn(stellaActions,effect.id))stellaActions[effect.id](p,card,resume);
     else if(effect.reorderTop)autoRuleReorderTop(p,resume);
     else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
@@ -366,8 +384,12 @@ function botDispatch(card,timing,done,p=0,context={}){
       }else if(success&&effect.drawAfterCost)autoRuleDrawAfterCost(p,effect.drawAfterCost,resume);
       else resume();
     },p,!effect.steps?.some(step=>["chooseBranch","lookAndOrderTop"].includes(step.handler)),context);
-  }
-  next(0);
+  }}));
+}
+function botDispatch(card,timing,done,p=0,context={}){
+  const actions=botTriggeredActions(p,card,timing,context);
+  if(timing==="on_attack")actions.push(...botAttackTriggeredActions(p,card));
+  botResolveTriggered(p,actions,done);
 }
 function botTriggerIcons(p,card){
   const definition=botDefinition(card),icons=definition?.triggers??[];
@@ -407,14 +429,40 @@ function botResolveAttackTrigger(p,trigger,attacker,done){
   botResolveTriggerIcons(p,trigger,()=>{
     const source=attacker();
     if(trigger.cx!==true){done();return}
-    const finish=()=>stellaMemoryTrigger(p,done);
-    if(!source){finish();return}
-    botDispatch(source,"on_own_climax_trigger",finish,p,{triggerClimax:true});
+    const actions=source?botTriggeredActions(p,source,"on_own_climax_trigger",{triggerClimax:true}):[];
+    botResolveTriggered(p,[...actions,...stellaMemoryActions(p)],done);
   });
+}
+
+function botShowLookStep(prompt,respond){
+  const seen=prompt.cards.length;
+  const prefix=prompt.side==="opponent"?"相手の":"";
+  const label=seen?prefix+"山札の上から"+seen+"枚目（上限"+prompt.max+"枚）":prefix+"山札を上から1枚ずつ見る（上限"+prompt.max+"枚）";
+  const visible=prompt.cards.slice(-1).map(card=>card.id?card:{id:card.cardNumber});
+  const body=showResolution(label,visible,effectChoiceImageUrl);
+  function choose(text,more){deckButton(body,text,()=>{closeResolution();respond(more)})}
+  if(prompt.canContinue)choose(seen?"次の1枚を見る":"1枚見る",true);
+  choose(!seen?"見ない":prompt.side==="opponent"?"元の順番で戻す":"ここでやめる",false);
+}
+function botLookUpTo(p,max,done){
+  const iterator=WSEffects.lookUpTo(players[p].deck,max);
+  function next(more){
+    const step=iterator.next(more);
+    if(step.done){done(step.value);return}
+    if(p===1)next(true);
+    else botShowLookStep(step.value,next);
+  }
+  next();
 }
 
 function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const key=card.uid+":"+ability.id;
+  const reisSearch=ability.id==="on-play-waiting-okaken";
+  const reisConsole=ability.id==="memory-recollection-top-reveal";
+  const simpleReis=reisSearch||reisConsole;
+  const firenDuplicate=ability.id==="firen-on-play-duplicate";
+  const firenCombo=ability.id==="firen-cx-combo";
+  let singleComboTarget;
   const iterator=WSEffects.guide(ability,botEffectBoard(p),{
     ...context,sourceUid:card.uid,usedThisTurn:match.bot.uses[key]??0
   },findBotCard);
@@ -433,7 +481,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       if(index===entered.length){done?.(true,result);return}
       const entry=entered[index];
       const current=players[p][destinations.get(entry.uid)].find(card=>card.uid===entry.uid);
-      if(current)botStageEntry(p,current,"hand",()=>dispatch(index+1));
+      if(current)botStageEntry(p,current,firenDuplicate?"waiting":"hand",()=>dispatch(index+1));
       else dispatch(index+1);
     }
     resolveBoardRules(p,()=>dispatch(0));
@@ -517,6 +565,26 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       abortable=false;
       render();
     }
+    if(prompt.kind==="look-next"){
+      if(p===1&&isAutoRules())step(prompt.canContinue);
+      else botShowLookStep(prompt,more=>{
+        if(more)abortable=false;
+        step(more);
+      });
+      return;
+    }
+    if((simpleReis||firenDuplicate)&&prompt.kind==="cost"||
+       (reisSearch||firenDuplicate)&&prompt.kind==="optional"){
+      step(prompt.kind==="optional"?true:undefined);
+      return;
+    }
+    if(reisSearch&&prompt.kind==="reveal"){
+      const names=prompt.cards.map(entry=>stellaName({id:entry.cardNumber}));
+      if(isAutoRules())autoRuleLog(names.join("、")+"を公開して手札へ");
+      else botMessage(names.join("、")+"を公開して手札へ");
+      step();
+      return;
+    }
     if(p===1&&isAutoRules()){
       switch(prompt.kind){
         case "optional":case "optional-top":step(true);break;
@@ -530,25 +598,37 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
           step(candidates.slice(0,prompt.max).map(card=>card.uid));
           break;
         }
-        case "look-count":case "private-look-count":case "heal":step(prompt.max);break;
+        case "heal":step(prompt.max);break;
         case "destination":step(prompt.destinations[0]);break;
         case "treasure":step(prompt.canStock);break;
         default:step();break;
       }
       return;
     }
-    const body=showResolution(ability.category??"カード効果",(prompt.committedState||prompt.topOrder||prompt.privateLook)?prompt.candidates.map(c=>({id:c.cardNumber})):["reveal","private-look"].includes(prompt.kind)?prompt.cards.map(c=>({id:c.cardNumber})):prompt.kind==="treasure"?[card]:[]);
+    if(firenDuplicate&&prompt.kind==="select"&&prompt.phase==="steps"&&prompt.candidates.length===1){
+      step([prompt.candidates[0].uid]);
+      return;
+    }
+    if(firenCombo&&prompt.kind==="select"&&prompt.candidates.length<=1){
+      singleComboTarget=prompt.candidates[0];
+      step(singleComboTarget?[singleComboTarget.uid]:[]);
+      return;
+    }
+    const simpleSelection=simpleReis||firenDuplicate||firenCombo;
+    const cardChoices=prompt.kind==="select"&&(prompt.from.zone==="deck"||simpleSelection);
+    const title=simpleReis&&prompt.kind==="select"?(prompt.phase==="costs"?
+      (reisSearch?"ストック1枚を払い、クロックの下に置くカードを選ぶ":"思い出に置く回想キャラを選ぶ"):
+      "山札からレベル1以下のキャラを1枚まで選ぶ"):
+      firenDuplicate&&prompt.kind==="select"?(prompt.phase==="costs"?"控え室に置く手札を選ぶ":"登場させるフィレンを選ぶ"):
+      firenCombo?(prompt.kind==="destination"?"選んだキャラをどこに置く？":"控え室からキャラを1枚まで選ぶ"):
+      ability.category??"カード効果";
+    const visibleCards=!cardChoices&&prompt.kind==="select"&&prompt.committedState?prompt.candidates:
+      prompt.kind==="reveal"?prompt.cards:singleComboTarget?[singleComboTarget]:[];
+    const body=showResolution(title,prompt.kind==="treasure"?[card]:visibleCards.map(c=>({id:c.cardNumber})));
     const add=(label,action)=>deckButton(body,label,()=>{closeResolution();action()});
     const respond=(label,result)=>add(label,()=>step(result));
     if(prompt.kind==="branch"){
       prompt.labels.forEach((label,index)=>respond(label,index));
-    }else if(prompt.kind==="private-look-count"){
-      body.append(document.createTextNode("相手の山札を上から何枚見るか選んでください。"));
-      for(let n=0;n<=prompt.max;n++)respond(n?n+"枚見る":"見ない",n);
-    }else if(prompt.kind==="private-look"){
-      respond("元の順番で戻す");
-    }else if(prompt.kind==="look-count"){
-      for(let n=0;n<=prompt.max;n++)respond(n?n+"枚見る":"見ない",n);
     }else if(prompt.kind==="heal"){
       for(let n=0;n<=prompt.max;n++)respond(n===0?"回復しない":n+"枚回復",n);
     }else if(prompt.kind==="optional-top"){
@@ -557,12 +637,24 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     }else if(prompt.kind==="optional"){
       respond("能力を使う",true);respond("使わない",false);
     }else if(prompt.kind==="select"){
-      body.append(document.createTextNode(prompt.text??prompt.label+"から選んでください"));
+      const immediate=cardChoices&&prompt.max===1;
+      if(!simpleSelection){
+        const hint=document.createElement("p");
+        hint.textContent=prompt.text??prompt.label+"から選んでください";
+        body.append(hint);
+      }
       const picks=new Set(),orderButtons=[];
-      const confirm=add("選択を確定",()=>step([...picks]));confirm.disabled=prompt.min>0;
+      let confirm;
       for(const [candidateIndex,entry] of prompt.candidates.entries()){
         const actual={id:entry.cardNumber};
-        const b=deckButton(body,((prompt.topOrder||prompt.privateLook)?(candidateIndex+1)+"．":"")+(botCardInfo(actual)?.name??entry.cardNumber),()=>{
+        const label=((prompt.topOrder||prompt.privateLook)?(candidateIndex+1)+"．":"")+(botCardInfo(actual)?.name??entry.cardNumber);
+        const choose=()=>{
+          if(immediate){
+            if((simpleReis||firenDuplicate)&&prompt.phase==="costs")abortable=false;
+            closeResolution();
+            step([entry.uid]);
+            return;
+          }
           if(picks.has(entry.uid))picks.delete(entry.uid);
           else if(picks.size<prompt.max)picks.add(entry.uid);
           b.setAttribute("aria-pressed",String(picks.has(entry.uid)));
@@ -570,15 +662,17 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
             const ordered=[...picks];
             for(const [uid,button,label] of orderButtons){
               const index=ordered.indexOf(uid);
-              button.textContent=index<0?label:(index+1)+"番目に戻す ／ "+label;
+              (button.firstChild??button).textContent=index<0?label:(index+1)+"番目に戻す ／ "+label;
             }
           }
           b.style.outline=picks.has(entry.uid)?"2px solid #f4cf73":"";
           confirm.disabled=picks.size<prompt.min;
-        });
-        b.setAttribute("aria-pressed","false");
-        if(prompt.topOrder)orderButtons.push([entry.uid,b,b.textContent]);
+        };
+        const b=cardChoices?effectCardButton(body,actual,label,choose):deckButton(body,label,choose);
+        if(!immediate)b.setAttribute("aria-pressed","false");
+        if(prompt.topOrder)orderButtons.push([entry.uid,b,label]);
       }
+      if(!immediate){confirm=add("選択を確定",()=>step([...picks]));confirm.disabled=prompt.min>0}
       if(prompt.min===0)respond("選ばず進む",[]);
     }else if(prompt.kind==="destination"){
       for(const destination of prompt.destinations)respond(labels[destination.zone]+"へ",destination);
@@ -592,7 +686,10 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       body.append(document.createTextNode(prompt.text??"コストを確認してください"));
       respond("コストを支払う");
     }
-    if(abortable)add("効果確認を中止",()=>{iterator.return();done?.(false)});
+    if(abortable&&!(firenCombo&&prompt.kind==="select"))add(simpleSelection?"使わない":"効果確認を中止",()=>{
+      iterator.return();
+      done?.(false);
+    });
   }
   step();
 }
@@ -635,12 +732,61 @@ function botRevealTop(p,receive,done){
     resolveBoardRules(p,()=>done(!!card));
   });
 }
+const botRevealTitles={Brainstorm:"集中の公開カード",Damage:"ダメージの公開カード"};
+function rememberBotReveal(kind,player,cards,summary){
+  if(!match?.bot||!cards.length)return;
+  const history=match.bot.reveals??={};
+  history[kind]=[{player,summary,cards:cards.map(card=>({id:card.id}))},...(history[kind]??[])].slice(0,10);
+}
+function renderBotRevealButtons(prefix){
+  for(const kind of Object.keys(botRevealTitles)){
+    document.getElementById(prefix+kind+"Reveals").disabled=ruleBusy||!match.bot.reveals?.[kind]?.length;
+  }
+}
+function openBotReveals(kind){
+  const history=match?.bot?.reveals?.[kind];
+  if(!history?.length||ruleBusy||document.getElementById("dialog").open)return;
+  const description=entry=>(entry.player===0?"自分":"Bot")+"・"+entry.summary;
+  const body=showResolution(botRevealTitles[kind],[]);
+  setRuleModal(false);
+  const cards=document.createElement("div");
+  if(history.length===1){
+    const summary=document.createElement("p");
+    summary.textContent=description(history[0]);
+    body.append(summary);
+  }else{
+    const entries=document.createElement("select");
+    entries.setAttribute("aria-label","公開履歴（新しい順）");
+    for(const [index,entry] of history.entries()){
+      const option=document.createElement("option");
+      option.value=String(index);
+      option.textContent=(index+1)+"．"+description(entry);
+      entries.append(option);
+    }
+    entries.onchange=()=>{
+      const entry=history[Number(entries.value)];
+      if(!entry)return;
+      cards.replaceChildren();
+      appendResolutionCards(cards,entry.cards,effectChoiceImageUrl);
+    };
+    body.append(entries);
+  }
+  appendResolutionCards(cards,history[0].cards,effectChoiceImageUrl);
+  body.append(cards);
+}
+for(const kind of Object.keys(botRevealTitles)){
+  for(const prefix of ["bot","result"]){
+    document.getElementById(prefix+kind+"Reveals").onclick=()=>openBotReveals(kind);
+  }
+}
+
 function botDamage(target,amount,done){
   const board=players[target],revealed=[];
   function finish(cancel){
     const destination=cancel?"waiting":"clock";
     const damage={cards:revealed.map(card=>card.uid),cancelled:cancel};
     const result=cancel?"CXでダメージをキャンセル":"ダメージ "+revealed.length+"枚";
+    rememberBotReveal("Damage",target,revealed,cancel?result+"・"+revealed.length+"枚公開":result);
     if(isAutoRules()){
       autoRuleLog(result+(revealed.length?"（"+revealed.map(c=>botCardInfo(c).name).join("、")+"）":""));
       revealed.forEach(card=>{card.faceUp=true;board[destination].push(card)});
@@ -781,6 +927,7 @@ function scheduleBotTurn(){
 }
 function renderBotControls(){
   document.getElementById("botControls").hidden=false;
+  renderBotRevealButtons("bot");
   document.getElementById("botModeName").textContent="Bot戦 · "+((match.bot.scenario===stellaScenario?stellaDeck.title:match.bot.scenario===redBlueScenario?redBlueDeck.title:practiceTitles[match.bot.scenario])??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
   const button=document.getElementById("botStep");
   button.hidden=isDeckMirror(match.bot.scenario);

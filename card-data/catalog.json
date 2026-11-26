@@ -294,7 +294,7 @@
           ],
           "steps": [
             {
-              "handler": "selectNamed",
+              "handler": "selectCards",
               "params": {
                 "from": {
                   "side": "self",
@@ -302,7 +302,8 @@
                 },
                 "as": "duplicate",
                 "count": 1,
-                "cardNumber": "STS/W140-002"
+                "cardNumbers": ["STS/W140-002"],
+                "allowNoTarget": true
               }
             },
             {
@@ -316,7 +317,8 @@
                   "side": "self",
                   "zone": "stage"
                 },
-                "selection": "duplicate"
+                "selection": "duplicate",
+                "replaceStage": true
               }
             },
             {
@@ -1198,7 +1200,7 @@
           "category": "他のキャラのアタック時・ソウル－1と山札上公開",
           "type": "auto",
           "timing": "other_own_attack",
-          "optional": false,
+          "optional": true,
           "sourceText": "【自】【ターン1】 他のあなたのキャラがアタックした時、そのターン中、あなたはそのアタックしているキャラのソウルを－1し、自分の山札の上から1枚を公開する。そのカードがレベル0以下のキャラならストック置場に置く。（そうでないなら元に戻す）",
           "conditions": [],
           "costs": [],

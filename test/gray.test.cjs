@@ -59,8 +59,11 @@ test("Gray includes itself in X and may keep any one viewed card without reveali
   board.self.stage.push(source(),unit("ally",{traits:["魔王","巡遊者"]}),unit("other"));
   board.self.deck.push(unit("bottom"),unit("climax",{type:"climax"}),unit("top",{type:"event"}));
   const guide=Effects.guide(enter,board,opts,find);
-  assert.deepEqual(guide.next().value,{kind:"look-count",max:2});
-  const select=guide.next(2).value;
+  assert.deepEqual(guide.next().value,{kind:"look-next",side:"self",cards:[],max:2,canContinue:true});
+  const one=guide.next(true).value;
+  assert.deepEqual(ids(one.cards),["top"]);
+  assert.deepEqual(ids(board.self.deck),["bottom","climax","top"]);
+  const select=guide.next(true).value;
   assert.equal(select.privateLook,true);
   assert.deepEqual(ids(select.candidates),["top","climax"]);
   const result=guide.next(["climax"]).value;
@@ -76,7 +79,7 @@ test("Gray includes itself in X and may keep any one viewed card without reveali
   assert.equal(run(enter,board,{...opts,lookCount:3,lookPick:[]}).status,"needs-choice");
   assert.equal(run(enter,board,{...opts,lookCount:2,lookPick:["bottom"]}).status,"needs-choice");
   board.self.deck.pop();board.self.deck.pop();
-  assert.deepEqual(Effects.guide(enter,board,opts,find).next().value,{kind:"look-count",max:1});
+  assert.deepEqual(Effects.guide(enter,board,opts,find).next().value,{kind:"look-next",side:"self",cards:[],max:1,canContinue:true});
 });
 
 test("Gray refreshes after moving the last viewed cards to their destinations",()=>{
@@ -84,8 +87,8 @@ test("Gray refreshes after moving the last viewed cards to their destinations",(
   board.self.stage.push(source(),unit("unknown",{traits:null}));
   board.self.deck.push(unit("last"));
   const guide=Effects.guide(enter,board,opts,find);
-  assert.deepEqual(guide.next().value,{kind:"look-count",max:1});
-  assert.equal(guide.next(1).value.privateLook,true);
+  assert.deepEqual(guide.next().value,{kind:"look-next",side:"self",cards:[],max:1,canContinue:true});
+  assert.equal(guide.next(true).value.privateLook,true);
   const refresh=guide.next([]).value;
   assert.equal(refresh.kind,"deck-empty");
   assert.deepEqual(ids(refresh.state.self.deck),[]);

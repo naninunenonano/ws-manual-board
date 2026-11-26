@@ -8,4 +8,10 @@ function officialImageUrl(id){
   return "https://ws-tcg.com/wordpress/wp-content/images/cardlist/"+group[0]+"/"+folder+"/"+folder+"_"+number+".png";
 }
 
-if (typeof module === "object") module.exports = {officialImageUrl};
+function effectChoiceImageUrl(id){
+  const match=String(id).match(/^STS\/W140-(T?\d{2,3})(?:[A-Z]+)?$/i);
+  if(!match)return officialImageUrl(id);
+  return "https://heartofthecards.com/heartofthecards/images/cards/ws/sts-w140-"+match[1].toLowerCase()+".png";
+}
+
+if (typeof module === "object") module.exports = {officialImageUrl,effectChoiceImageUrl};
