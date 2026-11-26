@@ -737,6 +737,7 @@ function appendResolutionCards(body,cards,imageUrl){
 function effectCardButton(body,card,label,action){
  const button=deckButton(body,label,action);
  button.className="effect-card-choice carddetail";
+ button.setAttribute("aria-label",label);
  button.style.margin="";
  addCardImage(button,card,label,effectChoiceImageUrl);
  return button;
