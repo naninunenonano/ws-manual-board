@@ -20,7 +20,14 @@ jobs:
       - run: node --test test/*.test.cjs
       - run: npm install --no-save --package-lock=false playwright@1.58.2 @electric-sql/pglite@0.5.17
       - run: command -v google-chrome || npx playwright install chromium
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+      - name: Install Japanese fonts for screenshots
+        timeout-minutes: 2
+        continue-on-error: true
+        run: |
+          if [ -z "$(fc-list :lang=ja)" ]; then
+            sudo timeout 45s apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=10 update -qq
+            sudo timeout 45s apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=10 install -y -qq fonts-noto-cjk
+          fi
       - run: node test/online-db.cjs
       - run: node test/online-browser.cjs
       - run: node test/board-layout.cjs
