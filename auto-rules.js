@@ -515,35 +515,20 @@ function resolveKoukei(p,done){
   }
   next();
 }
-function autoRuleHandMenu(p,index){
-  if(ruleBusy||match.turn.player!==p)return false;
-  const card=players[p].hand[index],definition=botDefinition(card),type=definition?.type,phase=match.turn.phase;
-  const playableEvent=autoRuleEventEffect(definition);
-  if(!(phase==="main"&&(type==="character"||playableEvent)||phase==="climax"&&type==="climax"))return false;
-  const details=botCardDetails(card);
-  const body=showResolution(botCardInfo(card).name,details?[]:[card]);
-  if(details)appendBotCardDetails(body,details);
-  setRuleModal(false);
-  const level=autoRuleHandLevel(p,card,definition);
-  if(level!==definition.stats.level)body.append(document.createTextNode("手札ではLv"+level));
-  const error=type==="climax"&&players[p].cx.length?"すでにCXをプレイしています":autoRuleLegalPlay(p,card,phase,type);
-  deckButton(body,"選択解除",()=>{closeResolution();clearCardSelection()});
-  if(error){body.append(document.createTextNode(error));return true}
-  deckButton(body,"プレイする",()=>{
-    closeResolution();
-    if(type==="climax"){autoRulePlace(p,card.uid,"cx");return}
-    if(playableEvent){autoRulePlayEvent(p,card.uid);return}
-    const targets=showResolution("登場させる枠",[card]);
-    setRuleModal(false);
-    deckButton(targets,"選択解除",()=>{closeResolution();clearCardSelection()});
-    for(const slot of botSlots){
-      const occupied=players[p][slot].length>0;
-      deckButton(targets,labels[slot]+(occupied?"（入れ替え）":""),()=>{
-        closeResolution();autoRulePlace(p,card.uid,slot);
-      });
-    }
-  });
-  return true;
+function autoRulePlayFromHand(p,index){
+  if(ruleBusy||match.turn.player!==p)return;
+  const board=players[p],card=board.hand[index],definition=botDefinition(card);
+  const type=definition?.type,phase=match.turn.phase;
+  if(phase==="climax"&&type==="climax"&&!board.cx.length){
+    if(!autoRuleLegalPlay(p,card,"climax","climax"))autoRulePlace(p,card.uid,"cx");
+    return;
+  }
+  if(phase!=="main")return;
+  if(type==="character"){
+    if(!autoRuleLegalPlay(p,card,"main","character"))beginHandPlacement(p,index);
+  }else if(autoRuleEventEffect(definition)&&!autoRuleLegalPlay(p,card,"main","event")){
+    autoRulePlayEvent(p,card.uid);
+  }
 }
 
 function autoRuleDispatchBoard(p,timing,done){
