@@ -120,7 +120,9 @@ function restoreMatch() {
 }
 
 function showMatchScreen() {
-  matchElement("setupScreen").hidden = !isDeckSetup();
+  const editorVisible=isDeckSetup()&&botDeckEditorOpen;
+  matchElement("setupScreen").hidden = !isDeckSetup()||editorVisible;
+  matchElement("botDeckEditorScreen").hidden = !editorVisible;
   matchElement("battleScreen").hidden = !isMatchActive();
   matchElement("botControls").hidden=!match?.bot;
   for(const id of ["battleSideControl","shuffle","manualBattleHint"])matchElement(id).hidden=!!match?.bot;

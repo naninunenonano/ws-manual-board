@@ -10,15 +10,18 @@ const stellaDeck={
   ].map(([number,num,cx=false])=>({id:"STS/W140-"+number,num,cx}))
 };
 const stellaTrialScenario="stella-level-zero-trial";
-const trialReductions=new Set(["001","T03","071","068"].map(n=>"STS/W140-"+n));
+const trialReductions=new Set(["094","013","023","030"].map(n=>"STS/W140-"+n));
 const stellaTrialDeck={
   title:"ステラソラ・Lv0追加4種",
   cards:[
-    ...stellaDeck.cards.map(card=>trialReductions.has(card.id)?{...card,num:card.num-2}:card),
-    ...["038","040","007","016"].map(number=>({id:"STS/W140-"+number,num:2,cx:false}))
+    ...stellaDeck.cards
+      .map(card=>trialReductions.has(card.id)?{...card,num:card.num-1}:card)
+      .filter(card=>card.num>0),
+    ...["038","040","007","016"].map(number=>({id:"STS/W140-"+number,num:1,cx:false}))
   ]
 };
-const isStellaDeck=scenario=>scenario===stellaScenario||scenario===stellaTrialScenario;
+const stellaCustomScenario="stella-custom";
+const isStellaDeck=scenario=>scenario===stellaScenario||scenario===stellaTrialScenario||scenario===stellaCustomScenario;
 const isDeckMirror=scenario=>scenario===redBlueScenario||isStellaDeck(scenario);
 const stellaIs=(card,number)=>sameBotCardNumber(card.id,"STS/W140-"+number);
 const stellaAlly=card=>["巡遊者","魔王"].some(trait=>matchesPracticeTrait(card,trait));

@@ -79,6 +79,7 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
   vm.runInContext(read("auto-rules.js"),context);
   vm.runInContext(read("stella-effects.js"),context);
   vm.runInContext(read("bot-match.js"),context);
+  vm.runInContext(read("bot-deck-editor.js"),context);
   vm.runInContext(importScript,context);
   return {
     get:id=>elements.get(id), location, storage, settle,
@@ -2447,8 +2448,16 @@ test("ステラソラのLv0追加4種でDAQBEと初手から対戦できる",asy
   page.click("startBotBattle");
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
   assert.equal(page.run('match.decks[1]===stellaDeck'),true);
+  const base=JSON.parse(page.run("JSON.stringify(match.decks[1].cards)"));
+  const trial=JSON.parse(page.run("JSON.stringify(match.decks[0].cards)"));
+  const trialCounts=new Map(trial.map(c=>[c.id,c.num]));
+  const cuts=base.filter(c=>trialCounts.get(c.id)!==c.num);
+  assert.deepEqual(cuts.map(c=>[c.id.slice(9),c.num-(trialCounts.get(c.id)??0)]),[
+    ["094",1],["013",1],["023",1],["030",1]
+  ]);
+  assert.equal(trial.filter(c=>c.cx).reduce((n,c)=>n+c.num,0),8);
   for(const number of ["038","040","007","016"]){
-    assert.equal(page.run(`match.decks[0].cards.find(c=>c.id==="STS/W140-${number}").num`),2);
+    assert.equal(trialCounts.get("STS/W140-"+number),1);
     assert.equal(page.run(`botDefinition({id:"STS/W140-${number}"}).stats.level`),0);
   }
   page.click("confirmMulligan");
@@ -2543,4 +2552,43 @@ test("休暇フィレンは舞台から控え室に置かれた時だけ誘発�
   ruleButton(page,"使う");
   assert.equal(page.run('own.stock[0].uid'),"stock");
   assert.equal(page.run('own.waiting.some(c=>c.uid==="lv2")&&own.waiting.some(c=>c.uid==="cx")'),true);
+});
+
+test("Bot戦専用ページは両デッキの枚数を別々に編集し、保存した50枚で対戦を始める",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.click("openBotDeckEditor");
+  assert.equal(page.get("setupScreen").hidden,true);
+  assert.equal(page.get("botDeckEditorScreen").hidden,false);
+  assert.equal(page.get("startEditedBotBattle").disabled,false);
+  const adjust=(target,name,delta)=>{
+    const row=target.get("botDeckCardRows").children.find(entry=>entry.children[0].textContent===name);
+    assert.ok(row,name);
+    row.children[1].children[delta<0?0:2].onclick();
+  };
+  adjust(page,"巡遊者 グレイ",-1);
+  assert.equal(page.get("startEditedBotBattle").disabled,true);
+  adjust(page,"銃弾のロンド コハク",1);
+  assert.equal(page.get("startEditedBotBattle").disabled,false);
+  page.click("editOpponentBotDeck");
+  adjust(page,"黎明告げる凱旋歌",-1);
+  adjust(page,"カモメのポテト ラール",1);
+  assert.match(page.get("botDeckTotals").textContent,/Bot 50\/50枚（CX 7\/8枚）/);
+  assert.equal(page.get("startEditedBotBattle").disabled,true);
+  adjust(page,"カモメのポテト ラール",-1);
+  adjust(page,"黎明告げる凱旋歌",1);
+  page.get("botDeckPreset").value="trial";
+  page.click("applyBotDeckPreset");
+  assert.equal(page.get("startEditedBotBattle").disabled,false);
+
+  const reopened=launch("",page.storage,null,100,null,true);
+  await reopened.click("openBotDeckEditor");
+  reopened.click("startEditedBotBattle");
+  assert.equal(reopened.get("botDeckEditorScreen").hidden,true);
+  assert.equal(reopened.run("match.bot.scenario"),"stella-custom");
+  assert.deepEqual(ruleCounts(snapshot(reopened)),[50,50]);
+  assert.equal(reopened.run('match.decks[0].cards.some(c=>c.id==="STS/W140-038")'),true);
+  assert.equal(reopened.run('match.decks[0].cards.some(c=>c.id==="STS/W140-040")'),false);
+  assert.equal(reopened.run('match.decks[1].cards.some(c=>c.id==="STS/W140-040")'),true);
+  reopened.click("confirmMulligan");
+  assert.equal(reopened.run("isAutoRules()"),true);
 });

@@ -297,3 +297,35 @@ button.zone-fan-card[data-clock-index] {
   aspect-ratio: 0.71;
   object-fit: contain;
 }
+
+.bot-editor-status {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 0;
+  background: #101827;
+}
+.bot-editor-status p { margin: 4px 0; }
+#botDeckEditorNotice:empty { display: none; }
+#botDeckCardRows { list-style: none; padding: 0; margin: 8px 0; }
+.bot-deck-card-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #354563;
+}
+.bot-deck-card-row small { display: block; color: #b7c5db; }
+.bot-deck-count {
+  display: grid;
+  grid-template-columns: 44px 2ch 44px;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.bot-deck-count button { min-height: 44px; padding: 0; }
+#botDeckEditorScreen button[aria-pressed="true"] {
+  background: #3a547c;
+  border-color: #f4cf73;
+}
