@@ -450,9 +450,9 @@ function botShowLookStep(prompt,respond){
   if(prompt.canContinue)choose(seen?"次の1枚を見る":"1枚見る",true);
   choose(!seen?"見ない":prompt.side==="opponent"&&!prompt.bottom?"元の順番で戻す":"ここでやめる",false);
 }
-function botLookUpTo(p,max,done,{owner=p,bottom=false}={}){
+function botLookUpTo(p,max,done,{owner=p,bottom=false,review=false}={}){
   const deck=players[owner].deck;
-  const iterator=WSEffects.lookUpTo(bottom?deck.slice().reverse():deck,max,{side:owner===p?"self":"opponent"});
+  const iterator=WSEffects.lookUpTo(bottom?deck.slice().reverse():deck,max,{side:owner===p?"self":"opponent",review});
   function next(more){
     const step=iterator.next(more);
     if(step.done){done(step.value);return}

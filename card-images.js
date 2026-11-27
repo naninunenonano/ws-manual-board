@@ -5,6 +5,8 @@ const frierenTrialCardImages = Object.freeze({
   t04sp: "001",
   t09: "030",
   t09r: "012",
+  t11: "032",
+  t11sp: "002",
   t13: "034",
   t13r: "015"
 });
@@ -39,7 +41,7 @@ function effectChoiceImageUrl(id){
 
 function effectChoiceFallbackUrl(id){
   const match=String(id).match(/^(STS\/W140-T?\d{2,3})[A-Z]+$/i);
-  const trial=String(id).match(/^SFN\/S108-(T(?:04|09|13)[A-Z]*)$/i)?.[1].toLowerCase();
+  const trial=String(id).match(/^SFN\/S108-(T(?:04|09|11|13)[A-Z]*)$/i)?.[1].toLowerCase();
   if(trial&&Object.hasOwn(frierenTrialCardImages,trial))return frierenImageUrl("s108",trial);
   const frieren=String(id).match(/^(SFN\/S\d+-T?\d{2,3})[A-Z]+$/i);
   return match?effectChoiceImageUrl(match[1]):frieren?officialImageUrl(frieren[1]):null;

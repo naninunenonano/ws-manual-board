@@ -3135,6 +3135,374 @@
           "steps": null
         }
       ]
+    },
+    {
+      "cardNumber": "SFN/S128-002",
+      "variants": [
+        "SFN/S128-002",
+        "SFN/S128-002S",
+        "SFN/S128-002SEC"
+      ],
+      "name": "“故郷の花” フリーレン＆ヒンメル",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン 新装版",
+      "rarity": "RR",
+      "side": "S",
+      "type": "character",
+      "color": "黄",
+      "stats": {
+        "level": 3,
+        "cost": 2,
+        "power": 8500,
+        "soul": 2
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "冒険者",
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-flowers-level",
+          "category": "手札のレベル－1",
+          "type": "continuous",
+          "timing": "in_hand",
+          "optional": false,
+          "sourceText": "舞台に《冒険者》か《魔法》が4枚以上なら、手札のこのカードのレベルを1下げる。",
+          "steps": null
+        },
+        {
+          "id": "frieren-flowers-power",
+          "category": "自ターン中のパワー＋2000",
+          "type": "continuous",
+          "timing": "own_turn",
+          "optional": false,
+          "sourceText": "自分のターン中、他に《冒険者》か《魔法》がいるなら、パワー＋2000とアタック時の能力を得る。",
+          "steps": null
+        },
+        {
+          "id": "frieren-flowers-damage",
+          "category": "アタック時・相手に4ダメージ",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": true,
+          "sourceText": "自分のターン中に他の《冒険者》か《魔法》がいるなら、3ストックと手札2枚を払い、相手に4ダメージ。",
+          "steps": null
+        },
+        {
+          "id": "frieren-flowers-heal",
+          "category": "登場時・回復",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": true,
+          "sourceText": "手札から登場時、クロック上の1枚を控え室に置いてよい。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-046",
+      "variants": [
+        "SFN/S136-046",
+        "SFN/S136-046S"
+      ],
+      "name": "人類最強 南の勇者",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "C",
+      "side": "S",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 2,
+        "cost": 1,
+        "power": 5000,
+        "soul": 1
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "冒険者"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-prophecy-clock",
+          "category": "登場時・最大2枚にリバース時能力を付与",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "自分のキャラを2枚まで選び、このターン中、そのキャラがリバースした時にレベル条件を満たすバトル相手をクロックへ置ける能力を与える。",
+          "conditions": [
+            {
+              "handler": "sourceInZone",
+              "params": {
+                "side": "self",
+                "zone": "stage"
+              }
+            }
+          ],
+          "costs": [],
+          "target": null,
+          "steps": [
+            {
+              "handler": "selectCards",
+              "params": {
+                "from": {
+                  "side": "self",
+                  "zone": "stage"
+                },
+                "as": "targets",
+                "count": 2,
+                "min": 0,
+                "cardType": "character"
+              }
+            },
+            {
+              "handler": "grantSelectedStageAbility",
+              "params": {
+                "selection": "targets",
+                "abilityId": "STS/W140-023:clock-swap"
+              }
+            }
+          ],
+          "duration": null,
+          "limit": null,
+          "choices": [],
+          "stateRefs": []
+        },
+        {
+          "id": "frieren-prophecy-recover",
+          "category": "登場時・「未来を予知できる能力」を回収",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": true,
+          "sourceText": "手札1枚を控え室に置くと、控え室の「未来を予知できる能力」を手札に戻せる。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-036",
+      "variants": [
+        "SFN/S136-036",
+        "SFN/S136-036S"
+      ],
+      "name": "猛攻 メトーデ",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "U",
+      "side": "S",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 2,
+        "cost": 1,
+        "power": 4000,
+        "soul": 1
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-methode-entry",
+          "category": "登場時・パワーアップ",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "相手の舞台のキャラ1枚につき、このターン中パワー＋1500。",
+          "steps": null
+        },
+        {
+          "id": "frieren-methode-reverse",
+          "category": "バトル相手リバース時・山札下5枚",
+          "type": "auto",
+          "timing": "on_battle_opponent_reverse",
+          "optional": false,
+          "sourceText": "リバースしたバトル相手がLv2以上で自分のCX置場にCXがあれば、相手の山札下5枚を控え室へ。CXが含まれていれば相手に1ダメージ。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-033",
+      "variants": [
+        "SFN/S136-033",
+        "SFN/S136-033S"
+      ],
+      "name": "待ち合わせ ラヴィーネ",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "U",
+      "side": "S",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 1000,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-pair-deploy",
+          "category": "登場時・相方を山札から舞台へ",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": true,
+          "sourceText": "手札1枚を控え室に置くと、山札の「待ち合わせ カンネ」1枚までを好きな舞台の枠へ置き、山札をシャッフルする。",
+          "steps": null
+        },
+        {
+          "id": "frieren-lawine-attack",
+          "category": "アタック時・山札上を調整",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": false,
+          "sourceText": "他に「待ち合わせ カンネ」がいれば、山札を上から2枚まで見て、1枚を山札の上に戻し、残りを控え室に置く。そのターン中パワー＋4000。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-034",
+      "variants": [
+        "SFN/S136-034",
+        "SFN/S136-034S"
+      ],
+      "name": "待ち合わせ カンネ",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "U",
+      "side": "S",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 1000,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-pair-deploy",
+          "category": "登場時・相方を山札から舞台へ",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": true,
+          "sourceText": "手札1枚を控え室に置くと、山札の「待ち合わせ ラヴィーネ」1枚までを好きな舞台の枠へ置き、山札をシャッフルする。",
+          "steps": null
+        },
+        {
+          "id": "frieren-kanne-attack",
+          "category": "アタック時・山札上を調整",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": false,
+          "sourceText": "他に「待ち合わせ ラヴィーネ」がいれば、山札の上1枚を見て、上・下・控え室のいずれかへ置く。そのターン中パワー＋2000、ソウル＋1。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S108-T11",
+      "variants": [
+        "SFN/S108-T11",
+        "SFN/S108-T11SP"
+      ],
+      "name": "“魔法使い”フリーレン",
+      "title": "葬送のフリーレン",
+      "product": "トライアルデッキ 葬送のフリーレン",
+      "rarity": "TD",
+      "side": "S",
+      "type": "character",
+      "color": "青",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "冒険者",
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-mage-swap",
+          "category": "登場時・手札と控え室のCXを交換",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": true,
+          "sourceText": "1ストックと手札のCX1枚を控え室に置くと、控え室のCX1枚を回収できる。",
+          "steps": null
+        },
+        {
+          "id": "frieren-mage-reverse",
+          "category": "自身リバース時・山札の下",
+          "type": "auto",
+          "timing": "on_reverse",
+          "optional": true,
+          "sourceText": "バトル中に自身がリバースした場合、Lv0以下のバトル相手を相手の山札の下に置いてよい。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-048",
+      "variants": [
+        "SFN/S136-048",
+        "SFN/S136-048S"
+      ],
+      "name": "未来を予知できる能力",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "U",
+      "side": "S",
+      "type": "event",
+      "color": "緑",
+      "stats": {
+        "level": 2,
+        "cost": 0,
+        "power": null,
+        "soul": null
+      },
+      "triggers": [],
+      "traits": [],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-prophecy",
+          "category": "双方の山札上3枚まで確認",
+          "type": "event",
+          "timing": "on_play",
+          "optional": false,
+          "sourceText": "自分、相手の順に山札の上3枚までを見て、元の順番で戻す。このイベントをストックに置く。",
+          "steps": null
+        }
+      ],
+      "eventEffect": "未来予知"
     }
   ]
 }
