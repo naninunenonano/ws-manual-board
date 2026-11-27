@@ -1761,14 +1761,11 @@ test("ナツカのCXコンボとCXトリガー時の回復をアタック中に�
     match.turn.phase="attack";
     autoRuleAttack(0,"front0","natsuka","direct");
   `);
-  ruleButton(page,"能力を使う");
+  assert.match(page.get("dialogTitle").textContent,/手札を1枚捨てて/);
   ruleButton(page,"仮キャラ");
-  ruleButton(page,"選択を確定");
-  ruleButton(page,"コストを支払う");
   assert.equal(page.run("natsukaRival.waiting[0].uid"),"cancel");
   assert.equal(page.run("natsukaBoard.waiting[0].uid"),"discard");
   assert.equal(page.run("natsukaBoard.stock[0].uid"),"trigger");
-  ruleButton(page,"クロックの上から2枚まで回復");
   ruleButton(page,"2枚回復");
   assert.equal(page.run("natsukaBoard.clock.map(c=>c.uid).join()"),"old");
   assert.equal(page.run("natsukaRival.clock.length"),4);
@@ -1822,7 +1819,7 @@ test("風に揺れる気持ち ナツカは1枚の時だけ風を与え、起動
   assert.equal(page.get("dialogTitle").textContent,"次に解決する効果を選ぶ");
   ruleButton(page,"2．回想・マーカーを置く");
   ruleButton(page,"思い出の1枚目をマーカーにする");
-  ruleButton(page,"行う");
+  ruleButton(page,"回復する");
   assert.equal(page.run("windBoard.front1[0].uid"),"large");
   assert.equal(page.run("windBoard.memory.length"),0);
   assert.equal(page.run("windBoard.front1[0].markers[0].card.uid"),"kanache");
@@ -2074,10 +2071,8 @@ test("アヤメは手札を1枚払ったアタックだけ2回トリガーし、
     match.turn.phase="attack";
     autoRuleAttack(0,"front0","ayame","direct");
   `);
-  ruleButton(page,"能力を使う");
+  assert.match(page.get("dialogTitle").textContent,/手札を1枚捨てて/);
   ruleButton(page,"仮キャラ");
-  ruleButton(page,"選択を確定");
-  ruleButton(page,"コストを支払う");
   assert.equal(page.run("ayameBoard.waiting[0].uid"),"discard");
   assert.equal(page.run("ayameBoard.stock.map(c=>c.uid).join()"),"first,second");
   assert.equal(page.run("ayameRival.clock.length"),5);

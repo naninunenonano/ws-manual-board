@@ -464,7 +464,14 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const simpleReis=reisSearch||reisConsole;
   const firenDuplicate=ability.id==="firen-on-play-duplicate";
   const firenCombo=ability.id==="firen-cx-combo";
-  let singleComboTarget;
+  const [selectCost,moveCost]=ability.costs??[];
+  const handDiscard=!card.id.startsWith("BOT/")&&ability.optional&&ability.costs?.length===2&&selectCost?.handler==="selectCards"&&
+    selectCost.params.count===1&&selectCost.params.from?.side==="self"&&selectCost.params.from.zone==="hand"&&
+    moveCost?.handler==="move"&&moveCost.params.selection===selectCost.params.as&&
+    moveCost.params.from?.side==="self"&&moveCost.params.from.zone==="hand"&&
+    moveCost.params.to?.side==="self"&&moveCost.params.to.zone==="waiting";
+  const natsukaTrigger=ability.id==="cx-trigger-damage-or-heal";
+  let singleComboTarget,triggerHeal;
   const iterator=WSEffects.guide(ability,botEffectBoard(p),{
     ...context,sourceUid:card.uid,usedThisTurn:match.bot.uses[key]??0
   },findBotCard);
@@ -575,8 +582,8 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       });
       return;
     }
-    if((simpleReis||firenDuplicate)&&prompt.kind==="cost"||
-       (reisSearch||firenDuplicate)&&prompt.kind==="optional"){
+    if((simpleReis||firenDuplicate||handDiscard)&&prompt.kind==="cost"||
+       (reisSearch||firenDuplicate||handDiscard)&&prompt.kind==="optional"){
       step(prompt.kind==="optional"?true:undefined);
       return;
     }
@@ -616,9 +623,14 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       step(singleComboTarget?[singleComboTarget.uid]:[]);
       return;
     }
-    const simpleSelection=simpleReis||firenDuplicate||firenCombo;
+    if(natsukaTrigger&&prompt.kind==="heal"&&triggerHeal!==undefined){
+      step(triggerHeal);
+      return;
+    }
+    const discardPicker=handDiscard&&!firenDuplicate&&prompt.kind==="select"&&prompt.phase==="costs";
+    const simpleSelection=simpleReis||firenDuplicate||firenCombo||discardPicker;
     const pickImmediately=prompt.kind==="select"&&prompt.max===1&&(prompt.from.zone==="deck"||simpleSelection);
-    const title=simpleReis&&prompt.kind==="select"?(prompt.phase==="costs"?
+    const title=discardPicker?"手札を1枚捨てて「"+ability.category+"」を使う":simpleReis&&prompt.kind==="select"?(prompt.phase==="costs"?
       (reisSearch?"ストック1枚を払い、クロックの下に置くカードを選ぶ":"思い出に置く回想キャラを選ぶ"):
       "山札からレベル1以下のキャラを1枚まで選ぶ"):
       firenDuplicate&&prompt.kind==="select"?(prompt.phase==="costs"?"控え室に置く手札を選ぶ":"登場させるフィレンを選ぶ"):
@@ -629,12 +641,23 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     const add=(label,action)=>deckButton(body,label,()=>{closeResolution();action()});
     const respond=(label,result)=>add(label,()=>step(result));
     if(prompt.kind==="branch"){
-      prompt.labels.forEach((label,index)=>respond(label,index));
+      if(natsukaTrigger){
+        respond(prompt.labels[0],0);
+        const max=Math.min(2,players[p].clock.length);
+        for(let n=1;n<=max;n++)add(n+"枚回復",()=>{triggerHeal=n;step(1)});
+        add("回復しない",()=>{triggerHeal=0;step(1)});
+      }else prompt.labels.forEach((label,index)=>respond(label,index));
     }else if(prompt.kind==="heal"){
       for(let n=0;n<=prompt.max;n++)respond(n===0?"回復しない":n+"枚回復",n);
     }else if(prompt.kind==="optional-top"){
       body.append(document.createTextNode(prompt.label));
-      respond("行う",true);respond("行わない",false);
+      if(ability.id==="on-play-heal"){
+        respond("回復する",true);
+        respond("回復しない",false);
+      }else{
+        respond("行う",true);
+        respond("行わない",false);
+      }
     }else if(prompt.kind==="optional"){
       respond("能力を使う",true);respond("使わない",false);
     }else if(prompt.kind==="select"){
@@ -650,7 +673,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
         const label=((prompt.topOrder||prompt.privateLook)?(candidateIndex+1)+"．":"")+(botCardInfo(actual)?.name??entry.cardNumber);
         const choose=()=>{
           if(pickImmediately){
-            if((simpleReis||firenDuplicate)&&prompt.phase==="costs")abortable=false;
+            if((simpleReis||firenDuplicate||discardPicker)&&prompt.phase==="costs")abortable=false;
             closeResolution();
             step([entry.uid]);
             return;
