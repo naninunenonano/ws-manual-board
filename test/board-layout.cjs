@@ -65,6 +65,10 @@ async function main() {
       for(const p of [0,1])localStorage.setItem("ws-manual-deck-v1-p"+p,JSON.stringify(deck));
     },fixture);
     await page.goto("http://127.0.0.1:"+server.address().port);
+    assert.equal(await page.locator("#startBattle").isVisible(),false);
+    assert.equal(await page.locator("#openBotDeckEditor").isVisible(),true);
+    assert.equal(await page.locator("#onlineControls summary").isVisible(),true);
+    await page.locator("#startBattle").evaluate(button=>{button.parentElement.hidden=false});
     await page.locator("#startBattle").click();
     await page.locator("#confirmMulligan").click();
     await page.locator("#confirmMulligan").click();
@@ -261,7 +265,7 @@ async function checkBotDeckEditor(browser,url){
     }));
     await page.goto(url);
     await page.locator("#openBotDeckEditor").tap();
-    await page.getByRole("heading",{name:"Bot戦デッキ編集"}).waitFor();
+    await page.getByRole("heading",{name:"デッキ作成・Bot戦"}).waitFor();
     const start=page.locator("#startEditedBotBattle");
     await page.getByRole("button",{name:"巡遊者 グレイを1枚減らす",exact:true}).tap();
     assert.equal(await start.isDisabled(),true);
@@ -276,10 +280,15 @@ async function checkBotDeckEditor(browser,url){
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
     await page.reload();
     await page.locator("#openBotDeckEditor").tap();
+    await page.getByRole("textbox",{name:"デッキ名"}).fill("光り物入り");
+    await page.locator("#saveBuiltOnlineDeck").tap();
+    await page.getByRole("button",{name:"Bot",exact:true}).tap();
+    await page.locator("#loadBuilderDeck").selectOption({label:"光り物入り"});
+    await page.locator("#applyBuilderDeck").tap();
     await start.tap();
     await page.locator("#mulliganScreen").waitFor();
     assert.deepEqual(await page.evaluate(()=>match.decks.map(deck=>
-      deck.cards.find(card=>card.id==="STS/W140-038SSP")?.num??0)),[1,0]);
+      deck.cards.find(card=>card.id==="STS/W140-038SSP")?.num??0)),[1,1]);
   } finally {
     await page.close();
   }

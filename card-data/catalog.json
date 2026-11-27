@@ -1242,6 +1242,57 @@
       ]
     },
     {
+      "cardNumber": "STS/W140-022",
+      "variants": [
+        "STS/W140-022",
+        "STS/W140-022S"
+      ],
+      "name": "千の貌を持つ女 オトハ",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "U",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 2,
+        "cost": 1,
+        "power": 2500,
+        "soul": 1
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "巡遊者"
+      ],
+      "keywords": [],
+      "backup": {
+        "power": 2500,
+        "cost": 1
+      },
+      "effects": [
+        {
+          "id": "otoha-backup-soul",
+          "category": "助太刀使用時・ソウル－1",
+          "type": "auto",
+          "timing": "on_backup_used",
+          "sourceText": "このカードの助太刀使用時、1ストックと舞台の《巡遊者》か《魔王》のキャラ1枚を控え室に置いてよい。支払ったら、相手のキャラ1枚を選び、そのターン中ソウルを－1する。",
+          "optional": true,
+          "steps": null
+        },
+        {
+          "id": "otoha-backup",
+          "category": "助太刀2500 レベル2",
+          "type": "act",
+          "timing": "counter_step",
+          "sourceText": "1ストックと手札のこのカードを控え室に置き、フロントアタックされた自分のキャラにそのターン中パワー＋2500。",
+          "optional": true,
+          "steps": null
+        }
+      ]
+    },
+    {
       "cardNumber": "STS/W140-023",
       "variants": ["STS/W140-023", "STS/W140-023S"],
       "name": "ドリンクの誘惑 コゼット",
@@ -2067,6 +2118,69 @@
           "type": "auto",
           "timing": "own_climax_trigger",
           "sourceText": "思い出で自分のCXがトリガーした時、手札のCXを控え室に置くと巡遊者か魔王のキャラ1枚を回収できる。",
+          "optional": true,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-035",
+      "variants": [
+        "STS/W140-035",
+        "STS/W140-035S",
+        "STS/W140-035SP"
+      ],
+      "name": "波に先立つ兎 シア",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "RR",
+      "side": "W",
+      "type": "character",
+      "color": "赤",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "shia-order-top",
+          "category": "登場時・山札の上を確認",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "sourceText": "手札から登場した時、山札の上を2枚まで見て、その中から2枚まで好きな順で山札の上に戻し、残りを控え室に置く。",
+          "optional": false,
+          "steps": [
+            {
+              "handler": "lookAndOrderTop",
+              "params": {
+                "side": "self",
+                "max": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "shia-recover-entry",
+          "category": "登場時・控え室から回収",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "sourceText": "1ストックを払い、手札1枚を控え室に置いてよい。支払ったら、自分の控え室のキャラ1枚を手札に戻す。",
+          "optional": true,
+          "steps": null
+        },
+        {
+          "id": "shia-recover-leave",
+          "category": "舞台から控え室に置かれた時・回収",
+          "type": "auto",
+          "timing": "from_stage_to_waiting",
+          "sourceText": "1ストックを払い、手札1枚を控え室に置いてよい。支払ったら、自分の控え室のキャラ1枚を手札に戻す。",
           "optional": true,
           "steps": null
         }

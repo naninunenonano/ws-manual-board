@@ -136,6 +136,29 @@
     try{localStorage.setItem(selectedKey(side),$("savedDeckSelect").value)}catch(e){message("選択を保存できません")}
     updateSavedStatus();
   };
+  function insertDeck(list,deck){
+    const id="deck-"+Date.now()+"-"+Math.random().toString(36).slice(2,8);
+    list.push({id,deck,...(cloud?{cloud:cloud.newMetadata()}:{})});
+    return id;
+  }
+  function syncSavedDecks(){
+    if(cloud?.online())cloud.synchronize();
+    else if(cloud&&!cloud.busy())$("cloudDeckStatus").textContent="クラウド未接続。変更は端末に保存済みです。「同期・再試行」で接続できます。";
+  }
+  function registeredDecks(){
+    try{return library().map(item=>({id:item.id,title:item.deck.title,deck:normalize(item.deck)}))}
+    catch{return []}
+  }
+  connectDeckBuilder(registeredDecks,input=>{
+    const deck=normalize(input);
+    if(!cxReady(deck))throw Error("CXを8枚に確定してください");
+    const list=readLibrary();
+    const id=insertDeck(list,{title:deck.title,list:deck.cards.map(c=>({card_number:c.id,num:c.num,cx:c.cx}))});
+    try{writeLibrary(list)}catch{throw Error("端末にデッキを保存できません。保存容量を確認してください。")}
+    updateSavedStatus();
+    syncSavedDecks();
+    return id;
+  });
   function apply(deck){
     if(!cxReady(deck)){message("CXを8枚に確定してください");return}
     if(!isDeckSetup())return;
@@ -153,8 +176,7 @@
         const meta=editing.cloud;
         list[index]={...editing,deck:data,...(meta?{cloud:{...meta,dirty:meta.revision?"update":"insert"}}:{})};
       }else{
-        const id="deck-"+Date.now()+"-"+Math.random().toString(36).slice(2,8);
-        list.push({id,deck:data,...(cloud?{cloud:cloud.newMetadata()}:{})});
+        insertDeck(list,data);
       }
       writeLibrary(list);
     }catch(e){message("端末にデッキを保存できません。保存容量または登録データを確認してください");return}
@@ -164,8 +186,7 @@
     setEditing();
     updateSavedStatus();
     message("「"+title+"」を端末に保存しました");
-    if(cloud?.online())cloud.synchronize();
-    else if(cloud && !cloud.busy())$("cloudDeckStatus").textContent="クラウド未接続。変更は端末に保存済みです。「同期・再試行」で接続できます。";
+    syncSavedDecks();
   }
   $("editSavedDeck").onclick=async()=>{
     if(!isDeckSetup())return;
@@ -354,10 +375,7 @@
   if(cloud && typeof initializeOnlineMatch==="function"){
     onlineMatch=initializeOnlineMatch({
       authenticate:cloud.authenticate,
-      getDecks:()=>{
-        try{return library().map(item=>({id:item.id,title:item.deck.title,deck:normalize(item.deck)}))}
-        catch{return []}
-      }
+      getDecks:registeredDecks
     });
   }
   cloud?.synchronize();

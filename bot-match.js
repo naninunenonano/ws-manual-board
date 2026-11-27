@@ -372,7 +372,7 @@ function botTriggeredActions(p,card,timing,context={}){
     &&(!item.conditions?.length||WSEffects.triggerConditionsMet(item,botEffectBoard(p),
       {...context,sourceUid:card.uid},findBotCard)))??[];
   return effects.map(effect=>({label:stellaName(card)+"・"+(effect.category??effect.id),run:resume=>{
-    if(Object.hasOwn(stellaActions,effect.id))stellaActions[effect.id](p,card,resume);
+    if(Object.hasOwn(stellaActions,effect.id))stellaActions[effect.id](p,card,resume,context);
     else if(effect.reorderTop)autoRuleReorderTop(p,resume);
     else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
     else if(effect.traitLoot)autoRuleTraitLoot(p,card,effect,resume);

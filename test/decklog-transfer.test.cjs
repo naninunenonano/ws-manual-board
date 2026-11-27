@@ -2663,3 +2663,135 @@ test("ステラソラBot戦は集中0ヒットとキャンセルされたダメ�
   ruleButton(page,"確認して進む");
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
+
+test("オンライン用の新規作成はBotデッキと独立し、50枚とCX8枚を満たすデッキを登録する",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.click("openOnlineDeckBuilder");
+  assert.equal(page.get("startEditedBotBattle").hidden,true);
+  assert.match(page.get("botDeckTotals").textContent,/^0\/50枚/);
+  page.get("builtOnlineDeckName").value="オンライン検証";
+  page.get("builtOnlineDeckName").oninput();
+  assert.equal(page.get("saveBuiltOnlineDeck").disabled,true);
+  page.get("botDeckPreset").value="trial";
+  page.click("applyBotDeckPreset");
+  assert.equal(page.get("saveBuiltOnlineDeck").disabled,false);
+  page.click("saveBuiltOnlineDeck");
+  const [saved]=JSON.parse(page.storage.get(libraryKey));
+  assert.equal(saved.deck.title,"オンライン検証");
+  assert.equal(saved.deck.list.reduce((sum,card)=>sum+card.num,0),50);
+  assert.equal(saved.deck.list.filter(card=>card.cx).reduce((sum,card)=>sum+card.num,0),8);
+  assert.equal(saved.deck.list.find(card=>card.card_number==="STS/W140-038").num,1);
+  assert.equal(page.get("botDeckEditorScreen").hidden,true);
+  await page.click("openBotDeckEditor");
+  assert.equal(page.get("startEditedBotBattle").hidden,false);
+  assert.match(page.get("botDeckTotals").textContent,/Bot 50\/50枚/);
+  const kohaku=page.get("botDeckCardRows").children.find(row=>row.children[0].textContent==="銃弾のロンド コハク");
+  assert.equal(kohaku.children[1].children[1].textContent,"0");
+});
+
+test("共通のデッキ作成画面で大会を参考にした構成を保存し、Bot側に読み込んで対戦できる",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.click("openBotDeckEditor");
+  page.click("editNewDeck");
+  page.get("botDeckPreset").value="sendai";
+  page.get("botDeckPreset").onchange();
+  assert.equal(page.get("botDeckPresetLink").href,"https://ws-tcg.com/deckrecipe/5856/");
+  page.click("applyBotDeckPreset");
+  assert.match(page.get("botDeckTotals").textContent,/^50\/50枚（CX 8\/8枚）/);
+  page.get("builtOnlineDeckName").value="仙台トリオ3位";
+  page.get("builtOnlineDeckName").oninput();
+  assert.equal(page.get("saveBuiltOnlineDeck").disabled,false);
+  page.click("saveBuiltOnlineDeck");
+  const [saved]=JSON.parse(page.storage.get(libraryKey));
+  assert.equal(saved.deck.title,"仙台トリオ3位");
+  assert.equal(page.get("botDeckEditorScreen").hidden,false);
+  page.click("editOpponentBotDeck");
+  page.get("loadBuilderDeck").value=saved.id;
+  page.get("loadBuilderDeck").onchange();
+  page.click("applyBuilderDeck");
+  page.click("startEditedBotBattle");
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+  assert.equal(page.run('match.decks[0].cards.find(c=>c.id==="STS/W140-003").num'),2);
+  assert.equal(page.run('match.decks[1].cards.find(c=>c.id==="STS/W140-003").num'),3);
+  assert.deepEqual(JSON.parse(page.run('JSON.stringify(match.decks[1].cards.map(({id,num})=>[id.slice(9),num]).sort())')),[
+    ["001",4],["002",4],["003",3],["004",4],["008",4],["019",1],["022",1],["023",1],["024",4],
+    ["025",2],["030",3],["031",4],["032",4],["035",2],["071",4],["076",1],["T03",4]
+  ]);
+});
+
+test("シアは登場時に見たカードを控え室へ置いてから回収でき、舞台から控え室へ移動した時にも誘発する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    own.hand.push(card("035SP","shia"),card("008","discard"),card("001","discard2"));
+    own.stock.push(card("032","stock1",true),card("032","stock2",true));
+    own.deck.push(card("004","reserve"),card("032","keep",true),card("023","recover"));
+    autoRulePlace(0,"shia","front0");
+  `);
+  ruleButton(page,"1．波に先立つ兎 シア・登場時・山札の上を確認");
+  ruleButton(page,"1枚見る");
+  ruleButton(page,"次の1枚を見る");
+  ruleButton(page,"2．夢の先へ");
+  ruleButton(page,"選択を確定");
+  assert.equal(page.run("own.deck.at(-1).uid"),"keep");
+  ruleButton(page,"1．魂の取引 魔王ちゃん");
+  ruleButton(page,"1．ドリンクの誘惑 コゼット");
+  assert.equal(page.run("own.stock.length"),1);
+  assert.equal(page.run("own.hand.at(-1).uid"),"recover");
+  page.run('runRuleOperation(done=>{botMove(own,"front0",0,"waiting");done()})');
+  ruleButton(page,"1．黎明の刻 レイス");
+  const shia=page.get("dialogBody").children.find(el=>el.textContent.endsWith("波に先立つ兎 シア"));
+  assert.ok(shia);
+  shia.onclick();
+  assert.equal(page.run("own.stock.length"),0);
+  assert.equal(page.run("own.hand.at(-1).uid"),"shia");
+});
+
+test("オトハの助太刀でパワーを上げ、追加コストで選んだ攻撃キャラの今回のダメージを減らす",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    own.level.push(card("001","level1"),card("035","level2"));
+    own.hand.push(card("022S","backup"));
+    own.front0.push(card("013","defender"));
+    own.back0.push(card("025","cost"));
+    own.stock.push(card("032","stock1",true),card("032","stock2",true));
+    own.deck.push(card("004","damage"),card("004","keep"));
+    opponent.front2.push(card("013","attacker"));
+    opponent.back0.push(card("008","protected"));
+    opponent.deck.push(card("025","reserve"),card("025","trigger"));
+    match.turn.player=1;
+    setTurnPhase("attack");
+    autoRuleAttack(1,"front2","attacker","front");
+  `);
+  ruleButton(page,"千の貌を持つ女 オトハを使う");
+  assert.equal(page.run('botStats(0,own.front0[0]).power'),11000);
+  assert.equal(page.run("own.stock.length"),1);
+  ruleButton(page,"2．巡遊者 レイス");
+  assert.equal(page.get("dialogBody").children.some(el=>el.textContent.includes("魔王ちゃん")),false);
+  ruleButton(page,"1．ムーンシャドウ コゼット");
+  assert.equal(page.run("own.stock.length"),0);
+  assert.equal(page.run('own.waiting.some(c=>c.uid==="cost")'),true);
+  assert.equal(page.run('botStats(1,opponent.front2[0]).soul'),0);
+  assert.equal(page.run("own.clock.length"),0);
+  assert.equal(page.get("dialog").open,false);
+});
+
+test("Botはオトハの助太刀と追加効果を使い、コストで控え室に置かれたシアの能力も解決する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    own.front0.push(card("013","attacker"));
+    opponent.level.push(card("001","level1"),card("035","level2"));
+    opponent.hand.push(card("022","backup"),card("030","discard"));
+    opponent.front2.push(card("023","defender"));
+    opponent.back0.push(card("035","shia"));
+    opponent.stock.push(card("032","stock1",true),card("032","stock2",true),card("032","stock3",true));
+    opponent.waiting.push(card("004","recover"));
+    opponent.deck.push(card("001","reserve"));
+    runRuleOperation(done=>autoRuleCounter(1,own.front0[0],opponent.front2[0],done));
+  `);
+  assert.equal(page.run("opponent.stock.length"),0);
+  assert.equal(page.run("opponent.back0.length"),0);
+  assert.equal(page.run("opponent.hand.at(-1).uid"),"recover");
+  assert.equal(page.run('botStats(1,opponent.front2[0]).power'),8000);
+  assert.equal(page.run('botStats(0,own.front0[0]).soul'),0);
+  assert.equal(Boolean(page.get("dialog").open),false);
+});

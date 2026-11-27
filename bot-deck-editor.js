@@ -2,14 +2,43 @@
 
 let botDeckEditorOpen=false;
 
-(()=>{
+const connectDeckBuilder=(()=>{
   const get=id=>document.getElementById(id);
   const key="ws-stella-bot-decks-v1";
-  const presets={daqbe:stellaDeck,trial:stellaTrialDeck};
-  const tabs=[get("editOwnBotDeck"),get("editOpponentBotDeck")];
+  const sendaiDeck={
+    cards:[
+      ["004",4],["003",3],["076",1],["024",4],["023",1],["022",1],["002",4],
+      ["019",1],["008",4],["001",4],["T03",4],["025",2],["035",2],["071",4],
+      ["030",3],["031",4],["032",4]
+    ].map(([number,num])=>({id:"STS/W140-"+number,num}))
+  };
+  const presets={
+    daqbe:{deck:stellaDeck,url:"https://ws-tcg.com/deckrecipe/5855/"},
+    sendai:{deck:sendaiDeck,url:"https://ws-tcg.com/deckrecipe/5856/"},
+    trial:{deck:stellaTrialDeck},
+    empty:{deck:{cards:[]}}
+  };
+  const tabs=[get("editOwnBotDeck"),get("editOpponentBotDeck"),get("editNewDeck")];
   const list=get("botDeckCardRows"), totals=get("botDeckTotals"), notice=get("botDeckEditorNotice");
   const start=get("startEditedBotBattle"), apply=get("applyBotDeckPreset");
-  let counts, cards=[], editing=0;
+  const save=get("saveBuiltOnlineDeck"), deckName=get("builtOnlineDeckName");
+  const presetSelect=get("botDeckPreset"), savedSelect=get("loadBuilderDeck");
+  const load=get("applyBuilderDeck");
+  let counts,cards=[],editing=0,openedFromOnline=false,newDraft={},readSavedDecks;
+  const newDeck=()=>editing===2;
+  const currentDeck=()=>newDeck()?newDraft:counts[editing];
+  function setCurrentDeck(deck){
+    if(newDeck())newDraft=deck;
+    else{
+      counts[editing]=deck;
+      saveCounts();
+    }
+  }
+  function refreshPresetSource(){
+    const preset=presets[presetSelect.value];
+    get("botDeckPresetSource").hidden=!preset?.url;
+    if(preset?.url)get("botDeckPresetLink").href=preset.url;
+  }
   const rowUpdates=[];
   const variants=card=>CardCatalog.cardNumbers(card);
   const totalCopies=(deck,ids)=>ids.reduce((sum,id)=>sum+(deck[id]??0),0);
@@ -41,22 +70,29 @@ let botDeckEditorOpen=false;
       notice.textContent="端末に保存できません。この画面では編集を続けられます。";
     }
   }
-  function buildDeck(p){
+  function buildDeck(countsForDeck,title){
     return {
-      title:p===0?"自分のステラソラ":"Botのステラソラ",
+      title,
       cards:cards.flatMap(card=>variants(card).flatMap(id=>{
-        const num=counts[p][id];
+        const num=countsForDeck[id];
         return num?[{id,num,cx:card.type==="climax"}]:[];
       }))
     };
   }
-  function refreshCounts(){
-    const summaries=[0,1].map(p=>buildDeck(p).cards.reduce((sum,card)=>({
+  function summarize(deck){
+    return buildDeck(deck).cards.reduce((sum,card)=>({
       total:sum.total+card.num,cx:sum.cx+(card.cx?card.num:0)
-    }),{total:0,cx:0}));
-    totals.textContent=summaries.map(({total,cx},p)=>
-      (p===0?"自分":"Bot")+" "+total+"/50枚（CX "+cx+"/8枚）").join(" ／ ");
-    start.disabled=!summaries.every(({total,cx})=>total===50&&cx===8);
+    }),{total:0,cx:0});
+  }
+  const complete=({total,cx})=>total===50&&cx===8;
+  const describe=({total,cx})=>total+"/50枚（CX "+cx+"/8枚）";
+  function refreshCounts(){
+    const summaries=counts.map(summarize);
+    totals.textContent=newDeck()?describe(summarize(newDraft)):
+      summaries.map((summary,p)=>(p===0?"自分":"Bot")+" "+describe(summary)).join(" ／ ");
+    save.disabled=!deckName.value.trim()||!complete(summarize(currentDeck()));
+    start.disabled=!summaries.every(complete);
+    start.hidden=newDeck();
     tabs.forEach((tab,p)=>tab.setAttribute("aria-pressed",String(p===editing)));
     rowUpdates.forEach(update=>update());
   }
@@ -65,7 +101,7 @@ let botDeckEditorOpen=false;
     rowUpdates.length=0;
     for(const card of cards){
       const ids=variants(card),row=document.createElement("li");
-      let selectedId=ids.find(id=>counts[editing][id])??card.cardNumber;
+      let selectedId=ids.find(id=>currentDeck()[id])??card.cardNumber;
       let previewId;
       row.className="bot-deck-card-row";
       const label=document.createElement("div");
@@ -101,17 +137,17 @@ let botDeckEditorOpen=false;
       minus.textContent="−";
       plus.textContent="＋";
       function change(delta){
-        const deck=counts[editing],num=(deck[selectedId]??0)+delta;
+        const deck=currentDeck(),num=(deck[selectedId]??0)+delta;
         if(num<0||(delta>0&&totalCopies(deck,ids)>=4))return;
         if(num)deck[selectedId]=num;
         else delete deck[selectedId];
-        saveCounts();
+        if(!newDeck())saveCounts();
         refreshCounts();
       }
       minus.onclick=()=>change(-1);
       plus.onclick=()=>change(1);
       function updateRow(){
-        const deck=counts[editing],num=deck[selectedId]??0;
+        const deck=currentDeck(),num=deck[selectedId]??0;
         const edition=selectedId===card.cardNumber?"":"（"+editionNames[ids.indexOf(selectedId)]+"）";
         if(previewId!==selectedId){
           previewId=selectedId;
@@ -134,51 +170,124 @@ let botDeckEditorOpen=false;
     }
   }
 
-  get("openBotDeckEditor").onclick=async()=>{
-    if(!isDeckSetup())return;
-    botDeckEditorOpen=true;
-    showMatchScreen();
-    if(counts)return;
-    notice.textContent="カードデータを読み込んでいます";
-    apply.disabled=true;
-    await botCatalogReady;
-    if(!botCatalog){
-      notice.textContent="カードデータを読み込めませんでした。ページを再読み込みしてください。";
-      return;
+  function supportedDecks(){
+    const cardNumbers=new Set(cards.flatMap(variants));
+    return readSavedDecks().filter(({deck})=>{
+      if(!deck.cards.every(({id})=>cardNumbers.has(id)))return false;
+      const deckCounts=fromPreset(deck);
+      return complete(summarize(deckCounts))&&cards.every(card=>totalCopies(deckCounts,variants(card))<=4);
+    });
+  }
+  function refreshSavedDecks(){
+    const selected=savedSelect.value;
+    const options=supportedDecks();
+    savedSelect.replaceChildren();
+    const empty=document.createElement("option");
+    empty.value="";
+    empty.textContent=options.length?"デッキを選択":"対応する保存済みデッキなし";
+    savedSelect.append(empty);
+    for(const {id,deck} of options){
+      const option=document.createElement("option");
+      option.value=id;
+      option.textContent=deck.title;
+      savedSelect.append(option);
     }
-    if(counts)return;
-    cards=botCatalog.cards.filter(card=>card.cardNumber.startsWith("STS/")).sort((a,b)=>
-      Number(a.type==="climax")-Number(b.type==="climax")||a.cardNumber.localeCompare(b.cardNumber));
-    counts=loadCounts();
+    savedSelect.value=options.some(({id})=>id===selected)?selected:"";
+    load.disabled=!savedSelect.value;
+  }
+  function selectTab(index){
+    editing=index;
+    if(!counts)return;
+    notice.textContent="";
+    deckName.value="";
     renderRows();
     refreshCounts();
-    notice.textContent="";
+  }
+  async function openEditor(forOnline){
+    if(!isDeckSetup())return;
+    openedFromOnline=forOnline;
+    botDeckEditorOpen=true;
+    selectTab(forOnline?2:0);
+    showMatchScreen();
+    if(!counts){
+      notice.textContent="カードデータを読み込んでいます";
+      apply.disabled=true;
+      save.disabled=true;
+      await botCatalogReady;
+      if(!botDeckEditorOpen)return;
+      if(!botCatalog){
+        notice.textContent="カードデータを読み込めませんでした。ページを再読み込みしてください。";
+        return;
+      }
+      if(!counts){
+        cards=botCatalog.cards.filter(card=>card.cardNumber.startsWith("STS/")).sort((a,b)=>
+          Number(a.type==="climax")-Number(b.type==="climax")||a.cardNumber.localeCompare(b.cardNumber));
+        counts=loadCounts();
+      }
+      selectTab(editing);
+    }
+    refreshSavedDecks();
+    refreshPresetSource();
     apply.disabled=false;
-  };
-  get("closeBotDeckEditor").onclick=()=>{
+  }
+  function closeEditor(){
     botDeckEditorOpen=false;
     showMatchScreen();
+  }
+  get("openBotDeckEditor").onclick=()=>openEditor(false);
+  get("openOnlineDeckBuilder").onclick=()=>openEditor(true);
+  get("closeBotDeckEditor").onclick=closeEditor;
+  deckName.oninput=()=>{if(counts)refreshCounts()};
+  tabs.forEach((tab,p)=>{tab.onclick=()=>selectTab(p)});
+  savedSelect.onchange=()=>{load.disabled=!savedSelect.value};
+  load.onclick=()=>{
+    const saved=supportedDecks().find(({id})=>id===savedSelect.value);
+    if(!saved){refreshSavedDecks();return}
+    setCurrentDeck(fromPreset(saved.deck));
+    deckName.value=saved.deck.title;
+    renderRows();
+    refreshCounts();
   };
-  tabs.forEach((tab,p)=>{
-    tab.onclick=()=>{
-      editing=p;
-      if(counts)refreshCounts();
-    };
-  });
+  presetSelect.onchange=refreshPresetSource;
   apply.onclick=()=>{
-    const preset=presets[get("botDeckPreset").value];
+    const preset=presets[presetSelect.value];
     if(!counts||!preset)return;
-    counts[editing]=fromPreset(preset);
-    saveCounts();
+    setCurrentDeck(fromPreset(preset.deck));
+    renderRows();
     refreshCounts();
   };
   start.onclick=()=>{
-    if(start.disabled||!counts)return;
+    if(start.disabled||!counts||newDeck())return;
     if(onlineMatch?.active()){
       notice.textContent="オンラインルームを退出してから開始してください";
       return;
     }
-    startBotMatch(buildDeck(0),stellaCustomScenario,buildDeck(1));
+    startBotMatch(buildDeck(counts[0],"自分のステラソラ"),stellaCustomScenario,buildDeck(counts[1],"Botのステラソラ"));
     if(isDeckSetup())notice.textContent="対戦を開始できません。端末の保存設定を確認してください。";
+  };
+  return (getDecks,storeDeck)=>{
+    readSavedDecks=getDecks;
+    save.onclick=()=>{
+      if(!botDeckEditorOpen||!counts||save.disabled)return;
+      try{
+        const title=deckName.value.trim();
+        if(!title||!complete(summarize(currentDeck())))return;
+        const id=storeDeck(buildDeck(currentDeck(),title));
+        if(openedFromOnline&&newDeck()){
+          newDraft={};
+          deckName.value="";
+          closeEditor();
+          get("onlineControls").open=true;
+          onlineMatch?.refreshDecks();
+          get("onlineDeck").value=id;
+          get("onlineStatus").textContent="「"+title+"」を保存しました。ルームでこのデッキを選べます。";
+        }else{
+          refreshSavedDecks();
+          notice.textContent="「"+title+"」を共通のデッキ一覧に保存しました。";
+        }
+      }catch(error){
+        notice.textContent=error.message;
+      }
+    };
   };
 })();
