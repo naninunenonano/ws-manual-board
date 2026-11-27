@@ -9,9 +9,14 @@ function officialImageUrl(id){
 }
 
 function effectChoiceImageUrl(id){
-  const match=String(id).match(/^STS\/W140-(T?\d{2,3})(?:[A-Z]+)?$/i);
+  const match=String(id).match(/^STS\/W140-(T?\d{2,3}[A-Z]*)$/i);
   if(!match)return officialImageUrl(id);
   return "https://heartofthecards.com/heartofthecards/images/cards/ws/sts-w140-"+match[1].toLowerCase()+".png";
+}
+
+function effectChoiceFallbackUrl(id){
+  const match=String(id).match(/^(STS\/W140-T?\d{2,3})[A-Z]+$/i);
+  return match?effectChoiceImageUrl(match[1]):null;
 }
 
 if (typeof module === "object") module.exports = {officialImageUrl,effectChoiceImageUrl};

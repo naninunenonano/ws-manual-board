@@ -291,8 +291,8 @@ function botResolveRecall(p,entrant,done){
     done();
   }
   if(p===1){attach(choices[0]);return}
-  const body=showResolution("回想・登場したキャラの下に置く",[current,...choices]);
-  choices.forEach((card,index)=>deckButton(body,"思い出の"+(index+1)+"枚目をマーカーにする",()=>{
+  const body=showResolution("回想・登場したキャラの下に置く",[current]);
+  choices.forEach((card,index)=>effectCardButton(body,card,"思い出の"+(index+1)+"枚目をマーカーにする",()=>{
     closeResolution();attach(card);
   }));
   deckButton(body,"マーカーにしない",()=>{closeResolution();done()});
@@ -412,8 +412,8 @@ function botResolveWind(p,done){
     done();
   }
   if(p===1){bounce(targets[0]);return}
-  const body=showResolution("風・相手のキャラを手札に戻す",targets.map(({card})=>card));
-  for(const target of targets)deckButton(body,labels[target.slot]+"の"+(botCardInfo(target.card)?.name??target.card.id),()=>{
+  const body=showResolution("風・相手のキャラを手札に戻す",[]);
+  for(const target of targets)effectCardButton(body,target.card,labels[target.slot]+"の"+(botCardInfo(target.card)?.name??target.card.id),()=>{
     closeResolution();bounce(target);
   });
   deckButton(body,"戻さない",()=>{closeResolution();done()});
@@ -617,15 +617,14 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       return;
     }
     const simpleSelection=simpleReis||firenDuplicate||firenCombo;
-    const cardChoices=prompt.kind==="select"&&(prompt.from.zone==="deck"||simpleSelection);
+    const pickImmediately=prompt.kind==="select"&&prompt.max===1&&(prompt.from.zone==="deck"||simpleSelection);
     const title=simpleReis&&prompt.kind==="select"?(prompt.phase==="costs"?
       (reisSearch?"ストック1枚を払い、クロックの下に置くカードを選ぶ":"思い出に置く回想キャラを選ぶ"):
       "山札からレベル1以下のキャラを1枚まで選ぶ"):
       firenDuplicate&&prompt.kind==="select"?(prompt.phase==="costs"?"控え室に置く手札を選ぶ":"登場させるフィレンを選ぶ"):
       firenCombo?(prompt.kind==="destination"?"選んだキャラをどこに置く？":"控え室からキャラを1枚まで選ぶ"):
       ability.category??"カード効果";
-    const visibleCards=!cardChoices&&prompt.kind==="select"&&prompt.committedState?prompt.candidates:
-      prompt.kind==="reveal"?prompt.cards:singleComboTarget?[singleComboTarget]:[];
+    const visibleCards=prompt.kind==="reveal"?prompt.cards:singleComboTarget?[singleComboTarget]:[];
     const body=showResolution(title,prompt.kind==="treasure"?[card]:visibleCards.map(c=>({id:c.cardNumber})));
     const add=(label,action)=>deckButton(body,label,()=>{closeResolution();action()});
     const respond=(label,result)=>add(label,()=>step(result));
@@ -639,7 +638,6 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     }else if(prompt.kind==="optional"){
       respond("能力を使う",true);respond("使わない",false);
     }else if(prompt.kind==="select"){
-      const immediate=cardChoices&&prompt.max===1;
       if(!simpleSelection){
         const hint=document.createElement("p");
         hint.textContent=prompt.text??prompt.label+"から選んでください";
@@ -651,7 +649,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
         const actual={id:entry.cardNumber};
         const label=((prompt.topOrder||prompt.privateLook)?(candidateIndex+1)+"．":"")+(botCardInfo(actual)?.name??entry.cardNumber);
         const choose=()=>{
-          if(immediate){
+          if(pickImmediately){
             if((simpleReis||firenDuplicate)&&prompt.phase==="costs")abortable=false;
             closeResolution();
             step([entry.uid]);
@@ -664,17 +662,19 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
             const ordered=[...picks];
             for(const [uid,button,label] of orderButtons){
               const index=ordered.indexOf(uid);
-              (button.firstChild??button).textContent=index<0?label:(index+1)+"番目に戻す ／ "+label;
+              const orderedLabel=index<0?label:(index+1)+"番目に戻す ／ "+label;
+              (button.firstChild??button).textContent=orderedLabel;
+              button.setAttribute("aria-label",orderedLabel);
             }
           }
           b.style.outline=picks.has(entry.uid)?"2px solid #f4cf73":"";
           confirm.disabled=picks.size<prompt.min;
         };
-        const b=cardChoices?effectCardButton(body,actual,label,choose):deckButton(body,label,choose);
-        if(!immediate)b.setAttribute("aria-pressed","false");
+        const b=effectCardButton(body,actual,label,choose);
+        if(!pickImmediately)b.setAttribute("aria-pressed","false");
         if(prompt.topOrder)orderButtons.push([entry.uid,b,label]);
       }
-      if(!immediate){confirm=add("選択を確定",()=>step([...picks]));confirm.disabled=prompt.min>0}
+      if(!pickImmediately){confirm=add("選択を確定",()=>step([...picks]));confirm.disabled=prompt.min>0}
       if(prompt.min===0)respond("選ばず進む",[]);
     }else if(prompt.kind==="destination"){
       for(const destination of prompt.destinations)respond(labels[destination.zone]+"へ",destination);
@@ -782,6 +782,12 @@ for(const kind of Object.keys(botRevealTitles)){
   }
 }
 
+function showBotRevealResult(title,cards,done){
+  if(!cards.length){done();return}
+  const body=showResolution(title,cards,effectChoiceImageUrl);
+  deckButton(body,"確認して進む",()=>{closeResolution();done()});
+}
+
 function botDamage(target,amount,done){
   const board=players[target],revealed=[];
   function finish(cancel){
@@ -789,20 +795,21 @@ function botDamage(target,amount,done){
     const damage={cards:revealed.map(card=>card.uid),cancelled:cancel};
     const result=cancel?"CXでダメージをキャンセル":"ダメージ "+revealed.length+"枚";
     rememberBotReveal("Damage",target,revealed,cancel?result+"・"+revealed.length+"枚公開":result);
-    if(isAutoRules()){
-      autoRuleLog(result+(revealed.length?"（"+revealed.map(c=>botCardInfo(c).name).join("、")+"）":""));
-      revealed.forEach(card=>{card.faceUp=true;board[destination].push(card)});
+    function apply(){
+      for(const card of revealed){card.faceUp=true;board[destination].push(card)}
       resolveBoardRules(target,()=>done(damage));
+    }
+    if(isAutoRules()){
+      autoRuleLog(result+(revealed.length?"（"+revealed.map(stellaName).join("、")+"）":""));
+      if(isDeckMirror(match.bot.scenario)){
+        showBotRevealResult((target===0?"自分":"Bot")+"の"+result,revealed,apply);
+      }else apply();
       return;
     }
     botMessage(result);
-    if(!revealed.length){resolveBoardRules(target,()=>done(damage));return}
-    const body=showResolution(result,revealed);
-    deckButton(body,cancel?"控え室へ":"クロックへ",()=>{
-      closeResolution();
-      for(const card of revealed){card.faceUp=true;board[destination].push(card)}
-      resolveBoardRules(target,()=>done(damage));
-    });
+    if(!revealed.length){apply();return}
+    const body=showResolution(result,revealed,effectChoiceImageUrl);
+    deckButton(body,cancel?"控え室へ":"クロックへ",()=>{closeResolution();apply()});
   }
   function next(){
     if(revealed.length===amount){finish(false);return}
@@ -1004,8 +1011,8 @@ function botReplaceWithNatsuka(p,source,done){
     botMove(board,slot,board[slot].findIndex(card=>card.uid===source.uid),"waiting");
     const candidates=board.hand.filter(card=>sameBotCardNumber(card.id,"STS/W140-004"));
     if(!candidates.length){done();return}
-    const choice=showResolution("同じ枠に爽風の才媛 ナツカを出す？",candidates);
-    for(const [index,candidate] of candidates.entries())deckButton(choice,candidates.length===1?"同じ枠に出す":(index+1)+"枚目を出す",()=>{
+    const choice=showResolution("同じ枠に爽風の才媛 ナツカを出す？",[]);
+    for(const [index,candidate] of candidates.entries())effectCardButton(choice,candidate,candidates.length===1?"同じ枠に出す":(index+1)+"枚目を出す",()=>{
       closeResolution();
       const entrant=botMove(board,"hand",board.hand.findIndex(card=>card.uid===candidate.uid),slot);
       autoRuleAddTurnStat(entrant,"power",2000);

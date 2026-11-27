@@ -281,7 +281,7 @@ button.zone-fan-card[data-clock-index] {
   gap: 6px;
   align-items: start;
 }
-#dialogBody:has(> .effect-card-choice) > :is(p, ol) { flex-basis: 100%; }
+#dialogBody:has(> .effect-card-choice) > :is(p, ol, details) { flex-basis: 100%; }
 #dialogBody .effect-card-choice {
   display: flex;
   flex-direction: column-reverse;
@@ -292,7 +292,7 @@ button.zone-fan-card[data-clock-index] {
   overflow-wrap: anywhere;
   font-size: 12px;
 }
-#dialogBody .effect-card-choice img {
+#dialogBody .effect-card-choice :is(img, .practice-card-face) {
   width: 100%;
   aspect-ratio: 0.71;
   object-fit: contain;
@@ -310,14 +310,27 @@ button.zone-fan-card[data-clock-index] {
 #botDeckCardRows { list-style: none; padding: 0; margin: 8px 0; }
 .bot-deck-card-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: clamp(52px, 18vw, 80px) minmax(0, 1fr) auto;
+  grid-template-areas: "preview info count";
   align-items: center;
   gap: 8px;
   padding: 8px 0;
   border-bottom: 1px solid #354563;
 }
+.bot-deck-card-info { grid-area: info; overflow-wrap: anywhere; }
+.bot-deck-card-preview {
+  grid-area: preview;
+  width: 100%;
+  aspect-ratio: 0.71;
+  display: grid;
+  place-items: center;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+}
+.bot-deck-card-preview img { width: 100%; height: 100%; object-fit: contain; }
 .bot-deck-card-row small { display: block; color: #b7c5db; }
 .bot-deck-count {
+  grid-area: count;
   display: grid;
   grid-template-columns: 44px 2ch 44px;
   align-items: center;
@@ -329,3 +342,4 @@ button.zone-fan-card[data-clock-index] {
   background: #3a547c;
   border-color: #f4cf73;
 }
+.bot-deck-edition { display: block; max-width: 100%; margin-top: 4px; }
