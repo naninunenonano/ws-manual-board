@@ -59,6 +59,9 @@ async function main() {
     await desktop.close();
     const page = await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
     await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
+    await page.route("https://www.c-labo-online.jp/data/c-labo/product/wssfns108t_*.jpg",route=>route.fulfill({
+      contentType:"image/svg+xml",body:'<svg xmlns="http://www.w3.org/2000/svg" width="459" height="640"><rect width="459" height="640" fill="#456"/></svg>'
+    }));
     const errors = [];
     page.on("pageerror",error=>errors.push(error.message));
     await page.addInitScript(deck=>{
@@ -93,7 +96,7 @@ async function main() {
         for(const z of destinations) {
           const cards = players[p];
           if (z === "cx" || (z === "level" && cards.level.length === 0)) {
-            const index = cards.deck.findIndex(card => /-(T09|022)$/.test(card.id));
+            const index = cards.deck.findIndex(card => card.id.endsWith(z==="level"?"-T09":"-022"));
             if (index !== -1) cards.deck.push(...cards.deck.splice(index,1));
           }
           takeTop(p,"deck","hand");
@@ -186,9 +189,14 @@ async function main() {
     assert.equal(await front.getAttribute("data-orientation"),"90");
     assert.equal(await back.getAttribute("data-orientation"),"180");
     await loadBoardImages();
-    const climax = lowerMat.locator('[data-z="level"] img.landscape-card').first();
+    const climax = lowerMat.locator('[data-z="level"] img.rotated-cx-scan').first();
     await climax.waitFor();
-    await assertAngle(climax,180);
+    await assertAngle(climax,90);
+    await page.evaluate(()=>showCardDetail(players[0].level.find(card=>card.id.endsWith("-T09"))));
+    const zoom = page.locator("#dialog .card-zoom-image.rotated-cx-scan img");
+    await zoom.waitFor();
+    await assertAngle(zoom,-90);
+    await page.locator("#close").click();
     await page.screenshot({path:"layout-screenshots/rotated.png",fullPage:true});
     await front.dblclick();
     await page.getByRole("button",{name:"縦向き",exact:true}).click();
