@@ -16,6 +16,7 @@ const connectDeckBuilder=(()=>{
     daqbe:{deck:stellaDeck,url:"https://ws-tcg.com/deckrecipe/5855/"},
     sendai:{deck:sendaiDeck,url:"https://ws-tcg.com/deckrecipe/5856/"},
     trial:{deck:stellaTrialDeck},
+    frieren:{deck:frierenDeck,url:"https://ws-tcg.com/deckrecipe/5856/"},
     empty:{deck:{cards:[]}}
   };
   const tabs=[get("editOwnBotDeck"),get("editOpponentBotDeck"),get("editNewDeck")];
@@ -23,7 +24,7 @@ const connectDeckBuilder=(()=>{
   const start=get("startEditedBotBattle"), apply=get("applyBotDeckPreset");
   const save=get("saveBuiltOnlineDeck"), deckName=get("builtOnlineDeckName");
   const presetSelect=get("botDeckPreset"), savedSelect=get("loadBuilderDeck");
-  const load=get("applyBuilderDeck");
+  const load=get("applyBuilderDeck"), titleFilter=get("builderTitleFilter");
   let counts,cards=[],editing=0,openedFromOnline=false,newDraft={},readSavedDecks;
   const newDeck=()=>editing===2;
   const currentDeck=()=>newDeck()?newDraft:counts[editing];
@@ -70,6 +71,11 @@ const connectDeckBuilder=(()=>{
       notice.textContent="端末に保存できません。この画面では編集を続けられます。";
     }
   }
+  const groups=deck=>new Set(Object.keys(deck).map(id=>id.split("/")[0]));
+  const gameTitle=deck=>groups(deck).has("SFN")?"葬送のフリーレン":"ステラソラ";
+  function showDeckTitle(deck){
+    titleFilter.value=groups(deck).has("SFN")?"SFN":"STS";
+  }
   function buildDeck(countsForDeck,title){
     return {
       title,
@@ -82,10 +88,10 @@ const connectDeckBuilder=(()=>{
   function summarize(deck){
     return buildDeck(deck).cards.reduce((sum,card)=>({
       total:sum.total+card.num,cx:sum.cx+(card.cx?card.num:0)
-    }),{total:0,cx:0});
+    }),{total:0,cx:0,mixed:groups(deck).size>1});
   }
-  const complete=({total,cx})=>total===50&&cx===8;
-  const describe=({total,cx})=>total+"/50枚（CX "+cx+"/8枚）";
+  const complete=({total,cx,mixed})=>total===50&&cx===8&&!mixed;
+  const describe=({total,cx,mixed})=>total+"/50枚（CX "+cx+"/8枚）"+(mixed?" ／ タイトルを1つにそろえてください":"");
   function refreshCounts(){
     const summaries=counts.map(summarize);
     totals.textContent=newDeck()?describe(summarize(newDraft)):
@@ -99,7 +105,7 @@ const connectDeckBuilder=(()=>{
   function renderRows(){
     list.replaceChildren();
     rowUpdates.length=0;
-    for(const card of cards){
+    for(const card of cards.filter(card=>card.cardNumber.startsWith((titleFilter.value||"STS")+"/"))){
       const ids=variants(card),row=document.createElement("li");
       let selectedId=ids.find(id=>currentDeck()[id])??card.cardNumber;
       let previewId;
@@ -200,6 +206,7 @@ const connectDeckBuilder=(()=>{
     if(!counts)return;
     notice.textContent="";
     deckName.value="";
+    showDeckTitle(currentDeck());
     renderRows();
     refreshCounts();
   }
@@ -220,7 +227,7 @@ const connectDeckBuilder=(()=>{
         return;
       }
       if(!counts){
-        cards=botCatalog.cards.filter(card=>card.cardNumber.startsWith("STS/")).sort((a,b)=>
+        cards=botCatalog.cards.filter(card=>/^(STS|SFN)\//.test(card.cardNumber)).sort((a,b)=>
           Number(a.type==="climax")-Number(b.type==="climax")||a.cardNumber.localeCompare(b.cardNumber));
         counts=loadCounts();
       }
@@ -244,15 +251,18 @@ const connectDeckBuilder=(()=>{
     const saved=supportedDecks().find(({id})=>id===savedSelect.value);
     if(!saved){refreshSavedDecks();return}
     setCurrentDeck(fromPreset(saved.deck));
+    showDeckTitle(currentDeck());
     deckName.value=saved.deck.title;
     renderRows();
     refreshCounts();
   };
+  titleFilter.onchange=()=>{renderRows();refreshCounts()};
   presetSelect.onchange=refreshPresetSource;
   apply.onclick=()=>{
     const preset=presets[presetSelect.value];
     if(!counts||!preset)return;
     setCurrentDeck(fromPreset(preset.deck));
+    showDeckTitle(currentDeck());
     renderRows();
     refreshCounts();
   };
@@ -262,7 +272,7 @@ const connectDeckBuilder=(()=>{
       notice.textContent="オンラインルームを退出してから開始してください";
       return;
     }
-    startBotMatch(buildDeck(counts[0],"自分のステラソラ"),stellaCustomScenario,buildDeck(counts[1],"Botのステラソラ"));
+    startBotMatch(buildDeck(counts[0],gameTitle(counts[0])),stellaCustomScenario,buildDeck(counts[1],gameTitle(counts[1])));
     if(isDeckSetup())notice.textContent="対戦を開始できません。端末の保存設定を確認してください。";
   };
   return (getDecks,storeDeck)=>{

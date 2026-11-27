@@ -31,7 +31,7 @@ async function main() {
   }
   const asset=new Map([["/","index.html"],["/cloud-decks.js","cloud-decks.js"],["/decklog-import.js","decklog-import.js"],
     ["/card-images.js","card-images.js"],["/online-match.js","online-match.js"],["/board-layout.css","board-layout.css"],["/match-state.js","match-state.js"],
-    ...["auto-rules.js","stella-effects.js","bot-match.js","bot-deck-editor.js","card-catalog.js","effects/engine.js","card-data/load.js","card-data/catalog.json"].map(file=>["/"+file,file])]);
+    ...["auto-rules.js","stella-effects.js","frieren-effects.js","bot-match.js","bot-deck-editor.js","card-catalog.js","effects/engine.js","card-data/load.js","card-data/catalog.json"].map(file=>["/"+file,file])]);
   const server=http.createServer((req,res)=>{
     const url=new URL(req.url,"http://localhost");
     const field=asset.get(url.pathname);
@@ -87,12 +87,12 @@ async function main() {
     await Promise.all([begin(a),begin(b),begin(c)]);
     await $(b,"openOnlineDeckBuilder").tap();
     await b.getByRole("heading",{name:"デッキ作成・Bot戦",exact:true}).waitFor();
-    await $(b,"builtOnlineDeckName").fill("ステラソラ検証");
+    await $(b,"builtOnlineDeckName").fill("フリーレン検証");
     assert.equal(await $(b,"saveBuiltOnlineDeck").isDisabled(),true);
-    await $(b,"botDeckPreset").selectOption("trial");
+    await $(b,"botDeckPreset").selectOption("frieren");
     await $(b,"applyBotDeckPreset").tap();
     await $(b,"saveBuiltOnlineDeck").tap();
-    await $(b,"onlineStatus").filter({hasText:"ステラソラ検証"}).waitFor();
+    await $(b,"onlineStatus").filter({hasText:"フリーレン検証"}).waitFor();
     await $(a,"onlineCreate").click();
     await $(a,"onlineCodeOutput").waitFor();
     const code=await $(a,"onlineCodeOutput").textContent();
@@ -100,7 +100,7 @@ async function main() {
     await $(b,"onlineCode").fill(code);
     await $(b,"onlineJoin").click();
     await $(b,"onlineReady").waitFor();
-    await $(b,"onlineDeck").selectOption({label:"ステラソラ検証"});
+    await $(b,"onlineDeck").selectOption({label:"フリーレン検証"});
     await $(c,"onlineCode").fill(code);
     await $(c,"onlineJoin").click();
     await c.getByText("ルームの参加枠が埋まっています",{exact:true}).first().waitFor();
@@ -111,7 +111,7 @@ async function main() {
     await Promise.all([$(a,"mulliganScreen").waitFor(),$(b,"mulliganScreen").waitFor()]);
     assert.equal(await a.locator("#mulliganCards button").count(),5);
     assert.equal(await b.locator("#mulliganCards button").count(),5);
-    assert.equal(await b.evaluate(()=>players[side].hand.every(card=>card.id.startsWith("STS/"))),true);
+    assert.equal(await b.evaluate(()=>players[side].hand.every(card=>card.id.startsWith("SFN/"))),true);
     assert.doesNotMatch(await b.locator("#mulliganCards").innerText(),/HOST/);
     await $(a,"confirmMulligan").click();
     await a.getByText(/相手のマリガンを待っています/).first().waitFor();

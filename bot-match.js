@@ -265,7 +265,7 @@ function botStats(p,card){
       }
     }
   }
-  if(power!=null)power+=stellaPower(p,card);
+  if(power!=null)power+=stellaPower(p,card)+frierenPower(p,card);
   return {power,soul};
 }
 
@@ -368,11 +368,13 @@ function botAttackTriggeredActions(p,attacker){
 function botTriggeredActions(p,card,timing,context={}){
   const effects=botDefinition(card)?.effects?.filter(item=>item.timing===timing&&item.type==="auto"
     &&(timing!=="on_own_climax_trigger"||card.gainedAbilities?.includes(item.id))
+    &&(!Object.hasOwn(frierenConditions,item.id)||frierenConditions[item.id](p,card))
     &&(item.id!=="t03-attack"||card.gainedAbilities?.includes("STS/W140-T03:loot"))
     &&(!item.conditions?.length||WSEffects.triggerConditionsMet(item,botEffectBoard(p),
       {...context,sourceUid:card.uid},findBotCard)))??[];
   return effects.map(effect=>({label:stellaName(card)+"・"+(effect.category??effect.id),run:resume=>{
     if(Object.hasOwn(stellaActions,effect.id))stellaActions[effect.id](p,card,resume,context);
+    else if(Object.hasOwn(frierenActions,effect.id))frierenActions[effect.id](p,card,resume);
     else if(effect.reorderTop)autoRuleReorderTop(p,resume);
     else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
     else if(effect.traitLoot)autoRuleTraitLoot(p,card,effect,resume);
@@ -430,29 +432,32 @@ function botResolveTriggerIcons(p,trigger,done){
 function botResolveAttackTrigger(p,trigger,attacker,done){
   botResolveTriggerIcons(p,trigger,()=>{
     const source=attacker();
-    if(trigger.cx!==true){done();return}
+    const frieren=frierenTriggerActions(p,trigger,attacker);
+    if(trigger.cx!==true){botResolveTriggered(p,frieren,done);return}
     const actions=source?botTriggeredActions(p,source,"on_own_climax_trigger",{triggerClimax:true}):[];
-    botResolveTriggered(p,[...actions,...stellaMemoryActions(p)],done);
+    botResolveTriggered(p,[...actions,...stellaMemoryActions(p),...frieren],done);
   });
 }
 
 function botShowLookStep(prompt,respond){
   const seen=prompt.cards.length;
   const prefix=prompt.side==="opponent"?"相手の":"";
-  const label=seen?prefix+"山札の上から"+seen+"枚目（上限"+prompt.max+"枚）":prefix+"山札を上から1枚ずつ見る（上限"+prompt.max+"枚）";
+  const edge=prompt.bottom?"下":"上";
+  const label=seen?prefix+"山札の"+edge+"から"+seen+"枚目（上限"+prompt.max+"枚）":prefix+"山札を"+edge+"から1枚ずつ見る（上限"+prompt.max+"枚）";
   const visible=prompt.cards.slice(-1).map(card=>card.id?card:{id:card.cardNumber});
   const body=showResolution(label,visible,effectChoiceImageUrl);
   function choose(text,more){deckButton(body,text,()=>{closeResolution();respond(more)})}
   if(prompt.canContinue)choose(seen?"次の1枚を見る":"1枚見る",true);
-  choose(!seen?"見ない":prompt.side==="opponent"?"元の順番で戻す":"ここでやめる",false);
+  choose(!seen?"見ない":prompt.side==="opponent"&&!prompt.bottom?"元の順番で戻す":"ここでやめる",false);
 }
-function botLookUpTo(p,max,done){
-  const iterator=WSEffects.lookUpTo(players[p].deck,max);
+function botLookUpTo(p,max,done,{owner=p,bottom=false}={}){
+  const deck=players[owner].deck;
+  const iterator=WSEffects.lookUpTo(bottom?deck.slice().reverse():deck,max,{side:owner===p?"self":"opponent"});
   function next(more){
     const step=iterator.next(more);
     if(step.done){done(step.value);return}
     if(p===1)next(true);
-    else botShowLookStep(step.value,next);
+    else botShowLookStep({...step.value,bottom},next);
   }
   next();
 }
@@ -556,7 +561,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
       abortable=false;
       const target=prompt.side==="self"?p:1-p;
-      botDamage(target,prompt.amount,damage=>step({state:botEffectBoard(p),damage}));
+      botAbilityDamage(target,prompt.amount,damage=>step({state:botEffectBoard(p),damage}));
       return;
     }
     if(prompt.kind==="deck-empty"){
@@ -811,6 +816,16 @@ function showBotRevealResult(title,cards,done){
   deckButton(body,"確認して進む",()=>{closeResolution();done()});
 }
 
+function botAbilityDamage(target,amount,done){
+  const battle=autoRuleFrontBattle?.[target];
+  const current=battle&&players[target][battle.slot].at(-1);
+  if(current?.uid===battle?.uid&&frierenIs(current,"S128-003")&&frierenEisen(target)&&frierenStatues(target)>=3){
+    autoRuleLog("旅の日常 アイゼン・キャラの自動能力によるダメージを受けない");
+    done({cards:[],cancelled:false});
+    return;
+  }
+  botDamage(target,amount,done);
+}
 function botDamage(target,amount,done){
   const board=players[target],revealed=[];
   function finish(cancel){
@@ -905,7 +920,7 @@ function botHumanAttack(p,zone,index){
 function botTriggerEffect(p,trigger,done){
   const board=players[p];
   const effect=botDefinition(trigger)?.effects?.find(item=>item.type==="trigger"&&item.timing==="on_trigger");
-  if(effect){
+  if(effect?.steps){
     const includesTrigger=effect.steps.some(step=>step.handler==="treasureTrigger");
     if(includesTrigger){trigger.faceUp=true;board.waiting.push(trigger)}
     botGuide(trigger,effect,success=>{
@@ -919,6 +934,7 @@ function botTriggerEffect(p,trigger,done){
     return;
   }
   function stock(){trigger.faceUp=false;board.stock.push(trigger);done()}
+  if(frierenChoice(trigger)){frierenChoiceTrigger(p,stock);return}
   if(isAutoRules()){stock();return}
   const body=showResolution("トリガーチェック",[trigger]);
   deckButton(body,"ストックに置く",()=>{closeResolution();stock()});
@@ -960,7 +976,7 @@ function scheduleBotTurn(){
 function renderBotControls(){
   document.getElementById("botControls").hidden=false;
   renderBotRevealButtons("bot");
-  document.getElementById("botModeName").textContent="Bot戦 · "+((match.bot.scenario===stellaCustomScenario?"ステラソラ・編集デッキ":match.bot.scenario===stellaTrialScenario?stellaTrialDeck.title+" vs DAQBE":match.bot.scenario===stellaScenario?stellaDeck.title:match.bot.scenario===redBlueScenario?redBlueDeck.title:practiceTitles[match.bot.scenario])??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
+  document.getElementById("botModeName").textContent="Bot戦 · "+((match.bot.scenario===stellaCustomScenario?match.decks.map(deck=>deck.title).join(" vs "):match.bot.scenario===stellaTrialScenario?stellaTrialDeck.title+" vs DAQBE":match.bot.scenario===stellaScenario?stellaDeck.title:match.bot.scenario===redBlueScenario?redBlueDeck.title:practiceTitles[match.bot.scenario])??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
   const button=document.getElementById("botStep");
   button.hidden=isDeckMirror(match.bot.scenario);
   button.disabled=!botCanStep();
@@ -979,6 +995,8 @@ function botDefinitionForAbilities(card){
   return (botDefinition(card)?.effects??[]).filter(ability=>ability.type==="activated"&&
     (ability.id!=="teresa-recall"||card.orientation===0&&players[0].hand.length>0)&&
     (ability.id!=="replace-with-natsuka"||players[0].level.length>=3)&&
+    (ability.id!=="frieren-statue"||card.orientation===0&&players[0].stock.length>0)&&
+    (ability.id!=="frieren-heiter-search"||stellaStage(0).some(other=>other!==card))&&
     (!ability.conditions?.some(step=>step.handler==="sourceStanding")||card.faceUp!==false&&(card.orientation??0)===0));
 }
 
@@ -1058,6 +1076,7 @@ function openBotAbility(){
     if(ability.brainstorm){activateBrainstorm(0,card,ability.brainstorm);return}
     if(ability.id==="replace-with-natsuka"){runRuleOperation(done=>botReplaceWithNatsuka(0,card,done));return}
     if(Object.hasOwn(stellaActions,ability.id)){runRuleOperation(done=>stellaActions[ability.id](0,card,done));return}
+    if(Object.hasOwn(frierenActions,ability.id)){runRuleOperation(done=>frierenActions[ability.id](0,card,done));return}
     runRuleOperation(done=>botGuide(card,ability,done));
   });
 }
