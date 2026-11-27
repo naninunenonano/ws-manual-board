@@ -16,6 +16,7 @@ const connectDeckBuilder=(()=>{
     daqbe:{deck:stellaDeck,url:"https://ws-tcg.com/deckrecipe/5855/"},
     sendai:{deck:sendaiDeck,url:"https://ws-tcg.com/deckrecipe/5856/"},
     trial:{deck:stellaTrialDeck},
+    frierenGreen:{deck:frierenGreenDeck},
     frieren:{deck:frierenDeck,url:"https://ws-tcg.com/deckrecipe/5856/"},
     empty:{deck:{cards:[]}}
   };

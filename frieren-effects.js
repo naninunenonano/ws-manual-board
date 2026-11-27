@@ -8,19 +8,29 @@ const frierenDeck={
     ["S136-076",3],["S108-T13",4],["S136-078",4],["S128-021",4],["S108-T09",4,true],["S128-022",4,true]
   ].map(([number,num,cx=false])=>({id:"SFN/"+number,num,cx}))
 };
+const frierenGreenDeck={
+  title:"お前山の上見スギ",
+  cards:[
+    ["S128-003",4],["S128-002",1],["S128-009",2],["S136-012",1],["S136-046",1],
+    ["S136-036",2],["S128-017",4],["S108-T04",4],["S136-001",4],["S136-005",3],
+    ["S136-006",4],["S136-033",3],["S136-034",3],["S136-065",1],["S108-T11",1],
+    ["S136-048",1],["S128-021",3],["S108-T09",4,true],["S128-022",4,true]
+  ].map(([number,num,cx=false])=>({id:"SFN/"+number,num,cx}))
+};
 const frierenIs=(card,number)=>card&&sameBotCardNumber(card.id,"SFN/"+number);
 const frierenAlly=card=>["冒険者","魔法"].some(trait=>matchesPracticeTrait(card,trait));
 const frierenOther=(p,source)=>stellaStage(p).filter(card=>card.uid!==source.uid&&frierenAlly(card));
 const frierenStatues=p=>players[p].memory.filter(card=>card.faceUp&&frierenIs(card,"S128-017")).length;
-const frierenEisen=p=>players[p].memory.some(card=>card.faceUp&&frierenIs(card,"S136-006"));
+const frierenEisenCount=p=>players[p].memory.filter(card=>card.faceUp&&frierenIs(card,"S136-006")).length;
 const frierenChoice=cx=>botDefinition(cx)?.triggers?.includes("チョイス");
 const frierenNamedCx=(p,number)=>players[p].cx.some(card=>frierenIs(card,number));
 
 function frierenPower(p,card){
   if(!card.id.startsWith("SFN/")||!stellaStage(p).includes(card))return 0;
   let power=frierenAlly(card)?1500*frierenOther(p,card).filter(source=>frierenIs(source,"S128-009")).length:0;
+  if(frierenIs(card,"S128-002")&&match.turn.player===p&&frierenOther(p,card).length)power+=2000;
   if(frierenIs(card,"S136-076")&&stellaStage(p).every(frierenAlly))power+=3000;
-  if(frierenIs(card,"S128-003")&&frierenEisen(p)&&frierenStatues(p)>=3)power+=1000;
+  if(frierenIs(card,"S128-003")&&frierenStatues(p)>=3)power+=1000*frierenEisenCount(p);
   if(frierenIs(card,"S108-T04")&&match.turn.player===p)
     power+=2000*frierenOther(p,card).filter(source=>frierenIs(source,"S136-005")).length;
   return power;
@@ -64,6 +74,18 @@ function frierenHeiterSearch(p,source,done){
     stellaLookAndTake(p,5,entry=>!entry.cx&&botEffectCard(entry).level>=1,false,done);
   },{optional:true});
 }
+function frierenChooseSlot(p,card,title,place,cancel,{botOrder=botSlots}={}){
+  const board=players[p];
+  if(p===1){place(botOrder.find(slot=>!board[slot].length)??botOrder[0]);return}
+  const body=showResolution(title,[card]);
+  for(const slot of botSlots){
+    const occupant=board[slot].at(-1);
+    deckButton(body,labels[slot]+(occupant?"（"+stellaName(occupant)+"と入れ替え）":""),()=>{
+      closeResolution();place(slot);
+    });
+  }
+  deckButton(body,"出さない",()=>{closeResolution();cancel()});
+}
 function frierenHimmelEntry(p,source,done){
   if(!frierenOther(p,source).length){done();return}
   const board=players[p];
@@ -78,15 +100,7 @@ function frierenHimmelEntry(p,source,done){
         stellaMove(board,"hand",card,slot);
         botStageEntry(p,card,"hand",done);
       }
-      if(p===1){place(botSlots.find(slot=>!board[slot].length)??"back0");return}
-      const body=showResolution("フリーレンを置く枠を選ぶ",[card]);
-      for(const slot of botSlots){
-        const occupant=board[slot].at(-1);
-        deckButton(body,labels[slot]+(occupant?"（"+stellaName(occupant)+"と入れ替え）":""),()=>{
-          closeResolution();place(slot);
-        });
-      }
-      deckButton(body,"出さない",()=>{closeResolution();done()});
+      frierenChooseSlot(p,card,"フリーレンを置く枠を選ぶ",place,done,{botOrder:["back0","back1",...botSlots.slice(0,3)]});
     },{optional:true});
   }
   if(!board.clock.length){deploy();return}
@@ -166,9 +180,13 @@ function frierenTopMove(actor,owner,canMill,done){
       deckButton(body,label,()=>{closeResolution();move(zone)});
   });
 }
-function frierenHimmelTop(p,source,done){
-  if(!frierenEisen(p)||frierenStatues(p)<4){done();return}
-  frierenTopMove(p,1-p,false,done);
+function frierenHimmelMemoryActions(p,attacker){
+  if(!frierenIs(attacker,"S128-003")||frierenStatues(p)<4)return [];
+  const action={
+    label:"記憶・アイゼンの効果で相手の山札の上を確認",
+    run:done=>frierenTopMove(p,1-p,false,done)
+  };
+  return Array(frierenEisenCount(p)).fill(action);
 }
 function frierenTdCombo(p,source,done){
   if(!frierenNamedCx(p,"S108-T09")||!frierenOther(p,source).length){done();return}
@@ -316,24 +334,187 @@ function frierenChoiceTrigger(p,done){
   },{optional:true});
 }
 function frierenEisenActions(p,cx){
-  if(frierenEisen(p)||!frierenIs(cx,"S128-022")&&!frierenIs(cx,"S108-T09"))return [];
-  const board=players[p],copies=board.waiting.filter(card=>frierenIs(card,"S136-006"));
-  if(!copies.length)return [];
-  return [{label:"旅の日常 アイゼン・控え室から思い出へ",
-    run:done=>frierenToMemory(p,"旅の日常 アイゼンを思い出にする",card=>frierenIs(card,"S136-006"),done)}];
+  if(frierenEisenCount(p)||!frierenIs(cx,"S128-022")&&!frierenIs(cx,"S108-T09"))return [];
+  const board=players[p];
+  const triggered=board.waiting.filter(card=>frierenIs(card,"S136-006")).map(card=>card.uid);
+  if(!triggered.length)return [];
+  return [{
+    label:"旅の日常 アイゼン・控え室から思い出へ（"+triggered.length+"枚）",
+    run:done=>{
+      // Each copy met the condition when the CX was placed. Moving one does not cancel the others.
+      const copies=triggered.map(uid=>board.waiting.find(card=>card.uid===uid)).filter(Boolean);
+      function resolve(selected){
+        for(const card of selected)stellaMove(board,"waiting",card,"memory");
+        done();
+      }
+      if(!copies.length){done();return}
+      if(p===1){resolve(copies);return}
+      if(copies.length===1){
+        stellaChoose(p,"旅の日常 アイゼンを思い出にする",copies,card=>resolve(card?[card]:[]),{optional:true});
+        return;
+      }
+      const selected=new Set();
+      const body=showResolution("思い出にするアイゼンを選ぶ",[]);
+      for(const [index,card] of copies.entries()){
+        const button=effectCardButton(body,card,(index+1)+"．"+stellaName(card),()=>{
+          if(selected.has(card))selected.delete(card);else selected.add(card);
+          button.setAttribute("aria-pressed",String(selected.has(card)));
+          button.style.outline=selected.has(card)?"2px solid #f4cf73":"";
+          confirm.disabled=!selected.size;
+        });
+        button.setAttribute("aria-pressed","false");
+      }
+      function finish(cards){closeResolution();resolve(cards)}
+      const confirm=deckButton(body,"選んだカードを思い出にする",()=>finish(copies.filter(card=>selected.has(card))));
+      confirm.disabled=true;
+      deckButton(body,"すべて思い出にする",()=>finish(copies));
+      deckButton(body,"思い出にしない",()=>finish([]));
+    }
+  }];
+}
+
+function frierenFlowersHeal(p,source,done){
+  const board=players[p];
+  if(!board.clock.length){done();return}
+  stellaConfirm(p,"故郷の花・クロックの上から1枚を回復する？",use=>{
+    if(use)botMove(board,"clock",board.clock.length-1,"waiting");
+    done();
+  });
+}
+function frierenFlowersDamage(p,source,done){
+  const board=players[p];
+  function pay(cards){
+    autoRulePay(p,3);
+    for(const card of cards)stellaMove(board,"hand",card,"waiting");
+    botAbilityDamage(1-p,4,done);
+  }
+  if(p===1){
+    if(board.hand.length<3&&players[0].level.length<3){done();return}
+    pay([...board.hand].sort((a,b)=>Number(b.cx)-Number(a.cx)).slice(0,2));
+    return;
+  }
+  const body=showResolution("故郷の花・3ストックと手札2枚で4ダメージ",[]);
+  const picks=new Set();
+  for(const [index,card] of board.hand.entries()){
+    const button=effectCardButton(body,card,(index+1)+"．"+stellaName(card),()=>{
+      if(picks.has(card))picks.delete(card);
+      else if(picks.size<2)picks.add(card);
+      button.setAttribute("aria-pressed",String(picks.has(card)));
+      button.style.outline=picks.has(card)?"2px solid #f4cf73":"";
+      confirm.disabled=picks.size!==2;
+    });
+    button.setAttribute("aria-pressed","false");
+  }
+  const confirm=deckButton(body,"コストを払う",()=>{closeResolution();pay(picks)});
+  confirm.disabled=true;
+  deckButton(body,"使わない",()=>{closeResolution();done()});
+}
+const frierenPartner=source=>frierenIs(source,"S136-033")?"S136-034":"S136-033";
+const frierenHasPartner=(p,source)=>stellaStage(p).some(card=>card!==source&&frierenIs(card,frierenPartner(source)));
+function frierenPartnerDeploy(p,source,done){
+  const board=players[p],partner=frierenPartner(source);
+  const choices=board.deck.filter(card=>frierenIs(card,partner));
+  if(p===1&&(!choices.length||frierenHasPartner(p,source)||botSlots.every(slot=>board[slot].length))){done();return}
+  stellaDiscardForAbility(p,discarded=>{
+    if(!discarded){done();return}
+    function finish(){
+      shuffle(board.deck);
+      resolveBoardRules(p,done);
+    }
+    stellaChoose(p,"山札から舞台に出す相方を選ぶ",choices,card=>{
+      if(!card){finish();return}
+      frierenChooseSlot(p,card,"相方を置く舞台の枠を選ぶ",slot=>{
+        if(board[slot].length)botMove(board,slot,0,"waiting");
+        stellaMove(board,"deck",card,slot);
+        shuffle(board.deck);
+        botStageEntry(p,card,"deck",()=>resolveBoardRules(p,done));
+      },finish);
+    },{optional:true});
+  });
+}
+function frierenLawineAttack(p,source,done){
+  const board=players[p];
+  botLookUpTo(p,2,viewed=>{
+    stellaChoose(p,"山札の上に戻すカードを1枚選ぶ",viewed,top=>{
+      for(const card of viewed){
+        if(card!==top)stellaMove(board,"deck",card,"waiting");
+      }
+      if(top)stellaMove(board,"deck",top,"deck");
+      autoRuleAddTurnStat(source,"power",4000);
+      resolveBoardRules(p,done);
+    });
+  });
+}
+function frierenKanneAttack(p,source,done){
+  frierenTopMove(p,p,true,()=>{
+    autoRuleAddTurnStat(source,"power",2000);
+    autoRuleAddTurnStat(source,"soul",1);
+    done();
+  });
+}
+function frierenMethodeEntry(p,source,done){
+  autoRuleAddTurnStat(source,"power",1500*stellaStage(1-p).length);
+  done();
+}
+function frierenMethodeReverse(p,done){
+  frierenMill(1-p,5,true,milled=>{
+    stellaShow(p,"猛攻 メトーデ・相手の山札の下から控え室へ",milled,()=>{
+      if(players[1-p].level.length<4&&milled.some(card=>card.cx))botAbilityDamage(1-p,1,done);
+      else done();
+    });
+  });
+}
+function frierenProphecy(p,done){
+  botLookUpTo(p,3,()=>botLookUpTo(p,3,()=>done("stock"),{owner:1-p,review:true}),{review:true});
+}
+function frierenProphecyRecover(p,source,done){
+  const board=players[p],eligible=card=>frierenIs(card,"S136-048");
+  if(!board.waiting.some(eligible)&&!board.hand.some(eligible)){done();return}
+  if(p===1&&!board.waiting.some(eligible)){done();return}
+  stellaDiscardForAbility(p,discarded=>{
+    if(!discarded){done();return}
+    stellaChoose(p,"控え室の「未来を予知できる能力」を回収",board.waiting.filter(eligible),card=>{
+      if(card)stellaMove(board,"waiting",card,"hand");
+      done();
+    });
+  });
+}
+function frierenMageSwap(p,source,done){
+  const board=players[p];
+  if(!board.stock.length){done();return}
+  if(p===1&&!(board.waiting.some(card=>card.cx)&&board.hand.filter(card=>card.cx).length>=2)){done();return}
+  stellaChoose(p,"1ストックと手札のCXを払う",board.hand.filter(card=>card.cx),discarded=>{
+    if(!discarded){done();return}
+    autoRulePay(p,1);
+    stellaMove(board,"hand",discarded,"waiting");
+    stellaChoose(p,"控え室から手札に戻すCX",board.waiting.filter(card=>card.cx),card=>{
+      if(card)stellaMove(board,"waiting",card,"hand");
+      done();
+    });
+  },{optional:true});
 }
 
 const frierenConditions={
+  "frieren-flowers-damage":(p,card)=>match.turn.player===p&&frierenOther(p,card).length>0&&
+    players[p].stock.length>=3&&players[p].hand.length>=2,
+  "frieren-lawine-attack":frierenHasPartner,
+  "frieren-kanne-attack":frierenHasPartner,
   "frieren-himmel-combo":frierenHimmelComboReady,
-  "frieren-himmel-top":p=>frierenEisen(p)&&frierenStatues(p)>=4,
   "frieren-vow-search":p=>players[p].stock.length>0&&players[p].deck.length>0
 };
 const frierenActions={
+  "frieren-flowers-heal":frierenFlowersHeal,
+  "frieren-flowers-damage":frierenFlowersDamage,
+  "frieren-pair-deploy":frierenPartnerDeploy,
+  "frieren-lawine-attack":frierenLawineAttack,
+  "frieren-kanne-attack":frierenKanneAttack,
+  "frieren-methode-entry":frierenMethodeEntry,
+  "frieren-prophecy-recover":frierenProphecyRecover,
+  "frieren-mage-swap":frierenMageSwap,
   "frieren-statue":frierenStatue,
   "frieren-heiter-search":frierenHeiterSearch,
   "frieren-himmel-entry":frierenHimmelEntry,
   "frieren-himmel-combo":frierenHimmelCombo,
-  "frieren-himmel-top":frierenHimmelTop,
   "frieren-bottom-look":frierenBottomLook,
   "frieren-td-entry":(p,card,done)=>{autoRuleAddTurnStat(card,"power",3000);done()},
   "frieren-td-combo":frierenTdCombo,

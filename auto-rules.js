@@ -409,7 +409,8 @@ function autoRuleHandLevel(p,card,definition){
   const board=players[p];
   const bonus=definition.effects?.some(effect=>effect.type==="continuous"&&effect.timing==="in_hand")
     ? WSEffects.continuousStatBonus(botEffectBoard(p),botEffectCard(card),"in_hand","level",findBotCard):0;
-  const level=bonus ? definition.stats.level+bonus : definition.stats.level;
+  const early=frierenIs(card,"S128-002")&&stellaStage(p).filter(frierenAlly).length>=4?-1:0;
+  const level=bonus||early ? definition.stats.level+bonus+early : definition.stats.level;
   const reduction=definition.handLevelReduction;
   if(!reduction)return level;
   if(reduction.maxWaitingCX!==undefined&&board.waiting.filter(card=>card.cx===true).length>reduction.maxWaitingCX)return level;
@@ -473,7 +474,7 @@ function autoRuleResolvePlay(p,index,zone,done){
   if(zone==="cx")botResolveTriggered(p,[...botTriggeredActions(p,card,"on_cx_play"),...frierenEisenActions(p,card)],finish);
   else botStageEntry(p,card,"hand",finish);
 }
-const autoRuleEventEffects=Object.freeze({"光景":resolveKoukei,"ヴェルジュ":(p,done)=>stellaVerge(p,done),"銅像の錆":(p,done)=>frierenRustMagic(p,done)});
+const autoRuleEventEffects=Object.freeze({"光景":resolveKoukei,"ヴェルジュ":(p,done)=>stellaVerge(p,done),"銅像の錆":(p,done)=>frierenRustMagic(p,done),"未来予知":(p,done)=>frierenProphecy(p,done)});
 function autoRuleEventEffect(definition){
   const name=definition?.effects?.some(effect=>effect.id==="verge-event")?"ヴェルジュ":definition?.eventEffect;
   return definition?.type==="event"&&Object.hasOwn(autoRuleEventEffects,name)?autoRuleEventEffects[name]:null;
@@ -773,9 +774,13 @@ function autoRuleResolveReversals(reversals,done){
     const backup=source.botBackupReverse;
     const effects=isAutoRules()?[botDefinition(source)?.reverseMove,backup?.turn===match.turn.number?backup:null]:[];
     const granted=(target.gainedAbilities??[]).filter(id=>id==="STS/W140-023:clock-swap");
+    const methode=frierenIs(source,"S136-036")&&botEffectCard(target).level>=2&&players[owner].cx.length;
+    const mage=frierenIs(target,"S108-T11")&&botEffectCard(source).level!=null&&botEffectCard(source).level<=0;
     return [
       ...effects.filter(Boolean).map(effect=>({owner,target,slot,...effect})),
       ...granted.map(()=>({owner:1-owner,target:source,slot:sourceSlot,clockSwap:true})),
+      ...(methode?[{owner,methode:true}]:[]),
+      ...(mage?[{owner:1-owner,target:source,slot:sourceSlot,zone:"deck",position:"bottom",optional:true,anyOrientation:true}]:[]),
       ...(stellaIs(target,"025")?[{owner:1-owner,target:source,slot:sourceSlot,clockSwap:true,maxLevel:0}]:[]),
       ...(source.gainedAbilities??[]).flatMap(id=>id==="frieren-reverse-memory"?[{owner,target,slot,zone:"memory",optional:true}]:
         id==="frieren-reverse-retreat"?[{owner,source,frierenRetreat:true}]:[]),
@@ -785,6 +790,7 @@ function autoRuleResolveReversals(reversals,done){
   function resolve(effect,next){
     const {owner,target,slot,zone,stock=0}=effect;
     const rival=players[1-owner];
+    if(effect.methode){frierenMethodeReverse(owner,next);return}
     if(effect.frierenRetreat){frierenRetreat(owner,effect.source,next);return}
     if(effect.retreat){stellaT03Retreat(owner,effect.source,next);return}
     if(effect.clockSwap){
@@ -803,23 +809,24 @@ function autoRuleResolveReversals(reversals,done){
       deckButton(body,"使わない",()=>{closeResolution();next()});
       return;
     }
-    const targetIndex=rival[slot].findIndex(card=>card.uid===target.uid&&card.orientation===180);
+    const targetIndex=rival[slot].findIndex(card=>card.uid===target.uid&&(card.orientation===180||effect.anyOrientation));
     if(targetIndex<0||players[owner].stock.length<stock){next();return}
     function moveReversed(){
       autoRulePay(owner,stock);
-      botMove(rival,slot,targetIndex,zone,"top");
+      botMove(rival,slot,targetIndex,zone,effect.position??"top");
       autoRuleLog(botCardInfo(target).name+"を"+labels[zone]+"へ"+(stock?"（"+stock+"ストック支払い）":""));
       resolveBoardRules(owner,()=>resolveBoardRules(1-owner,next));
     }
     if((!stock&&!effect.optional)||owner===1){moveReversed();return}
-    const body=showResolution("リバースしたキャラを"+labels[zone]+"へ置く？",[target]);
-    deckButton(body,stock?stock+"ストック払う":"思い出に置く",()=>{closeResolution();moveReversed()});
-    deckButton(body,"払わない",()=>{closeResolution();next()});
+    const destination=effect.position==="bottom"?"山札の下":labels[zone];
+    const body=showResolution(effect.anyOrientation?"バトル相手を"+destination+"に置く？":"リバースしたキャラを"+destination+"へ置く？",[target]);
+    deckButton(body,stock?stock+"ストック払う":destination+"に置く",()=>{closeResolution();moveReversed()});
+    deckButton(body,stock?"払わない":"置かない",()=>{closeResolution();next()});
   }
   const turn=match.turn.player;
   const actions=p=>pending.filter(effect=>effect.owner===p).map(effect=>({
-    label:effect.frierenRetreat?"仲間を後列へ移動":effect.retreat?stellaName(effect.source)+"・後列へ移動":
-      stellaName(effect.target)+"を"+labels[effect.clockSwap?"clock":effect.zone]+"へ",
+    label:effect.methode?"猛攻 メトーデ・相手の山札下5枚":effect.frierenRetreat?"仲間を後列へ移動":effect.retreat?stellaName(effect.source)+"・後列へ移動":
+      stellaName(effect.target)+"を"+(effect.position==="bottom"?"山札の下":labels[effect.clockSwap?"clock":effect.zone])+"へ",
     run:next=>resolve(effect,next)
   }));
   botResolveTriggered(turn,actions(turn),()=>botResolveTriggered(1-turn,actions(1-turn),done));
@@ -910,7 +917,12 @@ function autoRuleBotMain(p,done){
       const playable=board.hand.map((card,index)=>({card,index,definition:botDefinition(card)}))
         .filter(({card})=>!autoRuleLegalPlay(p,card,"main","character"));
       const isSupport=({definition:def})=>!!(def?.assist||def?.namedStageBuff||def?.cannotAttack||def?.cardNumber==="SFN/S136-005"||def?.effects?.some(effect=>effect.brainstorm));
-      let candidate=playable.find(entry=>isSupport(entry)===back);
+      const suitable=playable.filter(entry=>isSupport(entry)===back);
+      if(!back&&suitable.some(({card})=>card.id.startsWith("SFN/"))){
+        const priority=({definition:def})=>def.stats.level*10+(def.cardNumber==="SFN/S136-036"?1:0);
+        suitable.sort((a,b)=>priority(b)-priority(a));
+      }
+      let candidate=suitable[0];
       if(isStellaDeck(match.bot.scenario)){
         const frontCount=botSlots.slice(0,3).filter(zone=>board[zone].length).length;
         if(back&&!frontCount&&playable.length===1)candidate=undefined;
@@ -955,6 +967,7 @@ function autoRuleBotMain(p,done){
     const hasRear=["back0","back1"].some(slot=>board[slot].length);
     const index=board.hand.findIndex(card=>{
       if(!autoRuleEventEffect(botDefinition(card))||autoRuleLegalPlay(p,card,"main","event"))return false;
+      if(frierenIs(card,"S136-048"))return true;
       if(frierenIs(card,"S128-021"))return board.waiting.some(entry=>frierenIs(entry,"S128-017"))||!board.hand.some(entry=>entry.cx);
       return stellaIs(card,"030")?(hasRear||frontCount>1):players[1-p].stock.length>=2;
     });
@@ -974,7 +987,11 @@ function autoRuleBotStep(){
       if(isStellaDeck(match.bot.scenario)){
         const playable=card=>!autoRuleLegalPlay(p,card,"main","character",{planning:true});
         const available=board.hand.filter(playable).length;
-        const spare=board.hand.findIndex(card=>!card.cx&&!playable(card));
+        const hasGreen=[...board.level,...board.clock].some(card=>botDefinition(card)?.color==="緑");
+        const hasGreenPayoff=board.hand.some(card=>{const def=botDefinition(card);return card.id.startsWith("SFN/")&&def?.color==="緑"&&def.stats.level>=2;});
+        const greenForClock=!hasGreen&&hasGreenPayoff&&board.level.length>0?
+          board.hand.findIndex(card=>card.id.startsWith("SFN/")&&botDefinition(card)?.color==="緑"&&botDefinition(card).stats.level===0):-1;
+        const spare=greenForClock>=0?greenForClock:board.hand.findIndex(card=>!card.cx&&!playable(card));
         if(spare>=0)index=spare;
         else if(available===1)index=board.hand.filter(card=>card.cx).length>1?board.hand.findIndex(card=>card.cx):-1;
       }

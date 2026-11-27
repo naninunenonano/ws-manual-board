@@ -17,7 +17,7 @@ test("card numbers normalize and use the existing image URL convention",()=>{
 });
 
 test("Frieren trial print images use the larger scan and fall back to the same printing",()=>{
-  for(const [number,file] of [["T04","025"],["T04SP","001"],["T09","030"],["T09R","012"],["T13","034"],["T13R","015"]]){
+  for(const [number,file] of [["T04","025"],["T04SP","001"],["T09","030"],["T09R","012"],["T11","032"],["T11SP","002"],["T13","034"],["T13R","015"]]){
     const id="SFN/S108-"+number;
     assert.equal(isFrierenTrialClimax(id),number.startsWith("T09"));
     assert.equal(officialImageUrl(id),"https://www.c-labo-online.jp/data/c-labo/product/wssfns108t_"+file+".jpg");

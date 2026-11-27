@@ -2804,7 +2804,7 @@ test("大会レシピ1TK8A8の16種をBot側に指定し、ステラソラ対フ
   page.get("botDeckPreset").value="frieren";
   page.click("applyBotDeckPreset");
   assert.equal(page.get("builderTitleFilter").value,"SFN");
-  assert.equal(page.get("botDeckCardRows").children.length,16);
+  assert.equal(page.get("botDeckCardRows").children.length,23);
   assert.equal(page.get("startEditedBotBattle").disabled,false);
   page.click("startEditedBotBattle");
   const game=snapshot(page);
@@ -2869,4 +2869,209 @@ test("ヒンメルのCXコンボは下3枚のCXの枚数だけ2点を繰り返�
   assert.equal(page.run("opponent.waiting.map(card=>card.uid).join()"),"bottom1,bottom2,bottom3");
   assert.equal(page.run("opponent.clock.length"),4);
   assert.equal(page.run("match.bot.reveals.Damage.length"),2);
+});
+
+test("対応CXを置いた瞬間に思い出にアイゼンがなければ、控え室のアイゼン4枚を一度に思い出へ置ける",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(no,uid,cx=false)=>({id:"SFN/"+no,uid,cx,faceUp:true,orientation:0});
+    own.deck.push(fri("S136-001","reserve"));
+    own.hand.push(fri("S108-T09","cx",true),fri("S128-022","next-cx",true));
+    own.clock.push(fri("S136-001","yellow"));
+    for(let i=0;i<4;i++)own.waiting.push(fri(i===3?"S136-006S":"S136-006","eisen"+i));
+    own.waiting.push(fri("S108-T04","other"));
+    setTurnPhase("climax");
+    autoRulePlace(0,"cx","cx");
+  `);
+  ruleButton(page,"すべて思い出にする");
+  assert.equal(page.run("own.memory.map(c=>c.uid).join()"),"eisen0,eisen1,eisen2,eisen3");
+  assert.equal(page.run("own.waiting.map(c=>c.uid).join()"),"other");
+  page.run(`
+    botMove(own,"memory",1,"waiting");
+    botMove(own,"cx",0,"waiting");
+    autoRulePlace(0,"next-cx","cx");
+  `);
+  assert.equal(Boolean(page.get("dialog").open),false);
+  assert.equal(page.run('own.waiting.some(c=>c.uid==="eisen1")'),true);
+});
+
+test("アイゼンの誘発は置いた瞬間のカードを記録し、任意の枚数だけを思い出にできる",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(no,uid,cx=false)=>({id:"SFN/"+no,uid,cx,faceUp:true,orientation:0});
+    own.deck.push(fri("S136-001","reserve"));
+    own.waiting.push(fri("S136-006","first"),fri("S136-006S","foil"));
+    const queued=frierenEisenActions(0,fri("S128-022","cx",true));
+    own.waiting.push(fri("S136-006","late"));
+    runRuleOperation(done=>botResolveTriggered(0,queued,done));
+  `);
+  ruleButton(page,"2．旅の日常 アイゼン");
+  ruleButton(page,"選んだカードを思い出にする");
+  assert.equal(page.run("own.memory.map(c=>c.uid).join()"),"foil");
+  assert.equal(page.run("own.waiting.map(c=>c.uid).join()"),"first,late");
+});
+
+test("思い出のアイゼン4枚分のパワーとアタック時能力が重複する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(no,uid)=>({id:"SFN/"+no,uid,faceUp:true,orientation:0});
+    own.front0.push(fri("S128-003","himmel"));
+    for(let i=0;i<4;i++)own.memory.push(fri("S136-006","eisen"+i),fri("S128-017","statue"+i));
+    for(let i=0;i<6;i++)opponent.deck.push(card("001","top"+i));
+    runRuleOperation(done=>botDispatch(own.front0[0],"on_attack",done));
+  `);
+  assert.equal(page.run('botStats(0,own.front0[0]).power'),13500);
+  for(let i=0;i<4;i++)ruleButton(page,"山札の下に置く");
+  assert.equal(page.run('opponent.deck.at(-1).uid'),"top1");
+  assert.equal(Boolean(page.get("dialog").open),false);
+});
+
+test("お前山の上見スギを選ぶと、指定の50枚が自分側にもBot側にも使える",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.click("openBotDeckEditor");
+  page.get("botDeckPreset").value="frierenGreen";
+  page.click("applyBotDeckPreset");
+  page.click("editOpponentBotDeck");
+  page.click("applyBotDeckPreset");
+  assert.equal(page.get("startEditedBotBattle").disabled,false);
+  page.click("startEditedBotBattle");
+  const {decks}=snapshot(page);
+  const expected={ "S128-003":4,"S128-002":1,"S128-009":2,"S136-012":1,"S136-046":1,"S136-036":2,
+    "S128-017":4,"S108-T04":4,"S136-001":4,"S136-005":3,"S136-006":4,"S136-033":3,"S136-034":3,
+    "S136-065":1,"S108-T11":1,"S136-048":1,"S128-021":3,"S108-T09":4,"S128-022":4 };
+  for(const deck of decks){
+    assert.deepEqual(Object.fromEntries(deck.cards.map(card=>[card.id.slice(4),card.num])),expected);
+    assert.equal(deck.cards.filter(card=>card.cx).reduce((sum,card)=>sum+card.num,0),8);
+  }
+});
+
+test("Botのラヴィーネが手札を払い山札からカンネを登場させ、互いのアタック時能力を有効にする",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(no,uid,cx=false)=>({id:"SFN/"+no,uid,cx,faceUp:true,orientation:0});
+    opponent.hand.push(fri("S136-033","lawine"),fri("S136-001","cost"));
+    opponent.deck.push(fri("S136-034S","kanne"),fri("S108-T09","reserve",true),fri("S136-006","reserve2"));
+    match.turn.player=1;
+    runRuleOperation(done=>autoRuleResolvePlay(1,0,"front0",done));
+  `);
+  assert.equal(page.run("opponent.front1[0].uid"),"kanne");
+  assert.equal(page.run("opponent.waiting[0].uid"),"cost");
+  page.run('runRuleOperation(done=>botDispatch(opponent.front1[0],"on_attack",done,1))');
+  assert.equal(page.run("botStats(1,opponent.front1[0]).power"),3000);
+  assert.equal(page.run("botStats(1,opponent.front1[0]).soul"),2);
+  page.run('runRuleOperation(done=>botDispatch(opponent.front0[0],"on_attack",done,1))');
+  assert.equal(page.run("botStats(1,opponent.front0[0]).power"),5000);
+});
+
+test("未来を予知できる能力は双方の山札を元の順番のまま見てストックに入る",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(no,uid)=>({id:"SFN/"+no,uid,cx:false,faceUp:true,orientation:0});
+    own.level.push(fri("S136-033","green"),fri("S136-001","yellow"));
+    own.hand.push(fri("S136-048","event"));
+    for(let i=0;i<4;i++){
+      own.deck.push(fri("S136-001","own"+i));
+      opponent.deck.push(card("001","opponent"+i));
+    }
+    autoRulePlayEvent(0,"event");
+  `);
+  ruleButton(page,"1枚見る");
+  ruleButton(page,"次の1枚を見る");
+  ruleButton(page,"次の1枚を見る");
+  assert.match(page.get("dialogTitle").textContent,/3枚目/);
+  ruleButton(page,"ここでやめる");
+  ruleButton(page,"1枚見る");
+  assert.match(page.get("dialogTitle").textContent,/相手の山札/);
+  ruleButton(page,"元の順番で戻す");
+  assert.equal(page.run("own.deck.map(c=>c.uid).join()"),"own0,own1,own2,own3");
+  assert.equal(page.run("opponent.deck.map(c=>c.uid).join()"),"opponent0,opponent1,opponent2,opponent3");
+  assert.equal(page.run("own.stock[0].uid"),"event");
+});
+
+test("故郷の花は特徴持ち4枚で早出しでき、登場時回復と手札2枚を使う4ダメージを解決する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(no,uid)=>({id:"SFN/"+no,uid,cx:false,faceUp:true,orientation:0});
+    own.level.push(fri("S136-001","lv1"),fri("S136-034","lv2"));
+    own.clock.push(fri("S136-001","heal"));
+    own.hand.push(fri("S128-002","flower"),fri("S136-006","discard0"),fri("S136-006","discard1"));
+    for(const [i,slot] of ["front1","front2","back0","back1"].entries())own[slot].push(fri("S136-065","ally"+i));
+    for(let i=0;i<5;i++){
+      own.stock.push(fri("S136-006","pay"+i));
+      opponent.deck.push(card("001","damage"+i));
+    }
+    own.deck.push(fri("S136-001","reserve"));
+    autoRulePlace(0,"flower","front0");
+  `);
+  ruleButton(page,"使う");
+  assert.equal(page.run("own.clock.length"),0);
+  assert.equal(page.run("botStats(0,own.front0[0]).power"),10500);
+  page.run('runRuleOperation(done=>botDispatch(own.front0[0],"on_attack",done))');
+  ruleButton(page,"1．旅の日常 アイゼン");
+  ruleButton(page,"2．旅の日常 アイゼン");
+  ruleButton(page,"コストを払う");
+  assert.equal(page.run("own.stock.length"),0);
+  assert.equal(page.run("opponent.clock.length"),4);
+});
+
+test("メトーデはLv2以上をリバースさせるとCX条件で下5枚を落として1ダメージを与える",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(no,uid,cx=false)=>({id:"SFN/"+no,uid,cx,faceUp:true,orientation:0});
+    own.front0.push(fri("S136-036","methode"));
+    own.cx.push(fri("S128-022","combo",true));
+    opponent.front2.push(card("013","target"));
+    for(let i=0;i<7;i++)opponent.deck.push(card("001","deck"+i,i===4));
+    runRuleOperation(done=>botDispatch(own.front0[0],"from_hand_to_stage",done));
+  `);
+  assert.equal(page.run("botStats(0,own.front0[0]).power"),6500);
+  page.run(`
+    opponent.front2[0].orientation=180;
+    runRuleOperation(done=>autoRuleResolveReversals([{owner:0,source:own.front0[0],target:opponent.front2[0],slot:"front2",sourceSlot:"front0"}],done));
+  `);
+  ruleButton(page,"確認して進む");
+  assert.equal(page.run("opponent.waiting.length"),5);
+  assert.equal(page.run("opponent.clock.length"),1);
+});
+
+test("魔法使いフリーレンはリバースした時にまだリバースしていないLv0の相手も山札下へ置ける",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    own.front0.push({id:"SFN/S108-T11",uid:"mage",faceUp:true,orientation:180,cx:false});
+    opponent.front2.push(card("001","target"));
+    opponent.deck.push(card("001","reserve"));
+    runRuleOperation(done=>autoRuleResolveReversals([{owner:1,source:opponent.front2[0],target:own.front0[0],slot:"front0",sourceSlot:"front2"}],done));
+  `);
+  ruleButton(page,"山札の下に置く");
+  assert.equal(page.run("opponent.front2.length"),0);
+  assert.equal(page.run("opponent.deck[0].uid"),"target");
+});
+
+test("南の勇者の登場時にイベントを回収し、能力を与えた味方のリバースで早出しの相手をクロックへ送る",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(no,uid)=>({id:"SFN/"+no,uid,cx:false,faceUp:true,orientation:0});
+    own.level.push(fri("S136-033","green"),fri("S136-001","yellow"));
+    own.hand.push(fri("S136-046","hero"),fri("S136-006","discard"));
+    own.stock.push(fri("S136-006","cost"));
+    own.waiting.push(fri("S136-048","event"));
+    own.deck.push(fri("S136-001","reserve"));
+    opponent.deck.push(card("001","reserve2"));
+    opponent.front2.push(card("004","early"));
+    opponent.clock.push(card("001","replace"));
+    autoRulePlace(0,"hero","front0");
+  `);
+  ruleButton(page,"1．人類最強 南の勇者・登場時・最大2枚にリバース時能力を付与");
+  ruleButton(page,"人類最強 南の勇者");
+  ruleButton(page,"選択を確定");
+  ruleButton(page,"1．旅の日常 アイゼン");
+  ruleButton(page,"1．未来を予知できる能力");
+  assert.equal(page.run("own.hand[0].uid"),"event");
+  page.run(`
+    own.front0[0].orientation=180;
+    runRuleOperation(done=>autoRuleResolveReversals([{owner:1,source:opponent.front2[0],target:own.front0[0],slot:"front0",sourceSlot:"front2"}],done));
+  `);
+  ruleButton(page,"クロックを入れ替える");
+  assert.equal(page.run("opponent.clock[0].uid"),"early");
+  assert.equal(page.run("opponent.waiting[0].uid"),"replace");
 });

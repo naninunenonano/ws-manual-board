@@ -89,7 +89,7 @@ async function main() {
     await b.getByRole("heading",{name:"デッキ作成・Bot戦",exact:true}).waitFor();
     await $(b,"builtOnlineDeckName").fill("フリーレン検証");
     assert.equal(await $(b,"saveBuiltOnlineDeck").isDisabled(),true);
-    await $(b,"botDeckPreset").selectOption("frieren");
+    await $(b,"botDeckPreset").selectOption("frierenGreen");
     await $(b,"applyBotDeckPreset").tap();
     await $(b,"saveBuiltOnlineDeck").tap();
     await $(b,"onlineStatus").filter({hasText:"フリーレン検証"}).waitFor();
@@ -112,6 +112,7 @@ async function main() {
     assert.equal(await a.locator("#mulliganCards button").count(),5);
     assert.equal(await b.locator("#mulliganCards button").count(),5);
     assert.equal(await b.evaluate(()=>players[side].hand.every(card=>card.id.startsWith("SFN/"))),true);
+    assert.equal(await b.evaluate(()=>match.decks[side].cards.find(card=>card.id==="SFN/S136-033").num),3);
     assert.doesNotMatch(await b.locator("#mulliganCards").innerText(),/HOST/);
     await $(a,"confirmMulligan").click();
     await a.getByText(/相手のマリガンを待っています/).first().waitFor();

@@ -305,7 +305,7 @@ function botResolveTriggered(p,actions,done){
       const [action]=pending.splice(index,1);
       action.run(next);
     }
-    if(p===1||pending.length===1){resolve(0);return}
+    if(p===1||pending.every(action=>action===pending[0])){resolve(0);return}
     const body=showResolution("次に解決する効果を選ぶ",[]);
     for(const [index,action] of pending.entries())deckButton(body,(index+1)+"．"+action.label,()=>{
       closeResolution();resolve(index);
@@ -323,7 +323,7 @@ function botStageEntry(p,card,from,done){
 }
 function botAttackTriggeredActions(p,attacker){
   const board=players[p];
-  const actions=[];
+  const actions=frierenHimmelMemoryActions(p,attacker);
   if(["巡遊者","魔王"].some(trait=>matchesPracticeTrait(attacker,trait))){
     for(const marker of attacker.markers??[]){
       const effect=marker.faceUp&&botMarkerAbility(marker.card,"marker_host_attack");
@@ -450,9 +450,9 @@ function botShowLookStep(prompt,respond){
   if(prompt.canContinue)choose(seen?"次の1枚を見る":"1枚見る",true);
   choose(!seen?"見ない":prompt.side==="opponent"&&!prompt.bottom?"元の順番で戻す":"ここでやめる",false);
 }
-function botLookUpTo(p,max,done,{owner=p,bottom=false}={}){
+function botLookUpTo(p,max,done,{owner=p,bottom=false,review=false}={}){
   const deck=players[owner].deck;
-  const iterator=WSEffects.lookUpTo(bottom?deck.slice().reverse():deck,max,{side:owner===p?"self":"opponent"});
+  const iterator=WSEffects.lookUpTo(bottom?deck.slice().reverse():deck,max,{side:owner===p?"self":"opponent",review});
   function next(more){
     const step=iterator.next(more);
     if(step.done){done(step.value);return}
@@ -819,7 +819,7 @@ function showBotRevealResult(title,cards,done){
 function botAbilityDamage(target,amount,done){
   const battle=autoRuleFrontBattle?.[target];
   const current=battle&&players[target][battle.slot].at(-1);
-  if(current?.uid===battle?.uid&&frierenIs(current,"S128-003")&&frierenEisen(target)&&frierenStatues(target)>=3){
+  if(current?.uid===battle?.uid&&frierenIs(current,"S128-003")&&frierenEisenCount(target)&&frierenStatues(target)>=3){
     autoRuleLog("旅の日常 アイゼン・キャラの自動能力によるダメージを受けない");
     done({cards:[],cancelled:false});
     return;
