@@ -65,10 +65,14 @@ let botDeckEditorOpen=false;
     rowUpdates.length=0;
     for(const card of cards){
       const ids=variants(card),row=document.createElement("li");
-      let selectedId=card.cardNumber;
+      let selectedId=ids.find(id=>counts[editing][id])??card.cardNumber;
+      let previewId;
       row.className="bot-deck-card-row";
       const label=document.createElement("div");
+      label.className="bot-deck-card-info";
       label.textContent=card.name;
+      const preview=document.createElement("div");
+      preview.className="bot-deck-card-preview carddetail";
       const info=document.createElement("small");
       info.textContent=card.cardNumber+" ／ "+card.color+" ／ "+(card.type==="climax"?"CX":(card.type==="event"?"イベント ":"")+"Lv"+card.stats.level);
       label.append(info);
@@ -109,6 +113,11 @@ let botDeckEditorOpen=false;
       function updateRow(){
         const deck=counts[editing],num=deck[selectedId]??0;
         const edition=selectedId===card.cardNumber?"":"（"+editionNames[ids.indexOf(selectedId)]+"）";
+        if(previewId!==selectedId){
+          previewId=selectedId;
+          preview.replaceChildren();
+          addCardImage(preview,{id:selectedId},card.name+edition,effectChoiceImageUrl);
+        }
         amount.textContent=String(num);
         minus.setAttribute("aria-label",card.name+edition+"を1枚減らす");
         plus.setAttribute("aria-label",card.name+edition+"を1枚増やす");
@@ -120,7 +129,7 @@ let botDeckEditorOpen=false;
       }
       rowUpdates.push(updateRow);
       controls.append(minus,amount,plus);
-      row.append(label,controls);
+      row.append(label,controls,preview);
       list.append(row);
     }
   }

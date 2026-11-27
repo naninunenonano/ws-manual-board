@@ -255,13 +255,22 @@ async function checkBotDeckEditor(browser,url){
   const page=await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
   try {
     await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
+    await page.route("https://heartofthecards.com/**",route=>route.fulfill({
+      contentType:"image/png",
+      body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGZkAAAAASUVORK5CYII=","base64")
+    }));
     await page.goto(url);
     await page.locator("#openBotDeckEditor").tap();
     await page.getByRole("heading",{name:"Bot戦デッキ編集"}).waitFor();
     const start=page.locator("#startEditedBotBattle");
     await page.getByRole("button",{name:"巡遊者 グレイを1枚減らす",exact:true}).tap();
     assert.equal(await start.isDisabled(),true);
-    await page.getByRole("combobox",{name:"銃弾のロンド コハクのバージョン",exact:true}).selectOption("STS/W140-038SSP");
+    const kohaku=page.locator(".bot-deck-card-row").filter({hasText:"銃弾のロンド コハク"});
+    const preview=kohaku.locator(".bot-deck-card-preview img");
+    assert.match(await preview.getAttribute("src"),/038\.png$/);
+    await kohaku.getByRole("combobox",{name:"銃弾のロンド コハクのバージョン",exact:true}).selectOption("STS/W140-038SSP");
+    assert.match(await preview.getAttribute("src"),/038ssp\.png$/);
+    await preview.waitFor();
     await page.getByRole("button",{name:"銃弾のロンド コハク（SSP）を1枚増やす",exact:true}).tap();
     assert.equal(await start.isEnabled(),true);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);

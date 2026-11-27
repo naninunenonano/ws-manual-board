@@ -36,18 +36,14 @@ function stellaChoose(p,title,cards,done,{optional=false,shown=[]}={}){
     return;
   }
   if(p===1){done(cards[0]);return}
-  const body=showResolution(title,shown.length?[]:cards);
-  if(shown.length){
-    for(const card of shown){
-      const index=cards.indexOf(card);
-      const button=effectCardButton(body,card,index<0?stellaName(card):(index+1)+"．"+stellaName(card),()=>{
-        closeResolution();done(card);
-      });
-      button.disabled=index<0;
-    }
-  }else for(const [index,card] of cards.entries())deckButton(body,(index+1)+"．"+stellaName(card),()=>{
-    closeResolution();done(card);
-  });
+  const body=showResolution(title,[]);
+  for(const card of shown.length?shown:cards){
+    const index=cards.indexOf(card);
+    const button=effectCardButton(body,card,index<0?stellaName(card):(index+1)+"．"+stellaName(card),()=>{
+      closeResolution();done(card);
+    });
+    button.disabled=index<0;
+  }
   if(optional)deckButton(body,"選ばない",()=>{closeResolution();done(null)});
 }
 function stellaConfirm(p,title,done){

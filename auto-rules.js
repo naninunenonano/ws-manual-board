@@ -647,7 +647,7 @@ function autoRuleCounter(p,attacker,target,done){
   }
   if(p===1){play(candidates[0]);return}
   const body=showResolution("カウンター",[target]);
-  for(const card of candidates)deckButton(body,botCardInfo(card).name+"を使う",()=>{closeResolution();play(card)});
+  for(const card of candidates)effectCardButton(body,card,botCardInfo(card).name+"を使う",()=>{closeResolution();play(card)});
   deckButton(body,"使わない",()=>{closeResolution();done()});
 }
 function hasPracticeTrait(card,trait){
@@ -1113,7 +1113,7 @@ function resolveBrainstormSalvage(p,max,revealed,done){
   appendResolutionCards(details,revealed,effectChoiceImageUrl);
   body.append(details);
   for(const card of candidates){
-    const button=deckButton(body,botCardInfo(card)?.name??card.id,()=>{
+    const button=effectCardButton(body,card,botCardInfo(card)?.name??card.id,()=>{
       if(picks.has(card.uid))picks.delete(card.uid);
       else if(picks.size<limit)picks.add(card.uid);
       button.setAttribute("aria-pressed",String(picks.has(card.uid)));

@@ -1906,6 +1906,9 @@ test("魔王ちゃんの集中は4枚をめくり、CXの枚数まで控え室�
   const publicCards=page.get("dialogBody").children[0].children;
   assert.match(publicCards[0].textContent,/公開カード 4枚（CX 1枚）/);
   assert.match(publicCards[1].children[2].children[0].src,/sts-w140-032\.png$/);
+  const target=page.get("dialogBody").children.find(el=>el.textContent==="魂の取引 魔王ちゃん");
+  assert.match(target.className,/effect-card-choice/);
+  assert.match(target.children[0].src,/sts-w140-008\.png$/);
   ruleButton(page,"魂の取引 魔王ちゃん");
   ruleButton(page,"回収を確定");
   assert.equal(page.run("maouBoard.back0[0].orientation"),90);
@@ -2605,10 +2608,12 @@ test("光り物と通常版で合計4枚を上限とし、光り物のカード�
   const row=page.get("botDeckCardRows").children.find(entry=>entry.children[0].textContent==="巡遊者 コゼット");
   const variants=row.children[0].children[1];
   const [minus,,plus]=row.children[1].children;
+  assert.match(row.children[2].children[0].src,/sts-w140-t03\.png$/);
   assert.equal(plus.disabled,true);
   minus.onclick();
   variants.value="STS/W140-T03SP";
   variants.onchange();
+  assert.match(row.children[2].children[0].src,/sts-w140-t03sp\.png$/);
   plus.onclick();
   assert.equal(plus.disabled,true);
   assert.equal(page.get("startEditedBotBattle").disabled,false);
