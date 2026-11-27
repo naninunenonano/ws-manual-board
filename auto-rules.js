@@ -533,15 +533,11 @@ function autoRuleHandMenu(p,index){
     closeResolution();
     if(type==="climax"){autoRulePlace(p,card.uid,"cx");return}
     if(playableEvent){autoRulePlayEvent(p,card.uid);return}
-    const targets=showResolution("登場させる枠",[card]);
-    setRuleModal(false);
-    deckButton(targets,"選択解除",()=>{closeResolution();clearCardSelection()});
-    for(const slot of botSlots){
-      const occupied=players[p][slot].length>0;
-      deckButton(targets,labels[slot]+(occupied?"（入れ替え）":""),()=>{
-        closeResolution();autoRulePlace(p,card.uid,slot);
-      });
-    }
+    const currentIndex=players[p].hand.findIndex(entry=>entry.uid===card.uid);
+    if(currentIndex<0)return;
+    selected={p,z:"hand",index:currentIndex,placementUid:card.uid};
+    render();
+    renderTurnControls();
   });
   return true;
 }

@@ -940,7 +940,9 @@ test("自動ルール：レベル・ストック不足で中止し、2枚支払�
   page.run('closeResolution();selected=null;botMove(players[0],"waiting",0,"level")');
   page.run('cardClick(0,"hand",2)');
   ruleButton(page,"プレイする");
-  ruleButton(page,"前列②");
+  assert.equal(page.get("dialog").open,false);
+  assert.match(page.get("stagePlacementHint").textContent,/置く枠をタップ/);
+  page.run('zoneClick(0,"front1")');
   let snap=snapshot(page);
   assert.equal(snap.players[0].front1[0].id,"BOT/W000-002");
   assert.equal(snap.players[0].stock.length,1);
@@ -1717,7 +1719,7 @@ test("オトハをLv2でプレイし、登場時のドロー後にリフレッ�
   assert.equal(page.run('autoRuleHandLevel(0,testOtohaBoard.hand[0],botDefinition(testOtohaBoard.hand[0]))'),2);
   page.run('cardClick(0,"hand",0)');
   ruleButton(page,"プレイする");
-  ruleButton(page,"前列①");
+  page.run('zoneClick(0,"front0")');
   assert.equal(page.run("testOtohaBoard.stock.length"),0);
   page.run('testOtohaBoard.front0[0].markers=[{card:testOtohaCard("own-marker","BOT/W000-001"),faceUp:false}]');
   assert.equal(page.run("botStats(0,testOtohaBoard.front0[0]).power"),11000);
