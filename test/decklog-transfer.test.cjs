@@ -2667,8 +2667,7 @@ test("ステラソラBot戦は集中0ヒットとキャンセルされたダメ�
 test("オンライン用の新規作成はBotデッキと独立し、50枚とCX8枚を満たすデッキを登録する",async()=>{
   const page=launch("",new Map(),null,100,null,true);
   await page.click("openOnlineDeckBuilder");
-  assert.equal(page.get("deckEditorTitle").textContent,"オンライン用デッキ作成");
-  assert.equal(page.get("editOpponentBotDeck").hidden,true);
+  assert.equal(page.get("startEditedBotBattle").hidden,true);
   assert.match(page.get("botDeckTotals").textContent,/^0\/50枚/);
   page.get("builtOnlineDeckName").value="オンライン検証";
   page.get("builtOnlineDeckName").oninput();
@@ -2684,8 +2683,36 @@ test("オンライン用の新規作成はBotデッキと独立し、50枚とCX8
   assert.equal(saved.deck.list.find(card=>card.card_number==="STS/W140-038").num,1);
   assert.equal(page.get("botDeckEditorScreen").hidden,true);
   await page.click("openBotDeckEditor");
-  assert.equal(page.get("deckEditorTitle").textContent,"Bot戦デッキ編集");
+  assert.equal(page.get("startEditedBotBattle").hidden,false);
   assert.match(page.get("botDeckTotals").textContent,/Bot 50\/50枚/);
   const kohaku=page.get("botDeckCardRows").children.find(row=>row.children[0].textContent==="銃弾のロンド コハク");
   assert.equal(kohaku.children[1].children[1].textContent,"0");
+});
+
+test("共通のデッキ作成画面で大会を参考にした構成を保存し、Bot側に読み込んで対戦できる",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.click("openBotDeckEditor");
+  page.click("editNewDeck");
+  page.get("botDeckPreset").value="sendai";
+  page.get("botDeckPreset").onchange();
+  assert.equal(page.get("botDeckPresetLink").href,"https://ws-tcg.com/deckrecipe/5856/");
+  assert.match(page.get("botDeckPresetNote").textContent,/フリージア2枚/);
+  page.click("applyBotDeckPreset");
+  assert.match(page.get("botDeckTotals").textContent,/^50\/50枚（CX 8\/8枚）/);
+  page.get("builtOnlineDeckName").value="仙台トリオ調整";
+  page.get("builtOnlineDeckName").oninput();
+  assert.equal(page.get("saveBuiltOnlineDeck").disabled,false);
+  page.click("saveBuiltOnlineDeck");
+  const [saved]=JSON.parse(page.storage.get(libraryKey));
+  assert.equal(saved.deck.title,"仙台トリオ調整");
+  assert.equal(page.get("botDeckEditorScreen").hidden,false);
+  page.click("editOpponentBotDeck");
+  page.get("loadBuilderDeck").value=saved.id;
+  page.get("loadBuilderDeck").onchange();
+  page.click("applyBuilderDeck");
+  page.click("startEditedBotBattle");
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+  assert.equal(page.run('match.decks[0].cards.find(c=>c.id==="STS/W140-003").num'),2);
+  assert.equal(page.run('match.decks[1].cards.find(c=>c.id==="STS/W140-003").num'),3);
+  assert.equal(page.run('match.decks[1].cards.find(c=>c.id==="STS/W140-068").num'),2);
 });

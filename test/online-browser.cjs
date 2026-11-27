@@ -86,7 +86,7 @@ async function main() {
     const begin=page=>page.locator("#onlineControls summary").click();
     await Promise.all([begin(a),begin(b),begin(c)]);
     await $(b,"openOnlineDeckBuilder").tap();
-    await b.getByRole("heading",{name:"オンライン用デッキ作成",exact:true}).waitFor();
+    await b.getByRole("heading",{name:"デッキ作成・Bot戦",exact:true}).waitFor();
     await $(b,"builtOnlineDeckName").fill("ステラソラ検証");
     assert.equal(await $(b,"saveBuiltOnlineDeck").isDisabled(),true);
     await $(b,"botDeckPreset").selectOption("trial");

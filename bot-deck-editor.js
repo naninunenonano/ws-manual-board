@@ -2,16 +2,47 @@
 
 let botDeckEditorOpen=false;
 
-const connectOnlineDeckBuilder=(()=>{
+const connectDeckBuilder=(()=>{
   const get=id=>document.getElementById(id);
   const key="ws-stella-bot-decks-v1";
-  const presets={daqbe:stellaDeck,trial:stellaTrialDeck};
-  const tabs=[get("editOwnBotDeck"),get("editOpponentBotDeck")];
+  const sendaiDeck={
+    cards:[
+      ["004",4],["003",3],["076",1],["024",4],["023",1],["013",1],["002",4],
+      ["019",1],["008",4],["001",4],["T03",4],["025",2],["068",2],["071",4],
+      ["030",3],["031",4],["032",4]
+    ].map(([number,num])=>({id:"STS/W140-"+number,num}))
+  };
+  const presets={
+    daqbe:{deck:stellaDeck,url:"https://ws-tcg.com/deckrecipe/5855/"},
+    sendai:{deck:sendaiDeck,url:"https://ws-tcg.com/deckrecipe/5856/",
+      note:"千の貌を持つ女 オトハ1枚と波に先立つ兎 シア2枚を、ムーンシャドウ コゼット1枚と弁論と立証 フリージア2枚に差し替えています。"},
+    trial:{deck:stellaTrialDeck},
+    empty:{deck:{cards:[]}}
+  };
+  const tabs=[get("editOwnBotDeck"),get("editOpponentBotDeck"),get("editNewDeck")];
   const list=get("botDeckCardRows"), totals=get("botDeckTotals"), notice=get("botDeckEditorNotice");
   const start=get("startEditedBotBattle"), apply=get("applyBotDeckPreset");
   const save=get("saveBuiltOnlineDeck"), deckName=get("builtOnlineDeckName");
-  let counts,cards=[],editing=0,online=false,onlineDraft={};
-  const currentDeck=()=>online?onlineDraft:counts[editing];
+  const presetSelect=get("botDeckPreset"), savedSelect=get("loadBuilderDeck");
+  const load=get("applyBuilderDeck");
+  let counts,cards=[],editing=0,openedFromOnline=false,newDraft={},readSavedDecks;
+  const newDeck=()=>editing===2;
+  const currentDeck=()=>newDeck()?newDraft:counts[editing];
+  function setCurrentDeck(deck){
+    if(newDeck())newDraft=deck;
+    else{
+      counts[editing]=deck;
+      saveCounts();
+    }
+  }
+  function refreshPresetSource(){
+    const preset=presets[presetSelect.value];
+    get("botDeckPresetSource").hidden=!preset?.url;
+    if(preset?.url){
+      get("botDeckPresetLink").href=preset.url;
+      get("botDeckPresetNote").textContent=preset.note??"";
+    }
+  }
   const rowUpdates=[];
   const variants=card=>CardCatalog.cardNumbers(card);
   const totalCopies=(deck,ids)=>ids.reduce((sum,id)=>sum+(deck[id]??0),0);
@@ -60,16 +91,13 @@ const connectOnlineDeckBuilder=(()=>{
   const complete=({total,cx})=>total===50&&cx===8;
   const describe=({total,cx})=>total+"/50枚（CX "+cx+"/8枚）";
   function refreshCounts(){
-    if(online){
-      const summary=summarize(onlineDraft);
-      totals.textContent=describe(summary);
-      save.disabled=!deckName.value.trim()||!complete(summary);
-    }else{
-      const summaries=counts.map(summarize);
-      totals.textContent=summaries.map((summary,p)=>(p===0?"自分":"Bot")+" "+describe(summary)).join(" ／ ");
-      start.disabled=!summaries.every(complete);
-      tabs.forEach((tab,p)=>tab.setAttribute("aria-pressed",String(p===editing)));
-    }
+    const summaries=counts.map(summarize);
+    totals.textContent=newDeck()?describe(summarize(newDraft)):
+      summaries.map((summary,p)=>(p===0?"自分":"Bot")+" "+describe(summary)).join(" ／ ");
+    save.disabled=!deckName.value.trim()||!complete(summarize(currentDeck()));
+    start.disabled=!summaries.every(complete);
+    start.hidden=newDeck();
+    tabs.forEach((tab,p)=>tab.setAttribute("aria-pressed",String(p===editing)));
     rowUpdates.forEach(update=>update());
   }
   function renderRows(){
@@ -117,7 +145,7 @@ const connectOnlineDeckBuilder=(()=>{
         if(num<0||(delta>0&&totalCopies(deck,ids)>=4))return;
         if(num)deck[selectedId]=num;
         else delete deck[selectedId];
-        if(!online)saveCounts();
+        if(!newDeck())saveCounts();
         refreshCounts();
       }
       minus.onclick=()=>change(-1);
@@ -146,15 +174,44 @@ const connectOnlineDeckBuilder=(()=>{
     }
   }
 
+  function supportedDecks(){
+    const cardNumbers=new Set(cards.flatMap(variants));
+    return readSavedDecks().filter(({deck})=>{
+      if(!deck.cards.every(({id})=>cardNumbers.has(id)))return false;
+      const deckCounts=fromPreset(deck);
+      return complete(summarize(deckCounts))&&cards.every(card=>totalCopies(deckCounts,variants(card))<=4);
+    });
+  }
+  function refreshSavedDecks(){
+    const selected=savedSelect.value;
+    const options=supportedDecks();
+    savedSelect.replaceChildren();
+    const empty=document.createElement("option");
+    empty.value="";
+    empty.textContent=options.length?"デッキを選択":"対応する保存済みデッキなし";
+    savedSelect.append(empty);
+    for(const {id,deck} of options){
+      const option=document.createElement("option");
+      option.value=id;
+      option.textContent=deck.title;
+      savedSelect.append(option);
+    }
+    savedSelect.value=options.some(({id})=>id===selected)?selected:"";
+    load.disabled=!savedSelect.value;
+  }
+  function selectTab(index){
+    editing=index;
+    if(!counts)return;
+    notice.textContent="";
+    deckName.value="";
+    renderRows();
+    refreshCounts();
+  }
   async function openEditor(forOnline){
     if(!isDeckSetup())return;
-    online=forOnline;
+    openedFromOnline=forOnline;
     botDeckEditorOpen=true;
-    get("deckEditorTitle").textContent=online?"オンライン用デッキ作成":"Bot戦デッキ編集";
-    get("onlineDeckBuilderFields").hidden=!online;
-    start.hidden=online;
-    save.hidden=!online;
-    for(const tab of tabs)tab.hidden=online;
+    selectTab(forOnline?2:0);
     showMatchScreen();
     if(!counts){
       notice.textContent="カードデータを読み込んでいます";
@@ -171,10 +228,10 @@ const connectOnlineDeckBuilder=(()=>{
           Number(a.type==="climax")-Number(b.type==="climax")||a.cardNumber.localeCompare(b.cardNumber));
         counts=loadCounts();
       }
+      selectTab(editing);
     }
-    notice.textContent="";
-    renderRows();
-    refreshCounts();
+    refreshSavedDecks();
+    refreshPresetSource();
     apply.disabled=false;
   }
   function closeEditor(){
@@ -184,26 +241,27 @@ const connectOnlineDeckBuilder=(()=>{
   get("openBotDeckEditor").onclick=()=>openEditor(false);
   get("openOnlineDeckBuilder").onclick=()=>openEditor(true);
   get("closeBotDeckEditor").onclick=closeEditor;
-  deckName.oninput=()=>{if(counts&&online)refreshCounts()};
-  tabs.forEach((tab,p)=>{
-    tab.onclick=()=>{
-      editing=p;
-      if(counts)refreshCounts();
-    };
-  });
+  deckName.oninput=()=>{if(counts)refreshCounts()};
+  tabs.forEach((tab,p)=>{tab.onclick=()=>selectTab(p)});
+  savedSelect.onchange=()=>{load.disabled=!savedSelect.value};
+  load.onclick=()=>{
+    const saved=supportedDecks().find(({id})=>id===savedSelect.value);
+    if(!saved){refreshSavedDecks();return}
+    setCurrentDeck(fromPreset(saved.deck));
+    deckName.value=saved.deck.title;
+    renderRows();
+    refreshCounts();
+  };
+  presetSelect.onchange=refreshPresetSource;
   apply.onclick=()=>{
-    const preset=presets[get("botDeckPreset").value];
+    const preset=presets[presetSelect.value];
     if(!counts||!preset)return;
-    if(online)onlineDraft=fromPreset(preset);
-    else{
-      counts[editing]=fromPreset(preset);
-      saveCounts();
-    }
+    setCurrentDeck(fromPreset(preset.deck));
     renderRows();
     refreshCounts();
   };
   start.onclick=()=>{
-    if(start.disabled||!counts||online)return;
+    if(start.disabled||!counts||newDeck())return;
     if(onlineMatch?.active()){
       notice.textContent="オンラインルームを退出してから開始してください";
       return;
@@ -211,20 +269,26 @@ const connectOnlineDeckBuilder=(()=>{
     startBotMatch(buildDeck(counts[0],"自分のステラソラ"),stellaCustomScenario,buildDeck(counts[1],"Botのステラソラ"));
     if(isDeckSetup())notice.textContent="対戦を開始できません。端末の保存設定を確認してください。";
   };
-  return storeDeck=>{
+  return (getDecks,storeDeck)=>{
+    readSavedDecks=getDecks;
     save.onclick=()=>{
-      if(!online||!botDeckEditorOpen||!counts||save.disabled)return;
+      if(!botDeckEditorOpen||!counts||save.disabled)return;
       try{
         const title=deckName.value.trim();
-        if(!title||!complete(summarize(onlineDraft)))return;
-        const id=storeDeck(buildDeck(onlineDraft,title));
-        onlineDraft={};
-        deckName.value="";
-        closeEditor();
-        get("onlineControls").open=true;
-        onlineMatch?.refreshDecks();
-        get("onlineDeck").value=id;
-        get("onlineStatus").textContent="「"+title+"」を保存しました。ルームでこのデッキを選べます。";
+        if(!title||!complete(summarize(currentDeck())))return;
+        const id=storeDeck(buildDeck(currentDeck(),title));
+        if(openedFromOnline&&newDeck()){
+          newDraft={};
+          deckName.value="";
+          closeEditor();
+          get("onlineControls").open=true;
+          onlineMatch?.refreshDecks();
+          get("onlineDeck").value=id;
+          get("onlineStatus").textContent="「"+title+"」を保存しました。ルームでこのデッキを選べます。";
+        }else{
+          refreshSavedDecks();
+          notice.textContent="「"+title+"」を共通のデッキ一覧に保存しました。";
+        }
       }catch(error){
         notice.textContent=error.message;
       }

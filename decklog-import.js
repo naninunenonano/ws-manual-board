@@ -145,7 +145,11 @@
     if(cloud?.online())cloud.synchronize();
     else if(cloud&&!cloud.busy())$("cloudDeckStatus").textContent="クラウド未接続。変更は端末に保存済みです。「同期・再試行」で接続できます。";
   }
-  connectOnlineDeckBuilder(input=>{
+  function registeredDecks(){
+    try{return library().map(item=>({id:item.id,title:item.deck.title,deck:normalize(item.deck)}))}
+    catch{return []}
+  }
+  connectDeckBuilder(registeredDecks,input=>{
     const deck=normalize(input);
     if(!cxReady(deck))throw Error("CXを8枚に確定してください");
     const list=readLibrary();
@@ -371,10 +375,7 @@
   if(cloud && typeof initializeOnlineMatch==="function"){
     onlineMatch=initializeOnlineMatch({
       authenticate:cloud.authenticate,
-      getDecks:()=>{
-        try{return library().map(item=>({id:item.id,title:item.deck.title,deck:normalize(item.deck)}))}
-        catch{return []}
-      }
+      getDecks:registeredDecks
     });
   }
   cloud?.synchronize();
