@@ -12,7 +12,7 @@ const frierenIs=(card,number)=>card&&sameBotCardNumber(card.id,"SFN/"+number);
 const frierenAlly=card=>["冒険者","魔法"].some(trait=>matchesPracticeTrait(card,trait));
 const frierenOther=(p,source)=>stellaStage(p).filter(card=>card.uid!==source.uid&&frierenAlly(card));
 const frierenStatues=p=>players[p].memory.filter(card=>card.faceUp&&frierenIs(card,"S128-017")).length;
-const frierenEisen=p=>players[p].memory.some(card=>card.faceUp&&frierenIs(card,"S136-006"));
+const frierenEisenCount=p=>players[p].memory.filter(card=>card.faceUp&&frierenIs(card,"S136-006")).length;
 const frierenChoice=cx=>botDefinition(cx)?.triggers?.includes("チョイス");
 const frierenNamedCx=(p,number)=>players[p].cx.some(card=>frierenIs(card,number));
 
@@ -20,7 +20,7 @@ function frierenPower(p,card){
   if(!card.id.startsWith("SFN/")||!stellaStage(p).includes(card))return 0;
   let power=frierenAlly(card)?1500*frierenOther(p,card).filter(source=>frierenIs(source,"S128-009")).length:0;
   if(frierenIs(card,"S136-076")&&stellaStage(p).every(frierenAlly))power+=3000;
-  if(frierenIs(card,"S128-003")&&frierenEisen(p)&&frierenStatues(p)>=3)power+=1000;
+  if(frierenIs(card,"S128-003")&&frierenStatues(p)>=3)power+=1000*frierenEisenCount(p);
   if(frierenIs(card,"S108-T04")&&match.turn.player===p)
     power+=2000*frierenOther(p,card).filter(source=>frierenIs(source,"S136-005")).length;
   return power;
@@ -166,9 +166,13 @@ function frierenTopMove(actor,owner,canMill,done){
       deckButton(body,label,()=>{closeResolution();move(zone)});
   });
 }
-function frierenHimmelTop(p,source,done){
-  if(!frierenEisen(p)||frierenStatues(p)<4){done();return}
-  frierenTopMove(p,1-p,false,done);
+function frierenHimmelMemoryActions(p,attacker){
+  if(!frierenIs(attacker,"S128-003")||frierenStatues(p)<4)return [];
+  const action={
+    label:"記憶・アイゼンの効果で相手の山札の上を確認",
+    run:done=>frierenTopMove(p,1-p,false,done)
+  };
+  return Array(frierenEisenCount(p)).fill(action);
 }
 function frierenTdCombo(p,source,done){
   if(!frierenNamedCx(p,"S108-T09")||!frierenOther(p,source).length){done();return}
@@ -316,16 +320,47 @@ function frierenChoiceTrigger(p,done){
   },{optional:true});
 }
 function frierenEisenActions(p,cx){
-  if(frierenEisen(p)||!frierenIs(cx,"S128-022")&&!frierenIs(cx,"S108-T09"))return [];
-  const board=players[p],copies=board.waiting.filter(card=>frierenIs(card,"S136-006"));
-  if(!copies.length)return [];
-  return [{label:"旅の日常 アイゼン・控え室から思い出へ",
-    run:done=>frierenToMemory(p,"旅の日常 アイゼンを思い出にする",card=>frierenIs(card,"S136-006"),done)}];
+  if(frierenEisenCount(p)||!frierenIs(cx,"S128-022")&&!frierenIs(cx,"S108-T09"))return [];
+  const board=players[p];
+  const triggered=board.waiting.filter(card=>frierenIs(card,"S136-006")).map(card=>card.uid);
+  if(!triggered.length)return [];
+  return [{
+    label:"旅の日常 アイゼン・控え室から思い出へ（"+triggered.length+"枚）",
+    run:done=>{
+      // Each copy met the condition when the CX was placed. Moving one does not cancel the others.
+      const copies=triggered.map(uid=>board.waiting.find(card=>card.uid===uid)).filter(Boolean);
+      function resolve(selected){
+        for(const card of selected)stellaMove(board,"waiting",card,"memory");
+        done();
+      }
+      if(!copies.length){done();return}
+      if(p===1){resolve(copies);return}
+      if(copies.length===1){
+        stellaChoose(p,"旅の日常 アイゼンを思い出にする",copies,card=>resolve(card?[card]:[]),{optional:true});
+        return;
+      }
+      const selected=new Set();
+      const body=showResolution("思い出にするアイゼンを選ぶ",[]);
+      for(const [index,card] of copies.entries()){
+        const button=effectCardButton(body,card,(index+1)+"．"+stellaName(card),()=>{
+          if(selected.has(card))selected.delete(card);else selected.add(card);
+          button.setAttribute("aria-pressed",String(selected.has(card)));
+          button.style.outline=selected.has(card)?"2px solid #f4cf73":"";
+          confirm.disabled=!selected.size;
+        });
+        button.setAttribute("aria-pressed","false");
+      }
+      function finish(cards){closeResolution();resolve(cards)}
+      const confirm=deckButton(body,"選んだカードを思い出にする",()=>finish(copies.filter(card=>selected.has(card))));
+      confirm.disabled=true;
+      deckButton(body,"すべて思い出にする",()=>finish(copies));
+      deckButton(body,"思い出にしない",()=>finish([]));
+    }
+  }];
 }
 
 const frierenConditions={
   "frieren-himmel-combo":frierenHimmelComboReady,
-  "frieren-himmel-top":p=>frierenEisen(p)&&frierenStatues(p)>=4,
   "frieren-vow-search":p=>players[p].stock.length>0&&players[p].deck.length>0
 };
 const frierenActions={
@@ -333,7 +368,6 @@ const frierenActions={
   "frieren-heiter-search":frierenHeiterSearch,
   "frieren-himmel-entry":frierenHimmelEntry,
   "frieren-himmel-combo":frierenHimmelCombo,
-  "frieren-himmel-top":frierenHimmelTop,
   "frieren-bottom-look":frierenBottomLook,
   "frieren-td-entry":(p,card,done)=>{autoRuleAddTurnStat(card,"power",3000);done()},
   "frieren-td-combo":frierenTdCombo,

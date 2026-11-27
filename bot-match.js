@@ -305,7 +305,7 @@ function botResolveTriggered(p,actions,done){
       const [action]=pending.splice(index,1);
       action.run(next);
     }
-    if(p===1||pending.length===1){resolve(0);return}
+    if(p===1||pending.every(action=>action===pending[0])){resolve(0);return}
     const body=showResolution("次に解決する効果を選ぶ",[]);
     for(const [index,action] of pending.entries())deckButton(body,(index+1)+"．"+action.label,()=>{
       closeResolution();resolve(index);
@@ -323,7 +323,7 @@ function botStageEntry(p,card,from,done){
 }
 function botAttackTriggeredActions(p,attacker){
   const board=players[p];
-  const actions=[];
+  const actions=frierenHimmelMemoryActions(p,attacker);
   if(["巡遊者","魔王"].some(trait=>matchesPracticeTrait(attacker,trait))){
     for(const marker of attacker.markers??[]){
       const effect=marker.faceUp&&botMarkerAbility(marker.card,"marker_host_attack");
@@ -819,7 +819,7 @@ function showBotRevealResult(title,cards,done){
 function botAbilityDamage(target,amount,done){
   const battle=autoRuleFrontBattle?.[target];
   const current=battle&&players[target][battle.slot].at(-1);
-  if(current?.uid===battle?.uid&&frierenIs(current,"S128-003")&&frierenEisen(target)&&frierenStatues(target)>=3){
+  if(current?.uid===battle?.uid&&frierenIs(current,"S128-003")&&frierenEisenCount(target)&&frierenStatues(target)>=3){
     autoRuleLog("旅の日常 アイゼン・キャラの自動能力によるダメージを受けない");
     done({cards:[],cancelled:false});
     return;

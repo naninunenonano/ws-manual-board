@@ -2870,3 +2870,58 @@ test("ヒンメルのCXコンボは下3枚のCXの枚数だけ2点を繰り返�
   assert.equal(page.run("opponent.clock.length"),4);
   assert.equal(page.run("match.bot.reveals.Damage.length"),2);
 });
+
+test("対応CXを置いた瞬間に思い出にアイゼンがなければ、控え室のアイゼン4枚を一度に思い出へ置ける",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(no,uid,cx=false)=>({id:"SFN/"+no,uid,cx,faceUp:true,orientation:0});
+    own.deck.push(fri("S136-001","reserve"));
+    own.hand.push(fri("S108-T09","cx",true),fri("S128-022","next-cx",true));
+    own.clock.push(fri("S136-001","yellow"));
+    for(let i=0;i<4;i++)own.waiting.push(fri(i===3?"S136-006S":"S136-006","eisen"+i));
+    own.waiting.push(fri("S108-T04","other"));
+    setTurnPhase("climax");
+    autoRulePlace(0,"cx","cx");
+  `);
+  ruleButton(page,"すべて思い出にする");
+  assert.equal(page.run("own.memory.map(c=>c.uid).join()"),"eisen0,eisen1,eisen2,eisen3");
+  assert.equal(page.run("own.waiting.map(c=>c.uid).join()"),"other");
+  page.run(`
+    botMove(own,"memory",1,"waiting");
+    botMove(own,"cx",0,"waiting");
+    autoRulePlace(0,"next-cx","cx");
+  `);
+  assert.equal(Boolean(page.get("dialog").open),false);
+  assert.equal(page.run('own.waiting.some(c=>c.uid==="eisen1")'),true);
+});
+
+test("アイゼンの誘発は置いた瞬間のカードを記録し、任意の枚数だけを思い出にできる",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(no,uid,cx=false)=>({id:"SFN/"+no,uid,cx,faceUp:true,orientation:0});
+    own.deck.push(fri("S136-001","reserve"));
+    own.waiting.push(fri("S136-006","first"),fri("S136-006S","foil"));
+    const queued=frierenEisenActions(0,fri("S128-022","cx",true));
+    own.waiting.push(fri("S136-006","late"));
+    runRuleOperation(done=>botResolveTriggered(0,queued,done));
+  `);
+  ruleButton(page,"2．旅の日常 アイゼン");
+  ruleButton(page,"選んだカードを思い出にする");
+  assert.equal(page.run("own.memory.map(c=>c.uid).join()"),"foil");
+  assert.equal(page.run("own.waiting.map(c=>c.uid).join()"),"first,late");
+});
+
+test("思い出のアイゼン4枚分のパワーとアタック時能力が重複する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(no,uid)=>({id:"SFN/"+no,uid,faceUp:true,orientation:0});
+    own.front0.push(fri("S128-003","himmel"));
+    for(let i=0;i<4;i++)own.memory.push(fri("S136-006","eisen"+i),fri("S128-017","statue"+i));
+    for(let i=0;i<6;i++)opponent.deck.push(card("001","top"+i));
+    runRuleOperation(done=>botDispatch(own.front0[0],"on_attack",done));
+  `);
+  assert.equal(page.run('botStats(0,own.front0[0]).power'),13500);
+  for(let i=0;i<4;i++)ruleButton(page,"山札の下に置く");
+  assert.equal(page.run('opponent.deck.at(-1).uid'),"top1");
+  assert.equal(Boolean(page.get("dialog").open),false);
+});

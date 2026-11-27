@@ -2399,9 +2399,9 @@
           "id": "frieren-himmel-top",
           "category": "記憶・相手の山札上を確認",
           "type": "auto",
-          "timing": "on_attack",
+          "timing": "granted_on_attack",
           "optional": false,
-          "sourceText": "思い出に「旅の日常 アイゼン」と「勇者一行の像」4枚があれば、相手の山札上1枚を見て上か下に置く。",
+          "sourceText": "思い出に「勇者一行の像」が4枚あれば、思い出の「旅の日常 アイゼン」1枚につき1回、相手の山札上1枚を見て上か下に置く。",
           "steps": null
         }
       ],
@@ -2812,7 +2812,7 @@
           "type": "auto",
           "timing": "on_named_cx_play",
           "optional": true,
-          "sourceText": "思い出に同名札がなく「僕達の冒険」か「久遠の愛情」を置いた時、控え室にある自身を思い出にできる。",
+          "sourceText": "「僕達の冒険」か「久遠の愛情」を置いた時点で思い出に同名札がなければ、控え室の同名札がそれぞれ誘発し、自身を思い出にできる。",
           "steps": null
         }
       ]
