@@ -65,6 +65,10 @@ async function main() {
       for(const p of [0,1])localStorage.setItem("ws-manual-deck-v1-p"+p,JSON.stringify(deck));
     },fixture);
     await page.goto("http://127.0.0.1:"+server.address().port);
+    assert.equal(await page.locator("#startBattle").isVisible(),false);
+    assert.equal(await page.locator("#openBotDeckEditor").isVisible(),true);
+    assert.equal(await page.locator("#onlineControls summary").isVisible(),true);
+    await page.locator("#startBattle").evaluate(button=>{button.parentElement.hidden=false});
     await page.locator("#startBattle").click();
     await page.locator("#confirmMulligan").click();
     await page.locator("#confirmMulligan").click();
