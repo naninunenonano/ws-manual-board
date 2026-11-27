@@ -1598,7 +1598,7 @@ test("赤青デッキは確定した50枚で初手・マリガンから開始す
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
 
-test("赤青同士ではBotの効果選択を自動で処理し、トリガーの確認だけを挟む",()=>{
+test("赤青同士ではBotの効果選択を自動で処理し、トリガーとダメージの公開を確認する",()=>{
   const page=launchRules("red-blue-deck");
   page.click("confirmMulligan");
   page.run(`finishEndTurn();setTurnPhase("main");const b=players[1];
@@ -1616,7 +1616,11 @@ test("赤青同士ではBotの効果選択を自動で処理し、トリガー�
   page.click("botStep");
   assert.equal(page.get("dialogTitle").textContent,"Botのトリガーチェック");
   ruleButton(page,"確認して進む");
+  assert.match(page.get("dialogTitle").textContent,/自分の.*ダメージ/);
+  ruleButton(page,"確認して進む");
   page.click("botStep");
+  ruleButton(page,"確認して進む");
+  assert.match(page.get("dialogTitle").textContent,/自分の.*ダメージ/);
   ruleButton(page,"確認して進む");
   assert.ok(snapshot(page).bot.log.some(line=>line.includes("CXコンボで")));
   assert.ok(!page.get("dialog").open);
@@ -1664,6 +1668,8 @@ test("赤青同士の自分のトリガーを確認するまでストックに�
   assert.equal(page.run("players[0].stock.length"),0);
   ruleButton(page,"確認して進む");
   ruleButton(page,"選ばず進む");
+  assert.match(page.get("dialogTitle").textContent,/Botの.*ダメージ/);
+  ruleButton(page,"確認して進む");
   assert.equal(snapshot(page).players[0].stock.at(-1).id,"BOT/W000-104");
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
@@ -2591,4 +2597,51 @@ test("Bot戦専用ページは両デッキの枚数を別々に編集し、保�
   assert.equal(reopened.run('match.decks[1].cards.some(c=>c.id==="STS/W140-040")'),true);
   reopened.click("confirmMulligan");
   assert.equal(reopened.run("isAutoRules()"),true);
+});
+
+test("光り物と通常版で合計4枚を上限とし、光り物のカード番号で保存して対戦に使う",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.click("openBotDeckEditor");
+  const row=page.get("botDeckCardRows").children.find(entry=>entry.children[0].textContent==="巡遊者 コゼット");
+  const variants=row.children[0].children[1];
+  const [minus,,plus]=row.children[1].children;
+  assert.equal(plus.disabled,true);
+  minus.onclick();
+  variants.value="STS/W140-T03SP";
+  variants.onchange();
+  plus.onclick();
+  assert.equal(plus.disabled,true);
+  assert.equal(page.get("startEditedBotBattle").disabled,false);
+
+  const reopened=launch("",page.storage,null,100,null,true);
+  await reopened.click("openBotDeckEditor");
+  reopened.click("startEditedBotBattle");
+  assert.equal(reopened.run('match.decks[0].cards.find(c=>c.id==="STS/W140-T03SP").num'),1);
+  assert.equal(reopened.run('match.decks[0].cards.find(c=>c.id==="STS/W140-T03").num'),3);
+  assert.equal(reopened.run('botDefinition({id:"STS/W140-T03SP"}).cardNumber'),"STS/W140-T03");
+  assert.match(reopened.run('effectChoiceImageUrl("STS/W140-T03SP")'),/sts-w140-t03sp\.png$/);
+});
+
+test("ステラソラBot戦は集中0ヒットとキャンセルされたダメージをその場で見せる",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.click("openBotDeckEditor");
+  page.click("startEditedBotBattle");
+  page.click("confirmMulligan");
+  page.run(`
+    const b=players[0];
+    const put=(id,to)=>botMove(b,"deck",b.deck.findIndex(c=>c.id==="STS/W140-"+id),to);
+    while(b.hand.length)botMove(b,"hand",0,"deck");
+    put("008","back0");put("001","stock");put("032","deck");
+    for(const id of ["019","023","068","071"])put(id,"deck");
+    setTurnPhase("main");
+    activateBrainstorm(0,b.back0[0],{stock:1,reveal:4,salvage:true});
+  `);
+  assert.match(page.get("dialogTitle").textContent,/自分の集中・CX 0枚/);
+  assert.equal(page.get("dialogBody").children[0].children.length,4);
+  ruleButton(page,"確認して進む");
+  page.run('runRuleOperation(done=>botDamage(0,1,done))');
+  assert.match(page.get("dialogTitle").textContent,/自分のCXでダメージをキャンセル/);
+  assert.equal(page.get("dialogBody").children[0].children.length,1);
+  ruleButton(page,"確認して進む");
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });

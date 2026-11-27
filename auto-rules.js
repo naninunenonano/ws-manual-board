@@ -1065,10 +1065,12 @@ function resolveBrainstorm(p,source,{stock,reveal,salvage},done){
     rememberBotReveal("Brainstorm",p,revealed,revealed.length+"枚公開・CX "+max+"枚");
     autoRuleLog("集中で"+revealed.length+"枚、CXが"+max+"枚（"+revealed.map(card=>botCardInfo(card).name).join("、")+"）");
     resolveBoardRules(p,()=>{
-      if(!max){done();return}
+      const title=(p===0?"自分":"Bot")+"の集中・CX "+max+"枚";
+      const afterReveal=next=>isDeckMirror(match.bot.scenario)?showBotRevealResult(title,revealed,next):next();
+      if(!max){afterReveal(done);return}
+      if(p===1){afterReveal(()=>salvage?resolveBrainstormSalvage(p,max,revealed,done):finishDraw(max));return}
       if(salvage){resolveBrainstormSalvage(p,max,revealed,done);return}
-      if(p===1){finishDraw(max);return}
-      const body=showResolution("集中・引く枚数を選ぶ（最大"+max+"枚）",revealed);
+      const body=showResolution("集中・引く枚数を選ぶ（最大"+max+"枚）",revealed,effectChoiceImageUrl);
       for(let n=0;n<=max;n++)deckButton(body,n===0?"引かない":n+"枚引く",()=>{
         closeResolution();
         autoRuleLog(n===0?"集中では引かない":"集中で"+n+"枚ドロー");
@@ -1088,7 +1090,11 @@ function resolveBrainstormSalvage(p,max,revealed,done){
   const board=players[p];
   const candidates=board.waiting.filter(card=>botDefinition(card)?.type==="character");
   const limit=Math.min(max,candidates.length);
-  if(!limit){done();return}
+  if(!limit){
+    if(p===0&&isDeckMirror(match.bot.scenario))showBotRevealResult("集中・回収できるキャラがありません",revealed,done);
+    else done();
+    return;
+  }
   const picks=new Set();
   function finish(){
     for(const uid of picks){
@@ -1101,6 +1107,7 @@ function resolveBrainstormSalvage(p,max,revealed,done){
   if(p===1){for(const card of candidates.slice(0,limit))picks.add(card.uid);finish();return}
   const body=showResolution("集中・控え室からキャラを"+limit+"枚まで手札へ",[]);
   const details=document.createElement("details"),summary=document.createElement("summary");
+  details.open=true;
   summary.textContent="公開カード "+revealed.length+"枚（CX "+max+"枚）";
   details.append(summary);
   appendResolutionCards(details,revealed,effectChoiceImageUrl);

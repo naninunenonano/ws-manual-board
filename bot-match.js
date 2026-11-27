@@ -782,6 +782,12 @@ for(const kind of Object.keys(botRevealTitles)){
   }
 }
 
+function showBotRevealResult(title,cards,done){
+  if(!cards.length){done();return}
+  const body=showResolution(title,cards,effectChoiceImageUrl);
+  deckButton(body,"確認して進む",()=>{closeResolution();done()});
+}
+
 function botDamage(target,amount,done){
   const board=players[target],revealed=[];
   function finish(cancel){
@@ -789,20 +795,21 @@ function botDamage(target,amount,done){
     const damage={cards:revealed.map(card=>card.uid),cancelled:cancel};
     const result=cancel?"CXでダメージをキャンセル":"ダメージ "+revealed.length+"枚";
     rememberBotReveal("Damage",target,revealed,cancel?result+"・"+revealed.length+"枚公開":result);
-    if(isAutoRules()){
-      autoRuleLog(result+(revealed.length?"（"+revealed.map(c=>botCardInfo(c).name).join("、")+"）":""));
-      revealed.forEach(card=>{card.faceUp=true;board[destination].push(card)});
+    function apply(){
+      for(const card of revealed){card.faceUp=true;board[destination].push(card)}
       resolveBoardRules(target,()=>done(damage));
+    }
+    if(isAutoRules()){
+      autoRuleLog(result+(revealed.length?"（"+revealed.map(stellaName).join("、")+"）":""));
+      if(isDeckMirror(match.bot.scenario)){
+        showBotRevealResult((target===0?"自分":"Bot")+"の"+result,revealed,apply);
+      }else apply();
       return;
     }
     botMessage(result);
-    if(!revealed.length){resolveBoardRules(target,()=>done(damage));return}
-    const body=showResolution(result,revealed);
-    deckButton(body,cancel?"控え室へ":"クロックへ",()=>{
-      closeResolution();
-      for(const card of revealed){card.faceUp=true;board[destination].push(card)}
-      resolveBoardRules(target,()=>done(damage));
-    });
+    if(!revealed.length){apply();return}
+    const body=showResolution(result,revealed,effectChoiceImageUrl);
+    deckButton(body,cancel?"控え室へ":"クロックへ",()=>{closeResolution();apply()});
   }
   function next(){
     if(revealed.length===amount){finish(false);return}

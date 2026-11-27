@@ -11,15 +11,24 @@ let botDeckEditorOpen=false;
   const start=get("startEditedBotBattle"), apply=get("applyBotDeckPreset");
   let counts, cards=[], editing=0;
   const rowUpdates=[];
+  const variants=card=>CardCatalog.cardNumbers(card);
+  const totalCopies=(deck,ids)=>ids.reduce((sum,id)=>sum+(deck[id]??0),0);
   const fromPreset=deck=>Object.fromEntries(deck.cards.map(({id,num})=>[id,num]));
 
   function loadCounts(){
     try{
       const saved=JSON.parse(localStorage.getItem(key));
       if(Array.isArray(saved)&&saved.length===2&&saved.every(item=>item&&typeof item==="object")){
-        return saved.map(item=>Object.fromEntries(cards
-          .map(card=>[card.cardNumber,item[card.cardNumber]])
-          .filter(([,num])=>Number.isInteger(num)&&num>=1&&num<=4)));
+        return saved.map(item=>Object.fromEntries(cards.flatMap(card=>{
+          let left=4;
+          return variants(card).flatMap(id=>{
+            const savedCount=item[id];
+            if(!Number.isInteger(savedCount)||savedCount<1||savedCount>4||left===0)return [];
+            const num=Math.min(savedCount,left);
+            left-=num;
+            return [[id,num]];
+          });
+        })));
       }
     }catch{}
     return [fromPreset(stellaDeck),fromPreset(stellaDeck)];
@@ -35,10 +44,10 @@ let botDeckEditorOpen=false;
   function buildDeck(p){
     return {
       title:p===0?"自分のステラソラ":"Botのステラソラ",
-      cards:cards.flatMap(card=>{
-        const id=card.cardNumber,num=counts[p][id];
+      cards:cards.flatMap(card=>variants(card).flatMap(id=>{
+        const num=counts[p][id];
         return num?[{id,num,cx:card.type==="climax"}]:[];
-      })
+      }))
     };
   }
   function refreshCounts(){
@@ -55,37 +64,61 @@ let botDeckEditorOpen=false;
     list.replaceChildren();
     rowUpdates.length=0;
     for(const card of cards){
-      const id=card.cardNumber, row=document.createElement("li");
+      const ids=variants(card),row=document.createElement("li");
+      let selectedId=card.cardNumber;
       row.className="bot-deck-card-row";
       const label=document.createElement("div");
       label.textContent=card.name;
       const info=document.createElement("small");
-      info.textContent=id+" ／ "+card.color+" ／ "+(card.type==="climax"?"CX":(card.type==="event"?"イベント ":"")+"Lv"+card.stats.level);
+      info.textContent=card.cardNumber+" ／ "+card.color+" ／ "+(card.type==="climax"?"CX":(card.type==="event"?"イベント ":"")+"Lv"+card.stats.level);
       label.append(info);
+      const editions=document.createElement("select");
+      const editionNames=ids.map(id=>({S:"SR",R:"RRR"}[id.slice(card.cardNumber.length)]??(id.slice(card.cardNumber.length)||"通常")));
+      if(ids.length>1){
+        editions.className="bot-deck-edition";
+        editions.setAttribute("aria-label",card.name+"のバージョン");
+        for(const id of ids){
+          const option=document.createElement("option");
+          option.value=id;
+          editions.append(option);
+        }
+        editions.value=selectedId;
+        editions.onchange=()=>{
+          if(!ids.includes(editions.value))return;
+          selectedId=editions.value;
+          updateRow();
+        };
+        label.append(editions);
+      }
       const controls=document.createElement("div");
       controls.className="bot-deck-count";
       const amount=document.createElement("span");
       const minus=document.createElement("button"), plus=document.createElement("button");
       minus.textContent="−";
-      minus.setAttribute("aria-label",card.name+"を1枚減らす");
       plus.textContent="＋";
-      plus.setAttribute("aria-label",card.name+"を1枚増やす");
       function change(delta){
-        const num=(counts[editing][id]??0)+delta;
-        if(num<0||num>4)return;
-        if(num)counts[editing][id]=num;
-        else delete counts[editing][id];
+        const deck=counts[editing],num=(deck[selectedId]??0)+delta;
+        if(num<0||(delta>0&&totalCopies(deck,ids)>=4))return;
+        if(num)deck[selectedId]=num;
+        else delete deck[selectedId];
         saveCounts();
         refreshCounts();
       }
       minus.onclick=()=>change(-1);
       plus.onclick=()=>change(1);
-      rowUpdates.push(()=>{
-        const num=counts[editing][id]??0;
+      function updateRow(){
+        const deck=counts[editing],num=deck[selectedId]??0;
+        const edition=selectedId===card.cardNumber?"":"（"+editionNames[ids.indexOf(selectedId)]+"）";
         amount.textContent=String(num);
+        minus.setAttribute("aria-label",card.name+edition+"を1枚減らす");
+        plus.setAttribute("aria-label",card.name+edition+"を1枚増やす");
         minus.disabled=num===0;
-        plus.disabled=num===4;
-      });
+        plus.disabled=totalCopies(deck,ids)>=4;
+        for(const [index,id] of ids.entries()){
+          if(ids.length>1)editions.children[index].textContent=editionNames[index]+" · "+(deck[id]??0)+"枚";
+        }
+      }
+      rowUpdates.push(updateRow);
       controls.append(minus,amount,plus);
       row.append(label,controls);
       list.append(row);

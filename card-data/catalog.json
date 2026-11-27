@@ -404,6 +404,7 @@
     },
     {
       "cardNumber": "STS/W140-003",
+      "variants": ["STS/W140-003", "STS/W140-003S", "STS/W140-003SP"],
       "name": "長夜無明 オトハ",
       "reading": "ムミョウジョウヤ オトハ",
       "title": "ステラソラ",
@@ -607,6 +608,7 @@
     },
     {
       "cardNumber": "STS/W140-004",
+      "variants": ["STS/W140-004", "STS/W140-004S", "STS/W140-004SP"],
       "name": "爽風の才媛 ナツカ",
       "reading": "ソウフウノサイエン ナツカ",
       "title": "ステラソラ",
@@ -961,6 +963,7 @@
     },
     {
       "cardNumber": "STS/W140-019",
+      "variants": ["STS/W140-019", "STS/W140-019S"],
       "name": "風に揺れる気持ち ナツカ",
       "reading": "カゼニユレルキモチ ナツカ",
       "title": "ステラソラ",
@@ -1004,6 +1007,7 @@
     },
     {
       "cardNumber": "STS/W140-024",
+      "variants": ["STS/W140-024", "STS/W140-024S"],
       "name": "カリスマ教師の気苦労 カナーチェ",
       "reading": "カリスマキョウシノキグロウ カナーチェ",
       "title": "ステラソラ",
@@ -1155,6 +1159,7 @@
     },
     {
       "cardNumber": "STS/W140-008",
+      "variants": ["STS/W140-008", "STS/W140-008S", "STS/W140-008SSP"],
       "name": "魂の取引 魔王ちゃん",
       "reading": "タマシイノトリヒキ マオウチャン",
       "title": "ステラソラ",
@@ -1238,6 +1243,7 @@
     },
     {
       "cardNumber": "STS/W140-023",
+      "variants": ["STS/W140-023", "STS/W140-023S"],
       "name": "ドリンクの誘惑 コゼット",
       "reading": "ドリンクノユウワク コゼット",
       "title": "ステラソラ",
@@ -1310,6 +1316,7 @@
     },
     {
       "cardNumber": "STS/W140-013",
+      "variants": ["STS/W140-013", "STS/W140-013S"],
       "name": "ムーンシャドウ コゼット",
       "reading": "ムーンシャドウ コゼット",
       "title": "ステラソラ",
@@ -1426,6 +1433,7 @@
     },
     {
       "cardNumber": "STS/W140-076",
+      "variants": ["STS/W140-076", "STS/W140-076S", "STS/W140-076SSP"],
       "name": "知識の力 アヤメ",
       "reading": "チシキノチカラ アヤメ",
       "title": "ステラソラ",
@@ -1552,6 +1560,7 @@
     },
     {
       "cardNumber": "STS/W140-094",
+      "variants": ["STS/W140-094", "STS/W140-094S"],
       "name": "巡遊者 グレイ",
       "reading": "ジュンユウシャ グレイ",
       "title": "ステラソラ",
@@ -1783,6 +1792,7 @@
     },
     {
       "cardNumber": "STS/W140-T03",
+      "variants": ["STS/W140-T03", "STS/W140-T03S", "STS/W140-T03SP"],
       "name": "巡遊者 コゼット",
       "reading": "ジュンユウシャ コゼット",
       "title": "ステラソラ",
@@ -1834,6 +1844,7 @@
     },
     {
       "cardNumber": "STS/W140-025",
+      "variants": ["STS/W140-025", "STS/W140-025S"],
       "name": "巡遊者 レイス",
       "reading": "ジュンユウシャ レイス",
       "title": "ステラソラ",
@@ -1877,6 +1888,7 @@
     },
     {
       "cardNumber": "STS/W140-071",
+      "variants": ["STS/W140-071", "STS/W140-071S"],
       "name": "弾む小雨 シーミャオ",
       "reading": "ハズムコサメ シーミャオ",
       "title": "ステラソラ",
@@ -1920,6 +1932,7 @@
     },
     {
       "cardNumber": "STS/W140-077",
+      "variants": ["STS/W140-077", "STS/W140-077S"],
       "name": "森のうっかりさん テレサ",
       "reading": "モリノウッカリサン テレサ",
       "title": "ステラソラ",
@@ -1974,6 +1987,7 @@
     },
     {
       "cardNumber": "STS/W140-068",
+      "variants": ["STS/W140-068", "STS/W140-068S", "STS/W140-068SP"],
       "name": "弁論と立証 フリージア",
       "reading": "ベンロントリッショウ フリージア",
       "title": "ステラソラ",
@@ -2017,6 +2031,7 @@
     },
     {
       "cardNumber": "STS/W140-030",
+      "variants": ["STS/W140-030", "STS/W140-030S"],
       "name": "星ノ塔スタッフ ヴェルジュ",
       "reading": "ホシノトウスタッフ ヴェルジュ",
       "title": "ステラソラ",
@@ -2059,6 +2074,7 @@
     },
     {
       "cardNumber": "STS/W140-038",
+      "variants": ["STS/W140-038", "STS/W140-038S", "STS/W140-038SSP"],
       "name": "銃弾のロンド コハク",
       "title": "ステラソラ",
       "product": "ブースターパック ステラソラ",
@@ -2101,6 +2117,7 @@
     },
     {
       "cardNumber": "STS/W140-040",
+      "variants": ["STS/W140-040", "STS/W140-040S"],
       "name": "カモメのポテト ラール",
       "title": "ステラソラ",
       "product": "ブースターパック ステラソラ",
@@ -2143,6 +2160,7 @@
     },
     {
       "cardNumber": "STS/W140-007",
+      "variants": ["STS/W140-007", "STS/W140-007S"],
       "name": "刻を断つ鎌 クルニス",
       "title": "ステラソラ",
       "product": "ブースターパック ステラソラ",
@@ -2184,6 +2202,7 @@
     },
     {
       "cardNumber": "STS/W140-016",
+      "variants": ["STS/W140-016", "STS/W140-016S"],
       "name": "多忙な上司に休日を フィレン",
       "title": "ステラソラ",
       "product": "ブースターパック ステラソラ",
