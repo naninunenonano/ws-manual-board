@@ -19,7 +19,7 @@ const files = new Map([
   ["/cloud-decks.js",["cloud-decks.js","text/javascript"]],
   ["/card-images.js",["card-images.js","application/javascript"]],
   ["/online-match.js",["online-match.js","text/javascript"]],
-  ...["auto-rules.js","stella-effects.js","bot-match.js","bot-deck-editor.js","card-catalog.js","effects/engine.js","card-data/load.js"].map(file=>["/"+file,[file,"text/javascript"]]),
+  ...["auto-rules.js","stella-effects.js","frieren-effects.js","bot-match.js","bot-deck-editor.js","card-catalog.js","effects/engine.js","card-data/load.js"].map(file=>["/"+file,[file,"text/javascript"]]),
   ["/card-data/catalog.json",["card-data/catalog.json","application/json"]]
 ]);
 

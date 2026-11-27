@@ -421,15 +421,19 @@ function autoRuleLegalPlay(p,card,phase,type,{planning=false}={}){
   const def=botDefinition(card),board=players[p];
   if(!def||def.type!==type)return "このカードは現在の操作ではプレイできません";
   if(!planning&&(match.turn.phase!==phase||(phase!=="attack"&&match.turn.player!==p)))return "現在のフェイズではプレイできません";
-  const level=autoRuleHandLevel(p,card,def),cost=autoRulePlayCost(def);
+  const level=autoRuleHandLevel(p,card,def),cost=autoRulePlayCost(p,def);
   if(!Number.isInteger(cost)||board.stock.length<cost)return "ストックが不足しています（必要 "+cost+"枚）";
   if(level!=null&&board.level.length<level)return "プレイヤーのレベルが不足しています（必要 Lv"+level+"）";
-  if(def.color&&(type==="climax"||level>0)&&![...board.level,...board.clock].some(c=>botDefinition(c)?.color===def.color))
+  if(def.color&&(type==="climax"||level>0)&&
+    !(type==="event"&&stellaStage(p).some(source=>frierenIs(source,"S136-001")))&&![...board.level,...board.clock].some(c=>botDefinition(c)?.color===def.color))
     return "レベル置場かクロックに同じ色が必要です";
   return "";
 }
-function autoRulePlayCost(definition){
-  return definition.type==="climax"?0:definition.stats.cost;
+function autoRulePlayCost(p,definition){
+  if(definition.type==="climax")return 0;
+  if(definition.cardNumber==="SFN/S128-003"&&!match.bot.uses["frieren-himmel-played:"+p])
+    return Math.max(0,definition.stats.cost-frierenStatues(p));
+  return definition.stats.cost;
 }
 function autoRulePay(p,cost){
   const board=players[p];
@@ -459,16 +463,17 @@ function autoRulePlace(p,uid,zone,confirmedOccupant){
   return true;
 }
 function autoRuleResolvePlay(p,index,zone,done){
-  const board=players[p],card=board.hand[index],cost=autoRulePlayCost(botDefinition(card));
+  const board=players[p],card=board.hand[index],cost=autoRulePlayCost(p,botDefinition(card));
+  if(frierenIs(card,"S128-003"))match.bot.uses["frieren-himmel-played:"+p]=true;
   autoRulePay(p,cost);
   if(board[zone].length)botMove(board,zone,0,"waiting");
   botMove(board,"hand",index,zone);
   autoRuleLog(botCardInfo(card).name+"をプレイ"+(cost?"（ストック−"+cost+"）":""));
   const finish=()=>resolveBoardRules(p,done);
-  if(zone==="cx")botDispatch(card,"on_cx_play",finish,p);
+  if(zone==="cx")botResolveTriggered(p,[...botTriggeredActions(p,card,"on_cx_play"),...frierenEisenActions(p,card)],finish);
   else botStageEntry(p,card,"hand",finish);
 }
-const autoRuleEventEffects=Object.freeze({"光景":resolveKoukei,"ヴェルジュ":(p,done)=>stellaVerge(p,done)});
+const autoRuleEventEffects=Object.freeze({"光景":resolveKoukei,"ヴェルジュ":(p,done)=>stellaVerge(p,done),"銅像の錆":(p,done)=>frierenRustMagic(p,done)});
 function autoRuleEventEffect(definition){
   const name=definition?.effects?.some(effect=>effect.id==="verge-event")?"ヴェルジュ":definition?.eventEffect;
   return definition?.type==="event"&&Object.hasOwn(autoRuleEventEffects,name)?autoRuleEventEffects[name]:null;
@@ -570,7 +575,7 @@ function autoRuleBeforeTurnEnd(){
 }
 function autoRuleOpposite(zone){return "front"+(2-Number(zone.slice(-1)))}
 function autoRuleAttackAllowed(p,zone,card){
-  return card?.faceUp&&card.orientation===0&&zone.startsWith("front")&&botDefinition(card)?.type==="character"&&
+  return card?.faceUp&&card.orientation===0&&zone.startsWith("front")&&botDefinition(card)?.type==="character"&&!botDefinition(card)?.cannotAttack&&
     !(match.turn.number===1&&p===match.firstPlayer&&match.bot.attacked);
 }
 function autoRuleAttackTypes(card,target){
@@ -740,7 +745,7 @@ function autoRuleMillOnAttack(p,{cxId,count},done){
     if(moved===count||!board.deck.length||board.level.length>=4){
       autoRuleLog("ゲートCXコンボ・山札の下から"+moved+"枚／CX "+climaxes+"枚");
       if(!climaxes||board.level.length>=4){done();return}
-      botDamage(target,climaxes,done);
+      botAbilityDamage(target,climaxes,done);
       return;
     }
     const card=botMove(board,"deck",0,"waiting");
@@ -772,12 +777,15 @@ function autoRuleResolveReversals(reversals,done){
       ...effects.filter(Boolean).map(effect=>({owner,target,slot,...effect})),
       ...granted.map(()=>({owner:1-owner,target:source,slot:sourceSlot,clockSwap:true})),
       ...(stellaIs(target,"025")?[{owner:1-owner,target:source,slot:sourceSlot,clockSwap:true,maxLevel:0}]:[]),
+      ...(source.gainedAbilities??[]).flatMap(id=>id==="frieren-reverse-memory"?[{owner,target,slot,zone:"memory",optional:true}]:
+        id==="frieren-reverse-retreat"?[{owner,source,frierenRetreat:true}]:[]),
       ...(stellaIs(source,"T03")?[{owner,source,retreat:true}]:[])
     ];
   });
   function resolve(effect,next){
     const {owner,target,slot,zone,stock=0}=effect;
     const rival=players[1-owner];
+    if(effect.frierenRetreat){frierenRetreat(owner,effect.source,next);return}
     if(effect.retreat){stellaT03Retreat(owner,effect.source,next);return}
     if(effect.clockSwap){
       const index=rival[slot].findIndex(card=>card.uid===target.uid);
@@ -803,19 +811,20 @@ function autoRuleResolveReversals(reversals,done){
       autoRuleLog(botCardInfo(target).name+"を"+labels[zone]+"へ"+(stock?"（"+stock+"ストック支払い）":""));
       resolveBoardRules(owner,()=>resolveBoardRules(1-owner,next));
     }
-    if(!stock||owner===1){moveReversed();return}
+    if((!stock&&!effect.optional)||owner===1){moveReversed();return}
     const body=showResolution("リバースしたキャラを"+labels[zone]+"へ置く？",[target]);
-    deckButton(body,stock+"ストック払う",()=>{closeResolution();moveReversed()});
+    deckButton(body,stock?stock+"ストック払う":"思い出に置く",()=>{closeResolution();moveReversed()});
     deckButton(body,"払わない",()=>{closeResolution();next()});
   }
   const turn=match.turn.player;
   const actions=p=>pending.filter(effect=>effect.owner===p).map(effect=>({
-    label:effect.retreat?stellaName(effect.source)+"・後列へ移動":
+    label:effect.frierenRetreat?"仲間を後列へ移動":effect.retreat?stellaName(effect.source)+"・後列へ移動":
       stellaName(effect.target)+"を"+labels[effect.clockSwap?"clock":effect.zone]+"へ",
     run:next=>resolve(effect,next)
   }));
   botResolveTriggered(turn,actions(turn),()=>botResolveTriggered(1-turn,actions(1-turn),done));
 }
+let autoRuleFrontBattle;
 function autoRuleAttack(p,zone,uid,type){
   const board=players[p],rival=players[1-p],opposite=autoRuleOpposite(zone);
   const attacker=board[zone].at(-1),target=rival[opposite].at(-1);
@@ -825,7 +834,9 @@ function autoRuleAttack(p,zone,uid,type){
   const targetUid=target?.uid;
   selected=null;attacker.orientation=90;match.bot.attacked=true;
   autoRuleAddTurnStat(attacker,"soul",adjustment);
-  runRuleOperation(done=>{
+  runRuleOperation(finish=>{
+    if(type==="front")autoRuleFrontBattle={[p]:{slot:zone,uid},[1-p]:{slot:opposite,uid:targetUid}};
+    function done(){autoRuleFrontBattle=undefined;finish()}
     autoRuleLog(({front:"フロント",side:"サイド",direct:"ダイレクト"})[type]+"アタック");
     const current=()=>board[zone].find(c=>c.uid===uid);
     const defender=()=>rival[opposite].find(c=>c.uid===targetUid);
@@ -865,10 +876,9 @@ function autoRuleAttack(p,zone,uid,type){
       });
     }
     let triggerChecks;
-    const attackActions=botTriggeredActions(p,attacker,"on_attack",{
-      opposingUid:targetUid,setTriggerChecks:n=>{triggerChecks=n}
-    });
-    attackActions.push(...botAttackTriggeredActions(p,attacker));
+    const context={opposingUid:targetUid,setTriggerChecks:n=>{triggerChecks=n},hasDoubleTrigger:()=>triggerChecks===2};
+    const attackActions=botTriggeredActions(p,attacker,"on_attack",context);
+    attackActions.push(...botAttackTriggeredActions(p,attacker),...frierenHeiterAttackActions(p,attacker,context));
     function afterAttackAbilities(){
       if(rival.level.length>=4||board.level.length>=4){done();return}
       const definition=botDefinition(attacker);
@@ -899,12 +909,12 @@ function autoRuleBotMain(p,done){
       const back=slot.startsWith("back");
       const playable=board.hand.map((card,index)=>({card,index,definition:botDefinition(card)}))
         .filter(({card})=>!autoRuleLegalPlay(p,card,"main","character"));
-      const isSupport=({definition:def})=>!!(def?.assist||def?.namedStageBuff||def?.effects?.some(effect=>effect.brainstorm));
+      const isSupport=({definition:def})=>!!(def?.assist||def?.namedStageBuff||def?.cannotAttack||def?.cardNumber==="SFN/S136-005"||def?.effects?.some(effect=>effect.brainstorm));
       let candidate=playable.find(entry=>isSupport(entry)===back);
       if(isStellaDeck(match.bot.scenario)){
         const frontCount=botSlots.slice(0,3).filter(zone=>board[zone].length).length;
         if(back&&!frontCount&&playable.length===1)candidate=undefined;
-        if(!back&&!candidate&&!frontCount)candidate=playable[0];
+        if(!back&&!candidate&&!frontCount)candidate=playable.find(entry=>!entry.definition.cannotAttack);
       }
       const index=candidate?.index??-1;
       if(index<0)playNext();
@@ -914,7 +924,15 @@ function autoRuleBotMain(p,done){
     const source=[board.back0.at(-1),board.back1.at(-1)].find(card=>
       card?.orientation===0&&botDefinition(card)?.effects?.some(effect=>effect.brainstorm&&effect.brainstorm.stock<=board.stock.length));
     const brainstorm=botDefinition(source)?.effects.find(effect=>effect.brainstorm)?.brainstorm;
+    const statue=stellaStage(p).find(card=>frierenIs(card,"S128-017")&&card.orientation===0);
+    if(statue&&board.stock.length&&board.waiting.some(card=>frierenIs(card,"S108-T04"))){
+      frierenStatue(p,statue,playEvent);return;
+    }
     if(brainstorm){resolveBrainstorm(p,source,brainstorm,playEvent);return}
+    const heiter=stellaStage(p).find(card=>frierenIs(card,"S136-005")&&stellaStageSlot(board,card).startsWith("back"));
+    if(heiter&&board.hand.length<=3&&stellaStage(p).some(card=>card.orientation===180)){
+      frierenHeiterSearch(p,heiter,playEvent);return;
+    }
     const teresa=stellaStage(p).find(card=>stellaIs(card,"077")&&card.orientation===0);
     if(teresa&&board.hand.length&&board.waiting.some(card=>botDefinition(card)?.type==="character"&&
       botDefinition(card).stats.level>=1)){stellaTeresa(p,teresa,playEvent);return}
@@ -922,10 +940,10 @@ function autoRuleBotMain(p,done){
   }
   function ensureAttacker(){
     if(!isStellaDeck(match.bot.scenario)||players.some(b=>b.level.length>=4)){done();return}
-    const front=botSlots.slice(0,3),ready=card=>card?.faceUp&&card.orientation===0;
+    const front=botSlots.slice(0,3),ready=card=>card?.faceUp&&card.orientation===0&&!botDefinition(card)?.cannotAttack;
     if(front.some(slot=>ready(board[slot].at(-1)))){done();return}
     const target=front.find(slot=>!board[slot].length)??front[0];
-    const playable=board.hand.findIndex(card=>!autoRuleLegalPlay(p,card,"main","character"));
+    const playable=board.hand.findIndex(card=>!botDefinition(card)?.cannotAttack&&!autoRuleLegalPlay(p,card,"main","character"));
     if(playable>=0){autoRuleResolvePlay(p,playable,target,done);return}
     const rear=["back0","back1"].find(slot=>ready(board[slot].at(-1)));
     if(rear&&!board[target].length)botMove(board,rear,board[rear].length-1,target);
@@ -937,6 +955,7 @@ function autoRuleBotMain(p,done){
     const hasRear=["back0","back1"].some(slot=>board[slot].length);
     const index=board.hand.findIndex(card=>{
       if(!autoRuleEventEffect(botDefinition(card))||autoRuleLegalPlay(p,card,"main","event"))return false;
+      if(frierenIs(card,"S128-021"))return board.waiting.some(entry=>frierenIs(entry,"S128-017"))||!board.hand.some(entry=>entry.cx);
       return stellaIs(card,"030")?(hasRear||frontCount>1):players[1-p].stock.length>=2;
     });
     if(index<0){ensureAttacker();return}
@@ -985,7 +1004,7 @@ function autoRuleBotStep(){
     }
     case "climax":{
       const combos=botSlots.slice(0,3).map(slot=>botDefinition(board[slot].at(-1)))
-        .map(def=>def?.lookOnAttack?.cxId??def?.millOnAttack?.cxId);
+        .map(def=>def?.lookOnAttack?.cxId??def?.millOnAttack?.cxId??def?.preferredCx);
       const findCx=condition=>board.hand.findIndex(card=>condition(card)&&!autoRuleLegalPlay(p,card,"climax","climax"));
       const comboIndex=findCx(card=>combos.some(number=>sameBotCardNumber(number,card.id)));
       const index=comboIndex>=0||!isStellaDeck(match.bot.scenario)?comboIndex:
@@ -1034,7 +1053,7 @@ function activateBrainstorm(p,source,brainstorm){
   selected=null;
   runRuleOperation(done=>resolveBrainstorm(p,source,brainstorm,done));
 }
-function resolveBrainstorm(p,source,{stock,reveal,salvage},done){
+function resolveBrainstorm(p,source,{stock,reveal,salvage,traits},done){
   const board=players[p];
   autoRulePay(p,stock);
   source.orientation=90;
@@ -1054,8 +1073,8 @@ function resolveBrainstorm(p,source,{stock,reveal,salvage},done){
       const title=(p===0?"自分":"Bot")+"の集中・CX "+max+"枚";
       const afterReveal=next=>isDeckMirror(match.bot.scenario)?showBotRevealResult(title,revealed,next):next();
       if(!max){afterReveal(done);return}
-      if(p===1){afterReveal(()=>salvage?resolveBrainstormSalvage(p,max,revealed,done):finishDraw(max));return}
-      if(salvage){resolveBrainstormSalvage(p,max,revealed,done);return}
+      if(p===1){afterReveal(()=>salvage?resolveBrainstormSalvage(p,max,revealed,done,traits):finishDraw(max));return}
+      if(salvage){resolveBrainstormSalvage(p,max,revealed,done,traits);return}
       const body=showResolution("集中・引く枚数を選ぶ（最大"+max+"枚）",revealed,effectChoiceImageUrl);
       for(let n=0;n<=max;n++)deckButton(body,n===0?"引かない":n+"枚引く",()=>{
         closeResolution();
@@ -1072,9 +1091,9 @@ function resolveBrainstorm(p,source,{stock,reveal,salvage},done){
 }
 
 
-function resolveBrainstormSalvage(p,max,revealed,done){
+function resolveBrainstormSalvage(p,max,revealed,done,traits){
   const board=players[p];
-  const candidates=board.waiting.filter(card=>botDefinition(card)?.type==="character");
+  const candidates=board.waiting.filter(card=>botDefinition(card)?.type==="character"&&(!traits||traits.some(trait=>matchesPracticeTrait(card,trait))));
   const limit=Math.min(max,candidates.length);
   if(!limit){
     if(p===0&&isDeckMirror(match.bot.scenario))showBotRevealResult("集中・回収できるキャラがありません",revealed,done);

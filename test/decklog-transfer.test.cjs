@@ -78,6 +78,7 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
   }
   vm.runInContext(read("auto-rules.js"),context);
   vm.runInContext(read("stella-effects.js"),context);
+  vm.runInContext(read("frieren-effects.js"),context);
   vm.runInContext(read("bot-match.js"),context);
   vm.runInContext(read("bot-deck-editor.js"),context);
   vm.runInContext(importScript,context);
@@ -2794,4 +2795,78 @@ test("Botはオトハの助太刀と追加効果を使い、コストで控え�
   assert.equal(page.run('botStats(1,opponent.front2[0]).power'),8000);
   assert.equal(page.run('botStats(0,own.front0[0]).soul'),0);
   assert.equal(Boolean(page.get("dialog").open),false);
+});
+
+test("大会レシピ1TK8A8の16種をBot側に指定し、ステラソラ対フリーレンを開始できる",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.click("openBotDeckEditor");
+  page.click("editOpponentBotDeck");
+  page.get("botDeckPreset").value="frieren";
+  page.click("applyBotDeckPreset");
+  assert.equal(page.get("builderTitleFilter").value,"SFN");
+  assert.equal(page.get("botDeckCardRows").children.length,16);
+  assert.equal(page.get("startEditedBotBattle").disabled,false);
+  page.click("startEditedBotBattle");
+  const game=snapshot(page);
+  assert.deepEqual(ruleCounts(game),[50,50]);
+  assert.ok(game.decks[0].cards.every(card=>card.id.startsWith("STS/")));
+  assert.equal(game.decks[1].cards.length,16);
+  assert.ok(game.decks[1].cards.every(card=>card.id.startsWith("SFN/")));
+  assert.equal(game.decks[1].cards.reduce((sum,card)=>sum+(card.cx?card.num:0),0),8);
+});
+
+test("勇者一行の像を思い出に置いて回収し、ヒンメルは各ターン最初のプレイだけ軽くなる",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(number,uid,cx=false)=>({id:"SFN/"+number,uid,cx,faceUp:true,orientation:0});
+    own.front0.push(fri("S128-017","statue"));
+    own.stock.push(fri("S136-006","stock"),fri("S136-065","stock2"));
+    own.waiting.push(fri("S108-T04","recover"));
+    own.level.push(fri("S136-001","lv1"),fri("S136-001","lv2"),fri("S136-001","lv3"));
+    own.deck.push(fri("S136-006","reserve"));
+    own.hand.push(fri("S128-003","first"),fri("S128-003","second"));
+    runRuleOperation(done=>frierenStatue(0,own.front0[0],done));
+  `);
+  ruleButton(page,"1．“勇者”ヒンメル");
+  assert.equal(page.run("own.memory[0].uid"),"statue");
+  assert.equal(page.run("own.hand.at(-1).uid"),"recover");
+  assert.equal(page.run('autoRuleAttackAllowed(0,"front0",own.memory[0])'),false);
+  assert.equal(page.run('autoRuleLegalPlay(0,own.hand[0],"main","character")'),"");
+  page.run('autoRulePlace(0,"first","front0")');
+  assert.equal(page.run("own.stock.length"),0);
+  assert.match(page.run('autoRuleLegalPlay(0,own.hand[0],"main","character")'),/必要 2枚/);
+});
+
+test("チョイスでハイターが許可したイベントを回収し、トリガーしたCXはストックに置く",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(number,uid,cx=false)=>({id:"SFN/"+number,uid,cx,faceUp:true,orientation:0});
+    const trigger=fri("S128-022OFR","choice",true);
+    own.back0.push(fri("S136-005","heiter"));
+    own.waiting.push(fri("S128-021","event"),fri("S136-076","noSoul"));
+    runRuleOperation(done=>botTriggerEffect(0,trigger,done));
+  `);
+  assert.equal(page.get("dialogBody").children.some(el=>el.textContent.includes("フェルン")),false);
+  ruleButton(page,"1．銅像の錆を綺麗に取る魔法");
+  ruleButton(page,"手札へ");
+  assert.equal(page.run("own.hand[0].uid"),"event");
+  assert.equal(page.run("own.stock[0].uid"),"choice");
+});
+
+test("ヒンメルのCXコンボは下3枚のCXの枚数だけ2点を繰り返し、通常のダメージと独立する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(number,uid,cx=false)=>({id:"SFN/"+number,uid,cx,faceUp:true,orientation:0});
+    own.front0.push(fri("S128-003","himmel"));
+    own.back0.push(fri("S136-006","ally1"));
+    own.back1.push(fri("S136-005","ally2"));
+    own.cx.push(fri("S128-022","combo",true));
+    opponent.deck.push(card("031","bottom1",true),card("004","bottom2"),card("032","bottom3",true));
+    for(let i=0;i<5;i++)opponent.deck.push(card("001","damage"+i));
+    runRuleOperation(done=>frierenHimmelCombo(0,own.front0[0],done));
+  `);
+  ruleButton(page,"確認して進む");
+  assert.equal(page.run("opponent.waiting.map(card=>card.uid).join()"),"bottom1,bottom2,bottom3");
+  assert.equal(page.run("opponent.clock.length"),4);
+  assert.equal(page.run("match.bot.reveals.Damage.length"),2);
 });

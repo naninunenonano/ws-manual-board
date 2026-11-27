@@ -2347,6 +2347,794 @@
           "steps": null
         }
       ]
+    },
+    {
+      "cardNumber": "SFN/S128-003",
+      "variants": [
+        "SFN/S128-003",
+        "SFN/S128-003S",
+        "SFN/S128-003SP"
+      ],
+      "name": "旅立ちのきっかけ ヒンメル",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン 新装版",
+      "rarity": "RR",
+      "side": "S",
+      "type": "character",
+      "color": "黄",
+      "stats": {
+        "level": 3,
+        "cost": 2,
+        "power": 9500,
+        "soul": 2
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "冒険者",
+        "武器"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-himmel-entry",
+          "category": "登場時・回復とフリーレンの登場",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "他に《冒険者》か《魔法》がいれば、クロック上1枚までを控え室へ置く。追加1ストックで手札の「旅立ちのきっかけ フリーレン」1枚までを好きな枠へ置く。",
+          "steps": null
+        },
+        {
+          "id": "frieren-himmel-combo",
+          "category": "久遠の愛情・相手の山札と追加ダメージ",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": false,
+          "sourceText": "「久遠の愛情」がCX置場にあり、手札5枚以下かつ他の《冒険者》か《魔法》が2枚以上なら、相手の山札下3枚を控え室へ。その中のCX1枚につき、2ダメージを1回与える。",
+          "steps": null
+        },
+        {
+          "id": "frieren-himmel-top",
+          "category": "記憶・相手の山札上を確認",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": false,
+          "sourceText": "思い出に「旅の日常 アイゼン」と「勇者一行の像」4枚があれば、相手の山札上1枚を見て上か下に置く。",
+          "steps": null
+        }
+      ],
+      "preferredCx": "SFN/S128-022"
+    },
+    {
+      "cardNumber": "SFN/S128-009",
+      "variants": [
+        "SFN/S128-009",
+        "SFN/S128-009S"
+      ],
+      "name": "旅立ちのきっかけ フリーレン",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン 新装版",
+      "rarity": "R",
+      "side": "S",
+      "type": "character",
+      "color": "黄",
+      "stats": {
+        "level": 3,
+        "cost": 2,
+        "power": 10000,
+        "soul": 2
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "冒険者",
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-journey-power",
+          "category": "永続能力",
+          "type": "continuous",
+          "timing": "always",
+          "optional": false,
+          "sourceText": "他の《冒険者》か《魔法》のキャラすべてにパワー＋1500。",
+          "steps": null
+        },
+        {
+          "id": "frieren-bottom-look",
+          "category": "登場時・相手の山札の下を確認",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "他に《冒険者》か《魔法》がいれば相手の山札を下から2枚まで見て、選んだ札を好きな順で下に戻し、残りを控え室へ置く。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-012",
+      "variants": [
+        "SFN/S136-012",
+        "SFN/S136-012S"
+      ],
+      "name": "回復魔法を操る僧侶 ハイター",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "U",
+      "side": "S",
+      "type": "character",
+      "color": "黄",
+      "stats": {
+        "level": 2,
+        "cost": 1,
+        "power": 2500,
+        "soul": 1
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "冒険者",
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-heiter-backup",
+          "category": "助太刀使用時・控え室を山札へ",
+          "type": "auto",
+          "timing": "on_backup_used",
+          "optional": true,
+          "sourceText": "控え室にチョイスCXが5枚以上ある場合、追加1ストックで控え室を山札に戻してシャッフルできる。",
+          "steps": null
+        },
+        {
+          "id": "frieren-heiter-counter",
+          "category": "助太刀2500 レベル2",
+          "type": "act",
+          "timing": "counter_step",
+          "optional": true,
+          "sourceText": "1ストックと手札の自身を控え室に置き、フロントされた自分のキャラにパワー＋2500。",
+          "steps": null
+        }
+      ],
+      "backup": {
+        "power": 2500,
+        "cost": 1
+      }
+    },
+    {
+      "cardNumber": "SFN/S128-017",
+      "variants": [
+        "SFN/S128-017",
+        "SFN/S128-017S"
+      ],
+      "name": "勇者一行の像",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン 新装版",
+      "rarity": "U",
+      "side": "S",
+      "type": "character",
+      "color": "黄",
+      "stats": {
+        "level": 1,
+        "cost": 0,
+        "power": 5500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "冒険者",
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-statue-continuous",
+          "category": "永続能力",
+          "type": "continuous",
+          "timing": "always",
+          "optional": false,
+          "sourceText": "アタックできない。思い出にあるこのカード1枚ごとに、そのターン最初の「旅立ちのきっかけ ヒンメル」の手札コストを1軽減。",
+          "steps": null
+        },
+        {
+          "id": "frieren-statue",
+          "category": "1ストックでこの像を思い出へ",
+          "type": "activated",
+          "timing": "main",
+          "optional": false,
+          "sourceText": "1ストックとスタンド中のこのカードを思い出に置き、控え室の「“勇者”ヒンメル」か「“故郷の花” フリーレン＆ヒンメル」を1枚回収。",
+          "steps": null
+        }
+      ],
+      "cannotAttack": true
+    },
+    {
+      "cardNumber": "SFN/S108-T04",
+      "variants": [
+        "SFN/S108-T04",
+        "SFN/S108-T04SP"
+      ],
+      "name": "“勇者”ヒンメル",
+      "title": "葬送のフリーレン",
+      "product": "トライアルデッキ 葬送のフリーレン",
+      "rarity": "TD",
+      "side": "S",
+      "type": "character",
+      "color": "黄",
+      "stats": {
+        "level": 1,
+        "cost": 0,
+        "power": 3000,
+        "soul": 1
+      },
+      "triggers": [
+        "ソウル"
+      ],
+      "traits": [
+        "冒険者",
+        "武器"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-td-entry",
+          "category": "登場時・パワー＋3000",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "手札から登場したターン中、パワー＋3000。",
+          "steps": null
+        },
+        {
+          "id": "frieren-td-combo",
+          "category": "僕達の冒険・山札上4枚まで",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": false,
+          "sourceText": "「僕達の冒険」がCX置場にあり、他に《冒険者》か《魔法》がいれば、上4枚までを見て同特徴のキャラ1枚までを公開して手札へ。残りは控え室へ。",
+          "steps": null
+        }
+      ],
+      "preferredCx": "SFN/S108-T09"
+    },
+    {
+      "cardNumber": "SFN/S136-001",
+      "variants": [
+        "SFN/S136-001",
+        "SFN/S136-001PS",
+        "SFN/S136-001S"
+      ],
+      "name": "“ハロウィンの魔法”フリーレン＆フェルン",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "RR",
+      "side": "S",
+      "type": "character",
+      "color": "黄",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "冒険者",
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-halloween-color",
+          "category": "永続能力",
+          "type": "continuous",
+          "timing": "always",
+          "optional": false,
+          "sourceText": "イベントを色条件なしで手札からプレイできる。",
+          "steps": null
+        },
+        {
+          "id": "frieren-halloween-trigger",
+          "category": "CXまたは同名札のトリガー時",
+          "type": "auto",
+          "timing": "own_trigger",
+          "optional": false,
+          "sourceText": "自分の《冒険者》か《魔法》1枚にそのターン中パワー＋1000と、バトル相手をリバースさせた時にその相手を思い出にする任意能力を与える。",
+          "steps": null
+        },
+        {
+          "id": "frieren-halloween-brainstorm",
+          "category": "集中（1ストック・自身レスト）",
+          "type": "activated",
+          "timing": "main",
+          "optional": false,
+          "sourceText": "4枚をめくって控え室へ置き、出たCX1枚につき《冒険者》か《魔法》1枚までを回収。",
+          "steps": null,
+          "brainstorm": {
+            "stock": 1,
+            "reveal": 4,
+            "salvage": true,
+            "traits": [
+              "冒険者",
+              "魔法"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-005",
+      "variants": [
+        "SFN/S136-005",
+        "SFN/S136-005S"
+      ],
+      "name": "旅の日常 ハイター",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "R",
+      "side": "S",
+      "type": "character",
+      "color": "黄",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "冒険者",
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-heiter-choice",
+          "category": "永続能力",
+          "type": "continuous",
+          "timing": "always",
+          "optional": false,
+          "sourceText": "自分のチョイスで控え室の「銅像の錆を綺麗に取る魔法」も選べる。",
+          "steps": null
+        },
+        {
+          "id": "frieren-heiter-double",
+          "category": "永続能力",
+          "type": "continuous",
+          "timing": "always",
+          "optional": false,
+          "sourceText": "自分のターン中、他の「“勇者”ヒンメル」すべてをパワー＋2000し、攻撃時に1ストックでトリガーチェックを2回できる能力を与える。",
+          "steps": null
+        },
+        {
+          "id": "frieren-heiter-search",
+          "category": "舞台の2枚で山札上5枚まで",
+          "type": "activated",
+          "timing": "main",
+          "optional": false,
+          "sourceText": "他の舞台のキャラ1枚と自身を控え室に置く。上5枚までを見てLv1以上1枚までを公開して手札へ、残りは控え室へ。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-002",
+      "variants": [
+        "SFN/S136-002",
+        "SFN/S136-002PS",
+        "SFN/S136-002S",
+        "SFN/S136-002SSP"
+      ],
+      "name": "旅の絆 フリーレン＆ヒンメル",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "RR",
+      "side": "S",
+      "type": "character",
+      "color": "黄",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 1500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "冒険者",
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-vow-search",
+          "category": "登場時・Lv1以下を山札から探す",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": true,
+          "sourceText": "1ストックと山札上1枚をクロックに置くことで、山札のLv1以下のキャラ1枚までを公開して手札へ加え、山札をシャッフル。",
+          "steps": null
+        },
+        {
+          "id": "frieren-vow-leave",
+          "category": "退場時・イベントを捨てて山札上5枚まで",
+          "type": "auto",
+          "timing": "from_stage_to_waiting",
+          "optional": true,
+          "sourceText": "手札のイベント1枚を控え室に置けば、上5枚までから《冒険者》か《魔法》のキャラ1枚までを公開して手札へ。残りは控え室へ。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-006",
+      "variants": [
+        "SFN/S136-006",
+        "SFN/S136-006S"
+      ],
+      "name": "旅の日常 アイゼン",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "R",
+      "side": "S",
+      "type": "character",
+      "color": "黄",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 1500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "冒険者",
+        "武器"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-eisen-memory",
+          "category": "永続能力",
+          "type": "continuous",
+          "timing": "always",
+          "optional": false,
+          "sourceText": "思い出のこのカードが、旅立ちのきっかけ ヒンメルを強化する。思い出の像が3枚以上ならパワー＋1000とバトル中の相手キャラの自動能力ダメージ無効、4枚以上なら攻撃時に相手山札上1枚を見て上か下へ。",
+          "steps": null
+        },
+        {
+          "id": "frieren-eisen-cx",
+          "category": "CX配置時・控え室から思い出へ",
+          "type": "auto",
+          "timing": "on_named_cx_play",
+          "optional": true,
+          "sourceText": "思い出に同名札がなく「僕達の冒険」か「久遠の愛情」を置いた時、控え室にある自身を思い出にできる。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-065",
+      "variants": [
+        "SFN/S136-065",
+        "SFN/S136-065S"
+      ],
+      "name": "作戦会議 フリーレン",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "C",
+      "side": "S",
+      "type": "character",
+      "color": "赤",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 1000,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "冒険者",
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-briefing",
+          "category": "登場時・山札の公開と回収",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": true,
+          "sourceText": "手札1枚を控え室に置けば、山札上1枚を公開し、そのレベル以下の控え室のキャラ1枚を回収する。CXはLv0。公開札は元に戻す。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-076",
+      "variants": [
+        "SFN/S136-076",
+        "SFN/S136-076S",
+        "SFN/S136-076SP"
+      ],
+      "name": "“一級魔法使い”フェルン",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "RR",
+      "side": "S",
+      "type": "character",
+      "color": "青",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 500,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "冒険者",
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-fern-power",
+          "category": "永続能力",
+          "type": "continuous",
+          "timing": "always",
+          "optional": false,
+          "sourceText": "自分のキャラすべてが《冒険者》か《魔法》ならパワー＋3000と、次の攻撃時能力を得る。",
+          "steps": null
+        },
+        {
+          "id": "frieren-fern-top",
+          "category": "アタック時・山札の上1枚を調整",
+          "type": "auto",
+          "timing": "on_attack",
+          "optional": false,
+          "sourceText": "自分の山札上1枚を見て、上、下、控え室のいずれかに置く。",
+          "steps": null
+        },
+        {
+          "id": "frieren-fern-leave",
+          "category": "退場時・山札上2枚とストック",
+          "type": "auto",
+          "timing": "from_stage_to_waiting",
+          "optional": false,
+          "sourceText": "《冒険者》か《魔法》が舞台にいれば、山札上2枚を控え室へ。イベントがあれば自身をストックの下に置いてよい。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S108-T13",
+      "variants": [
+        "SFN/S108-T13",
+        "SFN/S108-T13R"
+      ],
+      "name": "蒼月草 ヒンメル",
+      "title": "葬送のフリーレン",
+      "product": "トライアルデッキ 葬送のフリーレン",
+      "rarity": "TD",
+      "side": "S",
+      "type": "character",
+      "color": "青",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 2000,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "冒険者",
+        "武器"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-moon-leave",
+          "category": "退場時・クロックを払って山札を探す",
+          "type": "auto",
+          "timing": "from_stage_to_waiting",
+          "optional": true,
+          "sourceText": "手札1枚をクロックに置けば、山札の《冒険者》か《魔法》1枚までを公開して手札へ加え、シャッフル。思い出が2枚以下なら、控え室の同名札1枚までを思い出へ。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S136-078",
+      "variants": [
+        "SFN/S136-078",
+        "SFN/S136-078S"
+      ],
+      "name": "魔法の世界 フリーレン",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン Vol.2",
+      "rarity": "R",
+      "side": "S",
+      "type": "character",
+      "color": "青",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 1000,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "冒険者",
+        "魔法"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-spell-power",
+          "category": "登場時・パワー＋1500",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "《冒険者》か《魔法》1枚にそのターン中パワー＋1500。",
+          "steps": null
+        },
+        {
+          "id": "frieren-spell-retreat",
+          "category": "登場時・後列に移動する能力を付与",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "optional": false,
+          "sourceText": "自分のキャラ1枚に、バトル相手をリバースさせた時に他の自分のキャラ1枚をレストして空き後列へ動かす能力をそのターン中与える。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S128-021",
+      "variants": [
+        "SFN/S128-021",
+        "SFN/S128-021S"
+      ],
+      "name": "銅像の錆を綺麗に取る魔法",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン 新装版",
+      "rarity": "U",
+      "side": "S",
+      "type": "event",
+      "color": "黄",
+      "stats": {
+        "level": 1,
+        "cost": 1,
+        "power": null,
+        "soul": null
+      },
+      "triggers": [],
+      "traits": [],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-rust-magic",
+          "category": "黄CXを探し、像を思い出へ",
+          "type": "event",
+          "timing": "on_play",
+          "optional": false,
+          "sourceText": "山札の黄色いCX1枚までを公開して手札へ加え、シャッフル。その後、控え室の「勇者一行の像」1枚までを思い出へ。",
+          "steps": null
+        }
+      ],
+      "eventEffect": "銅像の錆"
+    },
+    {
+      "cardNumber": "SFN/S108-T09",
+      "variants": [
+        "SFN/S108-T09",
+        "SFN/S108-T09R"
+      ],
+      "name": "僕達の冒険",
+      "title": "葬送のフリーレン",
+      "product": "トライアルデッキ 葬送のフリーレン",
+      "rarity": "TD",
+      "side": "S",
+      "type": "climax",
+      "color": "黄",
+      "stats": {
+        "level": null,
+        "cost": null,
+        "power": null,
+        "soul": null
+      },
+      "triggers": [
+        "チョイス"
+      ],
+      "traits": [],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-cx-buff",
+          "category": "CX永続",
+          "type": "continuous",
+          "timing": "while_in_cx",
+          "optional": false,
+          "sourceText": "自分のキャラすべてにパワー＋1000、ソウル＋1。",
+          "steps": [
+            {
+              "handler": "continuousCxBuff",
+              "params": {
+                "side": "self",
+                "power": 1000,
+                "soul": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "frieren-choice",
+          "category": "チョイス",
+          "type": "trigger",
+          "timing": "on_trigger",
+          "optional": true,
+          "sourceText": "控え室のソウルトリガーを持つキャラ1枚までを、手札かストックに置く。",
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "SFN/S128-022",
+      "variants": [
+        "SFN/S128-022",
+        "SFN/S128-022OFR"
+      ],
+      "name": "久遠の愛情",
+      "title": "葬送のフリーレン",
+      "product": "ブースターパック 葬送のフリーレン 新装版",
+      "rarity": "CR",
+      "side": "S",
+      "type": "climax",
+      "color": "黄",
+      "stats": {
+        "level": null,
+        "cost": null,
+        "power": null,
+        "soul": null
+      },
+      "triggers": [
+        "チョイス"
+      ],
+      "traits": [],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "frieren-cx-buff",
+          "category": "CX永続",
+          "type": "continuous",
+          "timing": "while_in_cx",
+          "optional": false,
+          "sourceText": "自分のキャラすべてにパワー＋1000、ソウル＋1。",
+          "steps": [
+            {
+              "handler": "continuousCxBuff",
+              "params": {
+                "side": "self",
+                "power": 1000,
+                "soul": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "frieren-choice",
+          "category": "チョイス",
+          "type": "trigger",
+          "timing": "on_trigger",
+          "optional": true,
+          "sourceText": "控え室のソウルトリガーを持つキャラ1枚までを、手札かストックに置く。",
+          "steps": null
+        }
+      ]
     }
   ]
 }
