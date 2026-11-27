@@ -9,7 +9,17 @@ const stellaDeck={
     ["077",1],["068",3],["030",3],["031",4,true],["032",4,true]
   ].map(([number,num,cx=false])=>({id:"STS/W140-"+number,num,cx}))
 };
-const isDeckMirror=scenario=>scenario===redBlueScenario||scenario===stellaScenario;
+const stellaTrialScenario="stella-level-zero-trial";
+const trialReductions=new Set(["001","T03","071","068"].map(n=>"STS/W140-"+n));
+const stellaTrialDeck={
+  title:"ステラソラ・Lv0追加4種",
+  cards:[
+    ...stellaDeck.cards.map(card=>trialReductions.has(card.id)?{...card,num:card.num-2}:card),
+    ...["038","040","007","016"].map(number=>({id:"STS/W140-"+number,num:2,cx:false}))
+  ]
+};
+const isStellaDeck=scenario=>scenario===stellaScenario||scenario===stellaTrialScenario;
+const isDeckMirror=scenario=>scenario===redBlueScenario||isStellaDeck(scenario);
 const stellaIs=(card,number)=>sameBotCardNumber(card.id,"STS/W140-"+number);
 const stellaAlly=card=>["巡遊者","魔王"].some(trait=>matchesPracticeTrait(card,trait));
 const stellaStage=p=>botSlots.flatMap(slot=>players[p][slot].filter(card=>card.faceUp));
@@ -197,7 +207,148 @@ function stellaMemoryActions(p){
     }
   }));
 }
+function stellaStageSlot(board,card){
+  return botSlots.find(slot=>board[slot].some(entry=>entry.uid===card.uid));
+}
+function stellaDiscardForAbility(p,done){
+  const board=players[p];
+  stellaChoose(p,"コストにする手札を選ぶ",board.hand,card=>{
+    if(card)stellaMove(board,"hand",card,"waiting");
+    done(card);
+  },{optional:true,shown:board.hand});
+}
+function stellaKohakuDeploy(p,source,done){
+  const board=players[p];
+  const eligible=card=>stellaAlly(card)&&botDefinition(card)?.type==="character"&&botEffectCard(card).level<=0;
+  if(p===1&&!board.waiting.some(eligible)&&!board.hand.some(eligible)){done();return}
+  stellaDiscardForAbility(p,discarded=>{
+    if(!discarded){done();return}
+    const targets=board.waiting.filter(eligible);
+    stellaChoose(p,"控え室から登場させるキャラ",targets,target=>{
+      if(!target){done();return}
+      function place(slot){
+        if(board[slot].length)botMove(board,slot,board[slot].length-1,"waiting");
+        const entrant=stellaMove(board,"waiting",target,slot);
+        botStageEntry(p,entrant,"waiting",()=>resolveBoardRules(p,done));
+      }
+      if(p===1){place(botSlots.find(slot=>!board[slot].length)??"front0");return}
+      const body=showResolution("登場させる枠を選ぶ",[target],effectChoiceImageUrl);
+      for(const slot of botSlots){
+        const current=board[slot].at(-1);
+        deckButton(body,labels[slot]+(current?"（"+stellaName(current)+"を控え室へ）":""),()=>{
+          closeResolution();place(slot);
+        });
+      }
+    },{shown:targets});
+  });
+}
+function stellaKohakuSwap(p,source,done){
+  const board=players[p],slot=stellaStageSlot(board,source);
+  if(!slot||!board.stock.length){done();return}
+  const targets=stellaStage(p).filter(card=>card.uid!==source.uid&&stellaAlly(card));
+  function swap(target){
+    if(!target){done();return}
+    const other=stellaStageSlot(board,target);
+    autoRulePay(p,1);
+    source.orientation=target.orientation=0;
+    [board[slot],board[other]]=[board[other],board[slot]];
+    done();
+  }
+  if(p===1){
+    const opposing=slot.startsWith("front")?players[1-p][autoRuleOpposite(slot)].at(-1):null;
+    const threat=opposing?botStats(1-p,opposing).power??0:0;
+    const currentPower=botStats(p,source).power??0;
+    const upgrade=opposing&&threat>=currentPower&&targets.find(card=>
+      stellaStageSlot(board,card).startsWith("back")&&(botStats(p,card).power??0)>threat);
+    swap(upgrade);
+    return;
+  }
+  stellaChoose(p,"1ストック：コハクと入れ替えるキャラ",targets,swap,{optional:true,shown:targets});
+}
+function stellaLaarPrepare(p,source,done){
+  if(!stellaStageSlot(players[p],source)||!stellaStage(p).every(stellaAlly)){done();return}
+  stellaConfirm(p,"ラール・山札の上から1枚を控え室に置く？",use=>{
+    if(!use){done();return}
+    botRevealTop(p,card=>{
+      card.faceUp=true;
+      players[p].waiting.push(card);
+      const definition=botDefinition(card);
+      if(definition?.type==="character"&&botEffectCard(card).level<=2)(source.gainedAbilities??=[]).push("laar-retreat");
+      autoRuleLog("ラール・"+stellaName(card)+"を控え室へ");
+    },done);
+  });
+}
+function stellaLaarRetreat(p,source,done){
+  const board=players[p],slot=stellaStageSlot(board,source);
+  if(!slot||!source.gainedAbilities?.includes("laar-retreat")){done();return}
+  stellaConfirm(p,"ラールを手札に戻す？",use=>{
+    if(use)stellaMove(board,slot,source,"hand");
+    done();
+  });
+}
+function stellaCoronisStock(p,source,done){
+  const board=players[p];
+  stellaRevealTop(p,top=>{
+    const slot=stellaStageSlot(board,source);
+    if(slot&&top&&botDefinition(top)?.type==="character"&&botEffectCard(top).level<=0){
+      stellaMove(board,slot,source,"stock");
+    }
+    done();
+  });
+}
+function stellaCoronisReveal(p,source,done){
+  const board=players[p];
+  if(!board.stock.length){done();return}
+  const targets=stellaStage(p).filter(card=>card.uid!==source.uid&&stellaAlly(card));
+  stellaChoose(p,"1ストック：控え室に置く他のキャラ",targets,target=>{
+    if(!target){done();return}
+    autoRulePay(p,1);
+    stellaMove(board,stellaStageSlot(board,target),target,"waiting");
+    function reveal(left){
+      if(!left||board.level.length>=4){done();return}
+      stellaRevealTop(p,top=>{
+        if(!top||board.level.length>=4){done();return}
+        const type=botDefinition(top)?.type;
+        if(type==="event"||type==="character"&&stellaAlly(top)){
+          stellaMove(board,"deck",top,"hand");
+          resolveBoardRules(p,()=>reveal(left-1));
+        }else reveal(left-1);
+      });
+    }
+    reveal(2);
+  },{optional:true,shown:targets});
+}
+function stellaFirenHoliday(p,source,done){
+  const board=players[p],milled=[];
+  stellaDiscardForAbility(p,discarded=>{
+    if(!discarded){done();return}
+    function finish(){
+      if(board.level.length>=4){done();return}
+      const level=milled.reduce((sum,card)=>sum+(card.cx?0:botEffectCard(card).level??0),0);
+      const candidates=board.waiting.filter(card=>botDefinition(card)?.type==="character"&&stellaAlly(card)&&botEffectCard(card).level<=level);
+      stellaChoose(p,"控え室からLv"+level+"以下のキャラを回収",candidates,target=>{
+        if(target)stellaMove(board,"waiting",target,"hand");
+        if(!milled.some(card=>card.cx)){done();return}
+        stellaConfirm(p,"フィレン・山札の上1枚をストックに置く？",use=>{
+          if(!use){done();return}
+          botRevealTop(p,card=>{card.faceUp=false;board.stock.push(card)},done);
+        });
+      },{optional:true,shown:candidates});
+    }
+    function mill(left){
+      if(!left||board.level.length>=4){finish();return}
+      botRevealTop(p,card=>{
+        card.faceUp=true;board.waiting.push(card);milled.push(card);
+      },found=>{if(found)mill(left-1);else finish()});
+    }
+    mill(2);
+  });
+}
 const stellaActions={
+  "kohaku-deploy":stellaKohakuDeploy,"kohaku-swap":stellaKohakuSwap,
+  "laar-prepare":stellaLaarPrepare,
+  "coronis-stock":stellaCoronisStock,"coronis-reveal":stellaCoronisReveal,
+  "firen-holiday":stellaFirenHoliday,
   "t03-entry":stellaT03,"t03-attack":stellaT03Attack,"reis-cx":stellaReis,
   "shimiao-look":stellaShimiao,"freesia-reveal":stellaFreesia,"teresa-recall":stellaTeresa
 };

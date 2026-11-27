@@ -2439,3 +2439,108 @@ test("成立とキャンセルのダメージ公開をリロード後も確認�
   assert.match(entries.children[1].textContent,/自分.*ダメージ 1枚/);
   assert.equal(cards.children[0].children.length,1);
 });
+
+test("ステラソラのLv0追加4種でDAQBEと初手から対戦できる",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.settle();
+  page.get("botScenario").value="stella-level-zero-trial";
+  page.click("startBotBattle");
+  assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
+  assert.equal(page.run('match.decks[1]===stellaDeck'),true);
+  for(const number of ["038","040","007","016"]){
+    assert.equal(page.run(`match.decks[0].cards.find(c=>c.id==="STS/W140-${number}").num`),2);
+    assert.equal(page.run(`botDefinition({id:"STS/W140-${number}"}).stats.level`),0);
+  }
+  page.click("confirmMulligan");
+  assert.equal(snapshot(page).phase,"active");
+});
+
+async function launchStellaAbility(){
+  const page=launchRules();
+  await page.settle();
+  page.run(`
+    const own=players[0], opponent=players[1];
+    const card=(no,uid,cx=false)=>({id:"STS/W140-"+no,uid,cx,faceUp:true,orientation:0});
+    for(const board of players)for(const zone of zones)board[zone]=[];
+  `);
+  return page;
+}
+
+test("コハクは捨てたLv0を登場させ、相手アタック開始時にスタンドして入れ替える",async()=>{
+  const page=await launchStellaAbility();
+  page.run('own.hand.push(card("038","kohaku"),card("040","laar"));own.stock.push(card("032","pay",true));autoRulePlace(0,"kohaku","front0")');
+  ruleButton(page,"1．カモメのポテト ラール");
+  ruleButton(page,"1．カモメのポテト ラール");
+  ruleButton(page,"後列①");
+  page.run('own.front0[0].orientation=90;own.back0[0].orientation=180;match.turn.player=1;setTurnPhase("attack")');
+  const choose=page.get("dialogBody").children.find(el=>el.textContent.includes("コハク")&&el.textContent.includes("入れ替え"));
+  assert.ok(choose);
+  choose.onclick();
+  ruleButton(page,"1．カモメのポテト ラール");
+  assert.equal(page.run('own.front0[0].uid+":"+own.front0[0].orientation'),"laar:0");
+  assert.equal(page.run('own.back0[0].uid+":"+own.back0[0].orientation'),"kohaku:0");
+  assert.equal(page.run('own.stock.length'),0);
+  ruleButton(page,"使わない");
+});
+
+test("ラールは自分のスタンドフェイズに起きず、条件を満たすとフロントアタックを受けた時に手札へ戻れる",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    own.front0.push(card("040","laar"));
+    own.front0[0].orientation=90;
+    own.deck.push(card("016","reserve-own"),card("032","damage",true),card("016","milled"));
+    opponent.front2.push(card("038","attacker"));
+    opponent.deck.push(card("016","reserve"),card("016","trigger"));
+    setTurnPhase("stand");
+  `);
+  assert.equal(page.run("own.front0[0].orientation"),90);
+  page.run('match.turn.player=1;setTurnPhase("attack")');
+  ruleButton(page,"使う");
+  assert.equal(page.run('own.waiting[0].uid'),"milled");
+  page.run('autoRuleAttack(1,"front2","attacker","front")');
+  ruleButton(page,"使う");
+  assert.equal(page.run('own.hand[0].uid'),"laar");
+  assert.equal(page.run('own.front0.length'),0);
+  assert.equal(page.run('own.waiting.some(c=>c.uid==="damage")'),true);
+});
+
+test("クルニスの2つの登場時能力は順番を選べて、自身をストックに置いた後も残りを解決する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    own.front1.push(card("038","ally"));
+    own.deck.push(card("016","reserve"),card("030","event"),card("016","lv0"));
+    own.hand.push(card("007","coronis"));
+    autoRulePlace(0,"coronis","front0");
+  `);
+  const first=page.get("dialogBody").children.find(el=>el.textContent.includes("自身をストックへ"));
+  assert.ok(first);
+  first.onclick();
+  ruleButton(page,"確認して進む");
+  assert.equal(page.run('own.stock[0].uid'),"coronis");
+  ruleButton(page,"1．銃弾のロンド コハク");
+  ruleButton(page,"確認して進む");
+  ruleButton(page,"確認して進む");
+  assert.equal(page.run('own.hand.map(c=>c.uid).join()'),"lv0,event");
+  assert.equal(page.run('own.waiting.map(c=>c.uid).join()'),"coronis,ally");
+});
+
+test("休暇フィレンは舞台から控え室に置かれた時だけ誘発し、落としたカードのLv合計とCXを参照する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    own.hand.push(card("008","discard"),card("016","fromHand"));
+    own.front0.push(card("016","firen"));
+    own.waiting.push(card("003","tooHigh"));
+    own.deck.push(card("016","reserve"),card("008","stock"),card("025","other"),card("004","ignore"));
+    own.deck.splice(2,2,card("032","cx",true),card("023","lv2"));
+    runRuleOperation(done=>{botMove(own,"hand",1,"waiting");done()});
+  `);
+  assert.equal(Boolean(page.get("dialog").open),false);
+  page.run('runRuleOperation(done=>{botMove(own,"front0",0,"waiting");done()})');
+  ruleButton(page,"1．魂の取引 魔王ちゃん");
+  assert.match(page.get("dialogTitle").textContent,/Lv2以下/);
+  assert.equal(page.get("dialogBody").children.some(el=>el.textContent.includes("長夜無明")),false);
+  ruleButton(page,"選ばない");
+  ruleButton(page,"使う");
+  assert.equal(page.run('own.stock[0].uid'),"stock");
+  assert.equal(page.run('own.waiting.some(c=>c.uid==="lv2")&&own.waiting.some(c=>c.uid==="cx")'),true);
+});

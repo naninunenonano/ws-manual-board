@@ -120,14 +120,14 @@ function startBotMatch(deck,scenario){
   if(onlineMatch?.active()){message("オンラインルームを退出してから開始してください");return}
   const rules=isAutoRules(scenario);
   const redBlue=isDeckMirror(scenario);
-  const mirrorDeck=scenario===stellaScenario?stellaDeck:redBlueDeck;
-  if(scenario===stellaScenario&&!botCatalog){message("カードデータの読み込みをお待ちください");return}
+  const mirrorDeck=scenario===stellaTrialScenario?stellaTrialDeck:scenario===stellaScenario?stellaDeck:redBlueDeck;
+  if(isStellaDeck(scenario)&&!botCatalog){message("カードデータの読み込みをお待ちください");return}
   const opening=scenario==="opening"||redBlue;
   if(redBlue)deck=mirrorDeck;
   else if(rules)deck=Object.hasOwn(practiceTitles,scenario)?practiceDeck(botDeck,scenario):{...botDeck,title:"共通ルール確認用デッキ"};
   if(!deck){message("プレイヤー1の使用デッキを選択してください");return}
   if(!rules&&!Object.hasOwn(botScenarioNames,scenario))return;
-  const opponentDeck=redBlue?mirrorDeck:scenario===bondScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["109",1]],["001"]):
+  const opponentDeck=scenario===stellaTrialScenario?stellaDeck:redBlue?mirrorDeck:scenario===bondScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["109",1]],["001"]):
     scenario===backupScenario?practiceDeckWithSpecimens(botDeck,botDeck.title,[["120",1]],["009"]):botDeck;
   const boards=[buildMatchBoard(deck,0),buildMatchBoard(opponentDeck,1)];
   const [own,opponent]=boards;
@@ -928,7 +928,7 @@ function scheduleBotTurn(){
 function renderBotControls(){
   document.getElementById("botControls").hidden=false;
   renderBotRevealButtons("bot");
-  document.getElementById("botModeName").textContent="Bot戦 · "+((match.bot.scenario===stellaScenario?stellaDeck.title:match.bot.scenario===redBlueScenario?redBlueDeck.title:practiceTitles[match.bot.scenario])??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
+  document.getElementById("botModeName").textContent="Bot戦 · "+((match.bot.scenario===stellaTrialScenario?stellaTrialDeck.title+" vs DAQBE":match.bot.scenario===stellaScenario?stellaDeck.title:match.bot.scenario===redBlueScenario?redBlueDeck.title:practiceTitles[match.bot.scenario])??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
   const button=document.getElementById("botStep");
   button.hidden=isDeckMirror(match.bot.scenario);
   button.disabled=!botCanStep();
