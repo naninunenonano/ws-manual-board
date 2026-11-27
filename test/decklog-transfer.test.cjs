@@ -1811,11 +1811,23 @@ test("風に揺れる気持ち ナツカは1枚の時だけ風を与え、起動
   ruleButton(page,"戻さない");
   assert.equal(page.run("windBoard.hand.at(-1).uid"),"second-treasure");
   assert.equal(page.run("windRival.back0[0].uid"),"back-row");
-  page.run('selected={p:0,z:"front1",index:0};openBotAbility()');
+  page.run(`
+    windBoard.memory.push(windCard("kanache","STS/W140-024"));
+    windBoard.clock.push(windCard("heal"));
+    selected={p:0,z:"front1",index:0};openBotAbility();
+  `);
   ruleButton(page,"起動・爽風の才媛 ナツカに交代");
   ruleButton(page,"能力を使う");
   ruleButton(page,"同じ枠に出す");
+  assert.equal(page.get("dialogTitle").textContent,"次に解決する効果を選ぶ");
+  ruleButton(page,"2．回想・マーカーを置く");
+  ruleButton(page,"思い出の1枚目をマーカーにする");
+  ruleButton(page,"行う");
   assert.equal(page.run("windBoard.front1[0].uid"),"large");
+  assert.equal(page.run("windBoard.memory.length"),0);
+  assert.equal(page.run("windBoard.front1[0].markers[0].card.uid"),"kanache");
+  assert.equal(page.run("windBoard.front1[0].markers[0].faceUp"),true);
+  assert.equal(page.run("windBoard.clock.length"),0);
   assert.equal(page.run("windBoard.waiting.some(card=>card.uid==='small')"),true);
   assert.equal(page.run("windBoard.front1[0].turnPowerBonus"),2000);
   assert.equal(page.run("windBoard.stock.length"),0);

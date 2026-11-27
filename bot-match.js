@@ -1016,7 +1016,7 @@ function botReplaceWithNatsuka(p,source,done){
       closeResolution();
       const entrant=botMove(board,"hand",board.hand.findIndex(card=>card.uid===candidate.uid),slot);
       autoRuleAddTurnStat(entrant,"power",2000);
-      botDispatch(entrant,"from_hand_to_stage",done,p);
+      botStageEntry(p,entrant,"hand",done);
     });
     deckButton(choice,"出さない",()=>{closeResolution();done()});
   });
