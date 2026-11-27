@@ -615,20 +615,21 @@ function autoRuleCounter(p,attacker,target,done){
     const def=botDefinition(card);
     if(def?.backup){
       const blocked=autoRuleEntryBattleBuff(attacker)?.blocksBackup||autoRuleEntryBattleBuff(target)?.blocksBackup;
-      return !blocked&&board.level.length>=def.stats.level&&board.stock.length>=def.stats.cost;
+      return !blocked&&board.level.length>=def.stats.level&&board.stock.length>=(def.backup.cost??def.stats.cost);
     }
     return def?.counter&&!autoRuleLegalPlay(p,card,"attack",def.type);
   });
   if(!target||!candidates.length){done();return}
   function play(card){
-    autoRulePay(p,botDefinition(card).stats.cost);
+    const {backup,counter,stats}=botDefinition(card);
+    autoRulePay(p,backup?.cost??stats.cost);
     botMove(board,"hand",board.hand.indexOf(card),"waiting");
-    const {backup,counter}=botDefinition(card);
     const bonus=(backup??counter).power;
     autoRuleAddTurnStat(target,"power",bonus);
     if(backup?.reverseMove)target.botBackupReverse={...backup.reverseMove,turn:match.turn.number};
     autoRuleLog(botCardInfo(card).name+"を使用（パワー＋"+bonus+"）");
-    done();
+    if(backup)botDispatch(card,"on_backup_used",()=>autoRuleResolveWaiting(done),p,{attacker,defender:target});
+    else done();
   }
   if(p===1){play(candidates[0]);return}
   const body=showResolution("カウンター",[target]);

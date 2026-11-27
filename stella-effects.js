@@ -216,6 +216,43 @@ function stellaDiscardForAbility(p,done){
     done(card);
   },{optional:true,shown:board.hand});
 }
+function stellaShiaRecover(p,source,done){
+  const board=players[p];
+  const character=card=>botDefinition(card)?.type==="character";
+  if(!board.stock.length||!board.hand.length||
+    !(board.waiting.some(character)||character(board.stock.at(-1))||board.hand.some(character))){
+    done();return;
+  }
+  stellaChoose(p,"シア・1ストックと手札1枚でキャラを回収",board.hand,discarded=>{
+    if(!discarded){done();return}
+    autoRulePay(p,1);
+    stellaMove(board,"hand",discarded,"waiting");
+    stellaSalvage(p,character,done);
+  },{optional:true});
+}
+function stellaOtohaBackup(p,source,done,{attacker,defender}){
+  const board=players[p];
+  const allies=stellaStage(p).filter(stellaAlly);
+  const enemies=stellaStage(1-p).filter(card=>botDefinition(card)?.type==="character"&&
+    !botDefinition(card).keywords?.includes("相手の効果に選ばれない"));
+  if(!board.stock.length||!allies.length||!enemies.length){done();return}
+  function pay(ally){
+    if(!ally){done();return}
+    autoRulePay(p,1);
+    stellaMove(board,stellaStageSlot(board,ally),ally,"waiting");
+    stellaChoose(p,"オトハ・ソウルを－1する相手キャラ",p===1?[attacker]:enemies,target=>{
+      autoRuleAddTurnStat(target,"soul",-1);
+      done();
+    });
+  }
+  if(p===1){
+    const sacrifice=allies.find(card=>card!==defender&&stellaStageSlot(board,card).startsWith("back"))??
+      allies.find(card=>card!==defender&&botDefinition(card).stats.power<=1000);
+    pay(enemies.includes(attacker)&&botStats(1-p,attacker).soul>0?sacrifice:null);
+    return;
+  }
+  stellaChoose(p,"オトハ・1ストックと舞台のキャラ1枚を支払う",allies,pay,{optional:true});
+}
 function stellaKohakuDeploy(p,source,done){
   const board=players[p];
   const eligible=card=>stellaAlly(card)&&botDefinition(card)?.type==="character"&&botEffectCard(card).level<=0;
@@ -344,6 +381,8 @@ function stellaFirenHoliday(p,source,done){
   });
 }
 const stellaActions={
+  "shia-recover-entry":stellaShiaRecover,"shia-recover-leave":stellaShiaRecover,
+  "otoha-backup-soul":stellaOtohaBackup,
   "kohaku-deploy":stellaKohakuDeploy,"kohaku-swap":stellaKohakuSwap,
   "laar-prepare":stellaLaarPrepare,
   "coronis-stock":stellaCoronisStock,"coronis-reveal":stellaCoronisReveal,

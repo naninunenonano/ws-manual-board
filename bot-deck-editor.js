@@ -7,15 +7,14 @@ const connectDeckBuilder=(()=>{
   const key="ws-stella-bot-decks-v1";
   const sendaiDeck={
     cards:[
-      ["004",4],["003",3],["076",1],["024",4],["023",1],["013",1],["002",4],
-      ["019",1],["008",4],["001",4],["T03",4],["025",2],["068",2],["071",4],
+      ["004",4],["003",3],["076",1],["024",4],["023",1],["022",1],["002",4],
+      ["019",1],["008",4],["001",4],["T03",4],["025",2],["035",2],["071",4],
       ["030",3],["031",4],["032",4]
     ].map(([number,num])=>({id:"STS/W140-"+number,num}))
   };
   const presets={
     daqbe:{deck:stellaDeck,url:"https://ws-tcg.com/deckrecipe/5855/"},
-    sendai:{deck:sendaiDeck,url:"https://ws-tcg.com/deckrecipe/5856/",
-      note:"千の貌を持つ女 オトハ1枚と波に先立つ兎 シア2枚を、ムーンシャドウ コゼット1枚と弁論と立証 フリージア2枚に差し替えています。"},
+    sendai:{deck:sendaiDeck,url:"https://ws-tcg.com/deckrecipe/5856/"},
     trial:{deck:stellaTrialDeck},
     empty:{deck:{cards:[]}}
   };
@@ -38,10 +37,7 @@ const connectDeckBuilder=(()=>{
   function refreshPresetSource(){
     const preset=presets[presetSelect.value];
     get("botDeckPresetSource").hidden=!preset?.url;
-    if(preset?.url){
-      get("botDeckPresetLink").href=preset.url;
-      get("botDeckPresetNote").textContent=preset.note??"";
-    }
+    if(preset?.url)get("botDeckPresetLink").href=preset.url;
   }
   const rowUpdates=[];
   const variants=card=>CardCatalog.cardNumbers(card);
