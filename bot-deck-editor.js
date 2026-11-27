@@ -2,14 +2,16 @@
 
 let botDeckEditorOpen=false;
 
-(()=>{
+const connectOnlineDeckBuilder=(()=>{
   const get=id=>document.getElementById(id);
   const key="ws-stella-bot-decks-v1";
   const presets={daqbe:stellaDeck,trial:stellaTrialDeck};
   const tabs=[get("editOwnBotDeck"),get("editOpponentBotDeck")];
   const list=get("botDeckCardRows"), totals=get("botDeckTotals"), notice=get("botDeckEditorNotice");
   const start=get("startEditedBotBattle"), apply=get("applyBotDeckPreset");
-  let counts, cards=[], editing=0;
+  const save=get("saveBuiltOnlineDeck"), deckName=get("builtOnlineDeckName");
+  let counts,cards=[],editing=0,online=false,onlineDraft={};
+  const currentDeck=()=>online?onlineDraft:counts[editing];
   const rowUpdates=[];
   const variants=card=>CardCatalog.cardNumbers(card);
   const totalCopies=(deck,ids)=>ids.reduce((sum,id)=>sum+(deck[id]??0),0);
@@ -41,23 +43,33 @@ let botDeckEditorOpen=false;
       notice.textContent="端末に保存できません。この画面では編集を続けられます。";
     }
   }
-  function buildDeck(p){
+  function buildDeck(countsForDeck,title){
     return {
-      title:p===0?"自分のステラソラ":"Botのステラソラ",
+      title,
       cards:cards.flatMap(card=>variants(card).flatMap(id=>{
-        const num=counts[p][id];
+        const num=countsForDeck[id];
         return num?[{id,num,cx:card.type==="climax"}]:[];
       }))
     };
   }
-  function refreshCounts(){
-    const summaries=[0,1].map(p=>buildDeck(p).cards.reduce((sum,card)=>({
+  function summarize(deck){
+    return buildDeck(deck).cards.reduce((sum,card)=>({
       total:sum.total+card.num,cx:sum.cx+(card.cx?card.num:0)
-    }),{total:0,cx:0}));
-    totals.textContent=summaries.map(({total,cx},p)=>
-      (p===0?"自分":"Bot")+" "+total+"/50枚（CX "+cx+"/8枚）").join(" ／ ");
-    start.disabled=!summaries.every(({total,cx})=>total===50&&cx===8);
-    tabs.forEach((tab,p)=>tab.setAttribute("aria-pressed",String(p===editing)));
+    }),{total:0,cx:0});
+  }
+  const complete=({total,cx})=>total===50&&cx===8;
+  const describe=({total,cx})=>total+"/50枚（CX "+cx+"/8枚）";
+  function refreshCounts(){
+    if(online){
+      const summary=summarize(onlineDraft);
+      totals.textContent=describe(summary);
+      save.disabled=!deckName.value.trim()||!complete(summary);
+    }else{
+      const summaries=counts.map(summarize);
+      totals.textContent=summaries.map((summary,p)=>(p===0?"自分":"Bot")+" "+describe(summary)).join(" ／ ");
+      start.disabled=!summaries.every(complete);
+      tabs.forEach((tab,p)=>tab.setAttribute("aria-pressed",String(p===editing)));
+    }
     rowUpdates.forEach(update=>update());
   }
   function renderRows(){
@@ -65,7 +77,7 @@ let botDeckEditorOpen=false;
     rowUpdates.length=0;
     for(const card of cards){
       const ids=variants(card),row=document.createElement("li");
-      let selectedId=ids.find(id=>counts[editing][id])??card.cardNumber;
+      let selectedId=ids.find(id=>currentDeck()[id])??card.cardNumber;
       let previewId;
       row.className="bot-deck-card-row";
       const label=document.createElement("div");
@@ -101,17 +113,17 @@ let botDeckEditorOpen=false;
       minus.textContent="−";
       plus.textContent="＋";
       function change(delta){
-        const deck=counts[editing],num=(deck[selectedId]??0)+delta;
+        const deck=currentDeck(),num=(deck[selectedId]??0)+delta;
         if(num<0||(delta>0&&totalCopies(deck,ids)>=4))return;
         if(num)deck[selectedId]=num;
         else delete deck[selectedId];
-        saveCounts();
+        if(!online)saveCounts();
         refreshCounts();
       }
       minus.onclick=()=>change(-1);
       plus.onclick=()=>change(1);
       function updateRow(){
-        const deck=counts[editing],num=deck[selectedId]??0;
+        const deck=currentDeck(),num=deck[selectedId]??0;
         const edition=selectedId===card.cardNumber?"":"（"+editionNames[ids.indexOf(selectedId)]+"）";
         if(previewId!==selectedId){
           previewId=selectedId;
@@ -134,31 +146,45 @@ let botDeckEditorOpen=false;
     }
   }
 
-  get("openBotDeckEditor").onclick=async()=>{
+  async function openEditor(forOnline){
     if(!isDeckSetup())return;
+    online=forOnline;
     botDeckEditorOpen=true;
+    get("deckEditorTitle").textContent=online?"オンライン用デッキ作成":"Bot戦デッキ編集";
+    get("onlineDeckBuilderFields").hidden=!online;
+    start.hidden=online;
+    save.hidden=!online;
+    for(const tab of tabs)tab.hidden=online;
     showMatchScreen();
-    if(counts)return;
-    notice.textContent="カードデータを読み込んでいます";
-    apply.disabled=true;
-    await botCatalogReady;
-    if(!botCatalog){
-      notice.textContent="カードデータを読み込めませんでした。ページを再読み込みしてください。";
-      return;
+    if(!counts){
+      notice.textContent="カードデータを読み込んでいます";
+      apply.disabled=true;
+      save.disabled=true;
+      await botCatalogReady;
+      if(!botDeckEditorOpen)return;
+      if(!botCatalog){
+        notice.textContent="カードデータを読み込めませんでした。ページを再読み込みしてください。";
+        return;
+      }
+      if(!counts){
+        cards=botCatalog.cards.filter(card=>card.cardNumber.startsWith("STS/")).sort((a,b)=>
+          Number(a.type==="climax")-Number(b.type==="climax")||a.cardNumber.localeCompare(b.cardNumber));
+        counts=loadCounts();
+      }
     }
-    if(counts)return;
-    cards=botCatalog.cards.filter(card=>card.cardNumber.startsWith("STS/")).sort((a,b)=>
-      Number(a.type==="climax")-Number(b.type==="climax")||a.cardNumber.localeCompare(b.cardNumber));
-    counts=loadCounts();
+    notice.textContent="";
     renderRows();
     refreshCounts();
-    notice.textContent="";
     apply.disabled=false;
-  };
-  get("closeBotDeckEditor").onclick=()=>{
+  }
+  function closeEditor(){
     botDeckEditorOpen=false;
     showMatchScreen();
-  };
+  }
+  get("openBotDeckEditor").onclick=()=>openEditor(false);
+  get("openOnlineDeckBuilder").onclick=()=>openEditor(true);
+  get("closeBotDeckEditor").onclick=closeEditor;
+  deckName.oninput=()=>{if(counts&&online)refreshCounts()};
   tabs.forEach((tab,p)=>{
     tab.onclick=()=>{
       editing=p;
@@ -168,17 +194,40 @@ let botDeckEditorOpen=false;
   apply.onclick=()=>{
     const preset=presets[get("botDeckPreset").value];
     if(!counts||!preset)return;
-    counts[editing]=fromPreset(preset);
-    saveCounts();
+    if(online)onlineDraft=fromPreset(preset);
+    else{
+      counts[editing]=fromPreset(preset);
+      saveCounts();
+    }
+    renderRows();
     refreshCounts();
   };
   start.onclick=()=>{
-    if(start.disabled||!counts)return;
+    if(start.disabled||!counts||online)return;
     if(onlineMatch?.active()){
       notice.textContent="オンラインルームを退出してから開始してください";
       return;
     }
-    startBotMatch(buildDeck(0),stellaCustomScenario,buildDeck(1));
+    startBotMatch(buildDeck(counts[0],"自分のステラソラ"),stellaCustomScenario,buildDeck(counts[1],"Botのステラソラ"));
     if(isDeckSetup())notice.textContent="対戦を開始できません。端末の保存設定を確認してください。";
+  };
+  return storeDeck=>{
+    save.onclick=()=>{
+      if(!online||!botDeckEditorOpen||!counts||save.disabled)return;
+      try{
+        const title=deckName.value.trim();
+        if(!title||!complete(summarize(onlineDraft)))return;
+        const id=storeDeck(buildDeck(onlineDraft,title));
+        onlineDraft={};
+        deckName.value="";
+        closeEditor();
+        get("onlineControls").open=true;
+        onlineMatch?.refreshDecks();
+        get("onlineDeck").value=id;
+        get("onlineStatus").textContent="「"+title+"」を保存しました。ルームでこのデッキを選べます。";
+      }catch(error){
+        notice.textContent=error.message;
+      }
+    };
   };
 })();

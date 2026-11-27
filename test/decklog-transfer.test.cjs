@@ -2663,3 +2663,29 @@ test("ステラソラBot戦は集中0ヒットとキャンセルされたダメ�
   ruleButton(page,"確認して進む");
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
+
+test("オンライン用の新規作成はBotデッキと独立し、50枚とCX8枚を満たすデッキを登録する",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.click("openOnlineDeckBuilder");
+  assert.equal(page.get("deckEditorTitle").textContent,"オンライン用デッキ作成");
+  assert.equal(page.get("editOpponentBotDeck").hidden,true);
+  assert.match(page.get("botDeckTotals").textContent,/^0\/50枚/);
+  page.get("builtOnlineDeckName").value="オンライン検証";
+  page.get("builtOnlineDeckName").oninput();
+  assert.equal(page.get("saveBuiltOnlineDeck").disabled,true);
+  page.get("botDeckPreset").value="trial";
+  page.click("applyBotDeckPreset");
+  assert.equal(page.get("saveBuiltOnlineDeck").disabled,false);
+  page.click("saveBuiltOnlineDeck");
+  const [saved]=JSON.parse(page.storage.get(libraryKey));
+  assert.equal(saved.deck.title,"オンライン検証");
+  assert.equal(saved.deck.list.reduce((sum,card)=>sum+card.num,0),50);
+  assert.equal(saved.deck.list.filter(card=>card.cx).reduce((sum,card)=>sum+card.num,0),8);
+  assert.equal(saved.deck.list.find(card=>card.card_number==="STS/W140-038").num,1);
+  assert.equal(page.get("botDeckEditorScreen").hidden,true);
+  await page.click("openBotDeckEditor");
+  assert.equal(page.get("deckEditorTitle").textContent,"Bot戦デッキ編集");
+  assert.match(page.get("botDeckTotals").textContent,/Bot 50\/50枚/);
+  const kohaku=page.get("botDeckCardRows").children.find(row=>row.children[0].textContent==="銃弾のロンド コハク");
+  assert.equal(kohaku.children[1].children[1].textContent,"0");
+});
