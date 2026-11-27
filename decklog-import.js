@@ -8,6 +8,8 @@
   let transferRevision = 0;
   const imageTypeCache = new Map();
   function detectLandscape(id){
+    // The high-resolution prints of 僕達の冒険 are scanned sideways.
+    if(isFrierenTrialClimax(id))return Promise.resolve(true);
     if(imageTypeCache.has(id))return imageTypeCache.get(id);
     const promise=new Promise(resolve=>{const url=officialImageUrl(id);if(!url){resolve(null);return}const img=new Image();img.onload=()=>resolve(img.naturalWidth>img.naturalHeight);img.onerror=()=>resolve(null);img.src=url});
     imageTypeCache.set(id,promise);return promise;

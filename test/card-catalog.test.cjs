@@ -2,7 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const C = require("../card-catalog.js");
-const {officialImageUrl} = require("../card-images.js");
+const {officialImageUrl,effectChoiceImageUrl,effectChoiceFallbackUrl,isFrierenTrialClimax} = require("../card-images.js");
 
 const card = (number="TEST/S001-001",attrs={}) => ({cardNumber:number,type:"character",
   color:"青",title:"テストタイトル",product:"試験商品",stats:{level:0,cost:0,power:1000,soul:1},effects:[],...attrs});
@@ -14,6 +14,17 @@ test("card numbers normalize and use the existing image URL convention",()=>{
   assert.equal(officialImageUrl(number),"https://ws-tcg.com/wordpress/wp-content/images/cardlist/t/test_s001/test_s001_001.png");
   assert.equal(C.validNumber("TEST/S001-001A*"),true);
   assert.equal(officialImageUrl("TEST/S001-001A*"),null);
+});
+
+test("Frieren trial print images use the larger scan and fall back to the same printing",()=>{
+  for(const [number,file] of [["T04","025"],["T04SP","001"],["T09","030"],["T09R","012"],["T13","034"],["T13R","015"]]){
+    const id="SFN/S108-"+number;
+    assert.equal(isFrierenTrialClimax(id),number.startsWith("T09"));
+    assert.equal(officialImageUrl(id),"https://www.c-labo-online.jp/data/c-labo/product/wssfns108t_"+file+".jpg");
+    assert.equal(effectChoiceImageUrl(id),officialImageUrl(id));
+    assert.equal(effectChoiceFallbackUrl(id),"https://heartofthecards.com/images/cards/ws/sfn-s108-"+number.toLowerCase()+".png");
+  }
+  assert.match(officialImageUrl("SFN/S128-003"),/sfn-s128-003\.png$/);
 });
 
 test("type-dependent stats keep zero distinct from null and reject invalid numbers",()=>{
