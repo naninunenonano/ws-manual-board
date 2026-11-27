@@ -402,10 +402,12 @@ async function checkAutoRules(browser,url){
   const hand=page.locator("#boards .player.active .hand");
   const center=page.locator('#boards .zone[data-p="0"][data-z="front1"]');
   await hand.locator('.card[title^="2コストの仮キャラ"]').first().tap({position:{x:8,y:10}});
-  await button("プレイする").tap();
   await page.locator("#dialog").waitFor({state:"hidden"});
   assert.equal(await page.locator('#boards .zone[data-p="0"] .stage-placement-target').count(),5);
   assert.equal(await page.locator('#boards .zone[data-p="1"] .stage-placement-target').count(),0);
+  await page.locator("#playerActions #clearSelection").tap();
+  assert.equal(await page.locator(".stage-placement-target").count(),0);
+  await hand.locator('.card[title^="2コストの仮キャラ"]').first().tap({position:{x:8,y:10}});
   const occupied=page.locator('#boards .zone[data-p="0"][data-z="front0"]');
   const stock=await page.evaluate(()=>players[0].stock.length);
   assert.equal(await occupied.locator(".zone-preview").count(),1);
@@ -415,7 +417,6 @@ async function checkAutoRules(browser,url){
   await button("キャンセル").tap();
   assert.equal(await page.locator(".stage-placement-target").count(),0);
   await hand.locator('.card[title^="2コストの仮キャラ"]').first().tap({position:{x:8,y:10}});
-  await button("プレイする").tap();
   await center.getByRole("button",{name:"前列②に置く",exact:true}).tap();
   assert.equal(await center.locator(".bot-power").innerText(),"4500");
   await center.tap({position:{x:14,y:10}});
@@ -423,7 +424,6 @@ async function checkAutoRules(browser,url){
   await button("使わない").tap();
   await page.locator("#nextPhase").tap();
   await hand.locator('.card[title^="仮CX"]').tap({position:{x:8,y:10}});
-  await button("プレイする").tap();
   assert.equal(await center.locator(".bot-power").innerText(),"5500");
   await page.locator("#nextPhase").tap();
   await center.tap({position:{x:14,y:10}});
@@ -496,11 +496,9 @@ async function checkLevelOnePractice(browser,url){
   await page.locator("#botScenario").selectOption("practice-level-one");
   await page.locator("#startBotBattle").tap();
   await hand("仮キャラ カムバック連動");
-  await button("プレイする").tap();
   await button("前列①に置く").tap();
   await page.locator("#nextPhase").tap();
   await hand("仮CX カムバック");
-  await button("プレイする").tap();
   await page.locator("#nextPhase").tap();
   await page.locator('#boards .zone[data-p="0"][data-z="front0"]').tap({position:{x:14,y:10}});
   await page.locator("#autoAttack").tap();
