@@ -19,7 +19,7 @@ const files = new Map([
   ["/cloud-decks.js",["cloud-decks.js","text/javascript"]],
   ["/card-images.js",["card-images.js","application/javascript"]],
   ["/online-match.js",["online-match.js","text/javascript"]],
-  ...["auto-rules.js","stella-effects.js","bot-match.js","card-catalog.js","effects/engine.js","card-data/load.js"].map(file=>["/"+file,[file,"text/javascript"]]),
+  ...["auto-rules.js","stella-effects.js","bot-match.js","bot-deck-editor.js","card-catalog.js","effects/engine.js","card-data/load.js"].map(file=>["/"+file,[file,"text/javascript"]]),
   ["/card-data/catalog.json",["card-data/catalog.json","application/json"]]
 ]);
 
@@ -239,6 +239,7 @@ async function main() {
     assert.deepEqual(forced,{clock:1,level:4,waiting:0,busy:false});
     assert.deepEqual(errors,[]);
     console.log(JSON.stringify(geometry));
+    await checkBotDeckEditor(browser,url);
     await checkBot(browser,url);
     await checkAutoRules(browser,url);
     await checkPracticeCards(browser,url);
@@ -250,6 +251,30 @@ async function main() {
     server.close();
   }
 }
+async function checkBotDeckEditor(browser,url){
+  const page=await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
+  try {
+    await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
+    await page.goto(url);
+    await page.locator("#openBotDeckEditor").tap();
+    await page.getByRole("heading",{name:"Bot戦デッキ編集"}).waitFor();
+    const start=page.locator("#startEditedBotBattle");
+    await page.getByRole("button",{name:"巡遊者 グレイを1枚減らす",exact:true}).tap();
+    assert.equal(await start.isDisabled(),true);
+    await page.getByRole("button",{name:"銃弾のロンド コハクを1枚増やす",exact:true}).tap();
+    assert.equal(await start.isEnabled(),true);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
+    await page.reload();
+    await page.locator("#openBotDeckEditor").tap();
+    await start.tap();
+    await page.locator("#mulliganScreen").waitFor();
+    assert.deepEqual(await page.evaluate(()=>match.decks.map(deck=>
+      deck.cards.find(card=>card.id==="STS/W140-038")?.num??0)),[1,0]);
+  } finally {
+    await page.close();
+  }
+}
+
 async function checkBot(browser,url){
   const page=await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
   const errors=[];

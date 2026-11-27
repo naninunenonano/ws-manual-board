@@ -2056,6 +2056,164 @@
           "steps": null
         }
       ]
+    },
+    {
+      "cardNumber": "STS/W140-038",
+      "name": "銃弾のロンド コハク",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "R",
+      "side": "W",
+      "type": "character",
+      "color": "赤",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 2000,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者",
+        "空白旅団"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "kohaku-deploy",
+          "category": "登場時・控え室から登場",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "sourceText": "手札1枚を控え室に置き、控え室のLv0以下の《巡遊者》か《魔王》のキャラ1枚を任意の枠に登場させる。",
+          "optional": true,
+          "steps": null
+        },
+        {
+          "id": "kohaku-swap",
+          "category": "相手アタックフェイズ開始時・入れ替え",
+          "type": "auto",
+          "timing": "at_opponent_attack_start",
+          "sourceText": "1ストックで自身と自分の《巡遊者》か《魔王》のキャラ1枚をスタンドして入れ替える。",
+          "optional": true,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-040",
+      "name": "カモメのポテト ラール",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "R",
+      "side": "W",
+      "type": "character",
+      "color": "赤",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 4000,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者",
+        "恩恵意志"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "laar-no-stand",
+          "category": "自分のスタンドフェイズにスタンドしない",
+          "type": "continuous",
+          "timing": "stand_phase",
+          "sourceText": "自身は自分のスタンドフェイズにスタンドしない。",
+          "optional": false,
+          "steps": null
+        },
+        {
+          "id": "laar-prepare",
+          "category": "相手アタックフェイズ開始時・山札上を控え室へ",
+          "type": "auto",
+          "timing": "at_opponent_attack_start",
+          "sourceText": "自分のキャラ全員が《巡遊者》か《魔王》なら、山札上1枚を任意で控え室へ。そのカードがLv2以下のキャラなら、そのターン中はフロントアタックされた時に自身を手札に戻してよい。",
+          "optional": true,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-007",
+      "name": "刻を断つ鎌 クルニス",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "R",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 2000,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "coronis-stock",
+          "category": "登場時・自身をストックへ",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "sourceText": "山札上を公開し、Lv0以下のキャラなら自身をストックへ。公開したカードは山札の上に戻す。",
+          "optional": false,
+          "steps": null
+        },
+        {
+          "id": "coronis-reveal",
+          "category": "登場時・山札上を2回公開",
+          "type": "auto",
+          "timing": "from_hand_to_stage",
+          "sourceText": "1ストックと他の《巡遊者》か《魔王》のキャラ1枚を控え室に置く。山札上を公開し、同特徴のキャラかイベントを手札に加え、その他は元に戻す。これを2回行う。",
+          "optional": true,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "cardNumber": "STS/W140-016",
+      "name": "多忙な上司に休日を フィレン",
+      "title": "ステラソラ",
+      "product": "ブースターパック ステラソラ",
+      "rarity": "U",
+      "side": "W",
+      "type": "character",
+      "color": "緑",
+      "stats": {
+        "level": 0,
+        "cost": 0,
+        "power": 1000,
+        "soul": 1
+      },
+      "triggers": [],
+      "traits": [
+        "巡遊者",
+        "アグリ・ユニオン"
+      ],
+      "keywords": [],
+      "effects": [
+        {
+          "id": "firen-holiday",
+          "category": "舞台から控え室に置かれた時・回収",
+          "type": "auto",
+          "timing": "from_stage_to_waiting",
+          "sourceText": "手札1枚を控え室に置き、山札上2枚を控え室へ。そのレベル合計以下の《巡遊者》か《魔王》のキャラ1枚までを回収する。落としたカードにCXがあれば、山札上1枚を任意でストックへ。CXはLv0として数える。",
+          "optional": true,
+          "steps": null
+        }
+      ]
     }
   ]
 }
