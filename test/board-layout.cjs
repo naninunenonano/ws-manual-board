@@ -300,6 +300,17 @@ async function checkBotDeckEditor(browser,url){
     await page.locator("#openBotDeckEditor").tap();
     await page.getByRole("heading",{name:"デッキ作成・Bot戦"}).waitFor();
     const start=page.locator("#startEditedBotBattle");
+    await page.locator("#editNewDeck").tap();
+    for(const [preset,title,count] of [["sakurarium","OSK",21],["aogiri","AOH",18]]){
+      await page.locator("#botDeckPreset").selectOption(preset);
+      await page.locator("#applyBotDeckPreset").tap();
+      assert.equal(await page.locator("#builderTitleFilter").inputValue(),title);
+      assert.equal(await page.locator(".bot-deck-card-row").count(),count);
+      assert.equal(await page.locator("#botDeckTotals").textContent(),"50/50枚（CX 8/8枚）");
+    }
+    await page.locator("#builtOnlineDeckName").fill("あおぎり高校 テスト用");
+    await page.locator("#saveBuiltOnlineDeck").tap();
+    await page.locator("#editOwnBotDeck").tap();
     await page.getByRole("button",{name:"巡遊者 グレイを1枚減らす",exact:true}).tap();
     assert.equal(await start.isDisabled(),true);
     const kohaku=page.locator(".bot-deck-card-row").filter({hasText:"銃弾のロンド コハク"});
