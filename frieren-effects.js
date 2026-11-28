@@ -283,7 +283,7 @@ function frierenRetreat(p,source,done){
   const board=players[p];
   const empty=["back0","back1"].filter(slot=>!board[slot].length);
   if(!empty.length){done();return}
-  const others=stellaStage(p).filter(card=>card.uid!==source.uid);
+  const others=stellaStage(p).filter(card=>card.uid!==source.uid&&oshiCanMove(card));
   stellaChoose(p,"レストして後列へ動かすキャラ",others,card=>{
     if(!card){done();return}
     function place(slot){

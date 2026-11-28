@@ -121,7 +121,7 @@ function stellaT03Retreat(p,source,done){
     const from=botSlots.find(slot=>board[slot].includes(target));
     const destinations=["back0","back1"].filter(slot=>!board[slot].length);
     function move(slot){stellaMove(board,from,target,slot);done()}
-    if(!destinations.length){done();return}
+    if(!destinations.length||!oshiCanMove(target)){done();return}
     if(p===1||destinations.length===1){move(destinations[0]);return}
     const body=showResolution("空いている後列を選ぶ",[target]);
     for(const slot of destinations)deckButton(body,labels[slot],()=>{closeResolution();move(slot)});
@@ -280,8 +280,8 @@ function stellaKohakuDeploy(p,source,done){
 }
 function stellaKohakuSwap(p,source,done){
   const board=players[p],slot=stellaStageSlot(board,source);
-  if(!slot||!board.stock.length){done();return}
-  const targets=stellaStage(p).filter(card=>card.uid!==source.uid&&stellaAlly(card));
+  if(!slot||!board.stock.length||!oshiCanMove(source)){done();return}
+  const targets=stellaStage(p).filter(card=>card.uid!==source.uid&&stellaAlly(card)&&oshiCanMove(card));
   function swap(target){
     if(!target){done();return}
     const other=stellaStageSlot(board,target);

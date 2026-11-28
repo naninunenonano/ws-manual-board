@@ -79,6 +79,7 @@ function appendBotCardDetails(parent,detail){
   parent.append(box);
 }
 function botMove(board,from,index,to,position="top"){
+  if(from!==to&&isStageZone(from)&&isStageZone(to)&&!oshiCanMove(board[from][index]))return null;
   const card=board[from].splice(index,1)[0];
   if(!card)return null;
   card.faceUp=!["deck","stock"].includes(to);
@@ -273,7 +274,7 @@ function botStats(p,card){
       }
     }
   }
-  if(power!=null)power+=stellaPower(p,card)+frierenPower(p,card);
+  if(power!=null)power+=stellaPower(p,card)+frierenPower(p,card)+oshiPower(p,card);
   return {power,soul};
 }
 
@@ -332,6 +333,9 @@ function botStageEntry(p,card,from,done){
 function botAttackTriggeredActions(p,attacker){
   const board=players[p];
   const actions=frierenHimmelMemoryActions(p,attacker);
+  if(oshiAlly(attacker))for(const ruby of oshiFrontRuby(p))actions.push({
+    label:stellaName(ruby)+"・山札上を確認",run:next=>oshiRubyTop(p,next)
+  });
   if(["巡遊者","魔王"].some(trait=>matchesPracticeTrait(attacker,trait))){
     for(const marker of attacker.markers??[]){
       const effect=marker.faceUp&&botMarkerAbility(marker.card,"marker_host_attack");
@@ -383,6 +387,8 @@ function botTriggeredActions(p,card,timing,context={}){
   return effects.map(effect=>({label:stellaName(card)+"・"+(effect.category??effect.id),run:resume=>{
     if(Object.hasOwn(stellaActions,effect.id))stellaActions[effect.id](p,card,resume,context);
     else if(Object.hasOwn(frierenActions,effect.id))frierenActions[effect.id](p,card,resume);
+    else if(Object.hasOwn(oshiActions,effect.id))oshiActions[effect.id](p,card,resume);
+    else if(Object.hasOwn(oshiAdditionalActions,effect.id))oshiAdditionalActions[effect.id](p,card,resume,context);
     else if(effect.reorderTop)autoRuleReorderTop(p,resume);
     else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
     else if(effect.traitLoot)autoRuleTraitLoot(p,card,effect,resume);
@@ -990,6 +996,7 @@ function botTriggerEffect(p,trigger,done){
     return;
   }
   function stock(){trigger.faceUp=false;board.stock.push(trigger);done()}
+  if(botTriggerIcons(p,trigger).includes("スタンバイ")){oshiStandby(p,stock);return}
   if(frierenChoice(trigger)){frierenChoiceTrigger(p,stock);return}
   if(isAutoRules()){stock();return}
   const body=showResolution("トリガーチェック",[trigger]);
@@ -1049,6 +1056,7 @@ function renderBotControls(){
 function botDefinitionForAbilities(card){
   if(!card||match.turn.player!==0||match.turn.phase!=="main"||ruleBusy)return [];
   return (botDefinition(card)?.effects??[]).filter(ability=>ability.type==="activated"&&
+    (ability.id!=="oshi-tsukuyomi-clock"||oshiTsukuyomiReady(0,card))&&
     (ability.id!=="teresa-recall"||card.orientation===0&&players[0].hand.length>0)&&
     (ability.id!=="replace-with-natsuka"||players[0].level.length>=3)&&
     (ability.id!=="frieren-statue"||card.orientation===0&&players[0].stock.length>0)&&
@@ -1133,6 +1141,7 @@ function openBotAbility(){
     if(ability.id==="replace-with-natsuka"){runRuleOperation(done=>botReplaceWithNatsuka(0,card,done));return}
     if(Object.hasOwn(stellaActions,ability.id)){runRuleOperation(done=>stellaActions[ability.id](0,card,done));return}
     if(Object.hasOwn(frierenActions,ability.id)){runRuleOperation(done=>frierenActions[ability.id](0,card,done));return}
+    if(Object.hasOwn(oshiActions,ability.id)){runRuleOperation(done=>oshiActions[ability.id](0,card,done));return}
     runRuleOperation(done=>botGuide(card,ability,done));
   });
 }
