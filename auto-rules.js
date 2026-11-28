@@ -1113,6 +1113,23 @@ function autoRuleBotMain(p,done){
   const slots=[...botSlots];
   const attackLimit=autoRuleAttackLimit(p);
   const readyFront=()=>botSlots.slice(0,3).filter(slot=>autoRuleAttackAllowed(p,slot,board[slot].at(-1))).length;
+  const frierenBrainstorm=card=>frierenIs(card,"S136-001");
+  const canDeploy=card=>!botDefinition(card)?.cannotAttack&&
+    !autoRuleLegalPlay(p,card,"main","character",{planning:true});
+  // Use known cards and resources. The next draw and surviving stage are uncertain.
+  function hasNextTurnPlay(){
+    if(board.hand.some(card=>!frierenBrainstorm(card)&&canDeploy(card)))return true;
+    const hasStatue=board.hand.some(card=>frierenIs(card,"S128-017")&&
+      !autoRuleLegalPlay(p,card,"main","character",{planning:true}));
+    return hasStatue&&board.stock.length>0&&
+      board.waiting.some(card=>frierenIs(card,"S108-T04")&&canDeploy(card)&&
+        autoRulePlayCost(p,botDefinition(card))+1<=board.stock.length);
+  }
+  const reserveBrainstorm=()=>{
+    if(!board.stock.length||(board.hand.length>2+attackLimit-readyFront()&&hasNextTurnPlay())||
+       stellaStage(p).some(frierenBrainstorm)||!["back0","back1"].some(slot=>!board[slot].length))return null;
+    return board.hand.find(card=>frierenBrainstorm(card)&&!autoRuleLegalPlay(p,card,"main","character"));
+  };
   function playNext(){
     if(players.some(b=>b.level.length>=4)){done();return}
     const slot=slots.shift();
@@ -1120,13 +1137,14 @@ function autoRuleBotMain(p,done){
       const back=slot.startsWith("back"),occupant=board[slot].at(-1);
       const playable=board.hand.map((card,index)=>({card,index,definition:botDefinition(card)}))
         .filter(({card})=>!autoRuleLegalPlay(p,card,"main","character"));
+      const reserved=reserveBrainstorm();
       const isSupport=({definition:def})=>!!(def?.assist||def?.namedStageBuff||def?.cannotAttack||["SFN/S136-005","OSK/S133-079"].includes(def?.cardNumber)||def?.effects?.some(effect=>effect.brainstorm));
       const combo=entry=>entry.definition.stats.level===1&&autoRuleBotHasCombo(entry.card,board.hand);
       let candidate;
       if(back&&!occupant){
-        candidate=playable.find(isSupport)??(!readyFront()?playable.find(entry=>!entry.definition.cannotAttack):undefined);
+        candidate=playable.find(entry=>entry.card===reserved)??playable.find(isSupport)??(!readyFront()?playable.find(entry=>!entry.definition.cannotAttack):undefined);
       }else if(!back&&readyFront()<attackLimit){
-        const attackers=playable.filter(entry=>!entry.definition.cannotAttack);
+        const attackers=playable.filter(entry=>entry.card!==reserved&&!entry.definition.cannotAttack);
         const score=entry=>{
           const cost=board.level.length<=1?autoRulePlayCost(p,entry.definition):0;
           return Number(combo(entry))*100+Number(!isSupport(entry))*4+entry.definition.stats.level-cost*10;
@@ -1158,19 +1176,12 @@ function autoRuleBotMain(p,done){
     const handAttacker=board.hand.some(card=>!botDefinition(card)?.cannotAttack&&
       !autoRuleLegalPlay(p,card,"main","character"));
     const needsAttacker=available<attackLimit&&!handAttacker;
-    const activeCombo=botSlots.slice(0,3).some(slot=>{
-      const card=board[slot].at(-1);
-      const cx=autoRuleBotComboCx(card);
-      return autoRuleReadyAttacker(card)&&board.hand.some(entry=>sameBotCardNumber(cx,entry.id)&&
-        !autoRuleLegalPlay(p,entry,"climax","climax",{planning:true}));
-    });
-    const wantsHand=brainstorms===0&&board.hand.length<6&&!activeCombo;
-    if(brainstorms<2&&(needsAttacker||wantsHand)){
-      for(const source of rear){
+    const needsFrierenHand=board.hand.length<=1||!hasNextTurnPlay();
+    const candidates=[...rear,...botSlots.slice(0,3).map(slot=>board[slot].at(-1))];
+    if(brainstorms<2){
+      for(const source of candidates){
         if(source?.orientation!==0)continue;
-        const losesAttacker=autoRuleReadyAttacker(source);
-        const canRestAttacker=available>attackLimit||needsAttacker&&(available>1||brainstorms>0);
-        if(losesAttacker&&!canRestAttacker)continue;
+        if(brainstorms>0&&!needsAttacker&&!(needsFrierenHand&&frierenBrainstorm(source)))continue;
         const brainstorm=botDefinition(source)?.effects?.find(effect=>effect.brainstorm&&effect.brainstorm.stock<=board.stock.length)?.brainstorm;
         if(!brainstorm)continue;
         brainstorms++;
@@ -1277,6 +1288,18 @@ function autoRuleBotStep(){
           (!keep(card)||board.hand.some(entry=>entry!==card&&sameBotCardNumber(card.id,entry.id)))):-1;
         index=spare>=0?spare:extraCx>=0?extraCx:available>1?
           board.hand.findIndex(card=>!keep(card)&&!card.cx):-1;
+      }
+      if(index<0&&isDeckMirror(match.bot.scenario)&&board.level.length<3&&board.hand.length){
+        const canAttackFromStage=botSlots.some((slot,i)=>{
+          const card=board[slot].at(-1);
+          return autoRuleReadyAttacker(card)&&(i<3||oshiCanMove(card));
+        });
+        const canPlayAttacker=board.hand.some(card=>!botDefinition(card)?.cannotAttack&&
+          !autoRuleLegalPlay(p,card,"main","character",{planning:true}));
+        if(!canAttackFromStage&&!canPlayAttacker){
+          index=0;
+          autoRuleLog("Botは攻撃できるキャラがいないためクロックで手札を補充");
+        }
       }
       if(!isDeckMirror(match.bot.scenario)||index<0||(!isStellaDeck(match.bot.scenario)&&board.hand.length>=7)||board.level.length>=3){
         setTurnPhase("main");break;
