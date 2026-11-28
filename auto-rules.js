@@ -344,7 +344,8 @@ function autoRuleStartWaiting(){
   return true;
 }
 
-function autoRuleLog(text){
+function autoRuleLog(text,record=true){
+  if(record)recordBotBattleAction(text);
   const lines=match.bot.log??=[];
   lines.push(text);
   if(lines.length>8)lines.shift();
@@ -496,6 +497,7 @@ function autoRuleResolveEvent(p,index,definition,effect,done){
   const board=players[p];
   autoRulePay(p,definition.stats.cost);
   const [card]=board.hand.splice(index,1);
+  recordBotBattleAction("イベントを使用・ストック−"+definition.stats.cost,p,[card]);
   effect(p,(destination="waiting")=>{
     card.faceUp=true;
     board[destination].push(card);
@@ -849,7 +851,9 @@ function autoRuleAttack(p,zone,uid,type){
   runRuleOperation(finish=>{
     if(type==="front")autoRuleFrontBattle={[p]:{slot:zone,uid},[1-p]:{slot:opposite,uid:targetUid}};
     function done(){autoRuleFrontBattle=undefined;finish()}
-    autoRuleLog(({front:"フロント",side:"サイド",direct:"ダイレクト"})[type]+"アタック");
+    const action=({front:"フロント",side:"サイド",direct:"ダイレクト"})[type]+"アタック";
+    recordBotBattleAction(labels[zone]+"から"+action,p,target?[attacker,target]:[attacker]);
+    autoRuleLog(action,false);
     const current=()=>board[zone].find(c=>c.uid===uid);
     const defender=()=>rival[opposite].find(c=>c.uid===targetUid);
     function damage(){
@@ -872,7 +876,8 @@ function autoRuleAttack(p,zone,uid,type){
         const souls=icons.filter(icon=>icon==="ソウル").length;
         function resolve(){
           if(current())autoRuleAddTurnStat(current(),"soul",souls);
-          autoRuleLog("トリガー "+botCardInfo(revealed).name+(souls?"（ソウル＋"+souls+"）":""));
+          recordBotBattleAction("トリガーチェック"+(souls?"・ソウル＋"+souls:""),p,[revealed]);
+          autoRuleLog("トリガー "+stellaName(revealed)+(souls?"（ソウル＋"+souls+"）":""),false);
           botResolveAttackTrigger(p,revealed,current,()=>{
             if(rival.level.length>=4||board.level.length>=4)done();
             else trigger(remaining-1);
@@ -975,6 +980,13 @@ function autoRuleBotKeepsCombo(p,card){
   return autoRuleBotHasCombo(card,hand)||
     stellaStage(p).concat(hand).some(source=>sameBotCardNumber(autoRuleBotComboCx(source),card.id));
 }
+function autoRuleBotRecoveryPriority(p,card){
+  const board=players[p],def=botDefinition(card);
+  if(def?.type!=="character")return 0;
+  const playable=!def.cannotAttack&&!autoRuleLegalPlay(p,card,"main","character",{planning:true});
+  return Number(autoRuleBotHasCombo(card,board.hand))*8+Number(playable)*4+
+    Number(def.stats.level<=board.level.length+1)+Number(def.stats.cost===0);
+}
 function autoRuleBotLevelIndex(p,clock){
   const board=players[p];
   const colors=new Set(board.level.map(card=>botDefinition(card)?.color));
@@ -1029,17 +1041,44 @@ function autoRuleBotMain(p,done){
       else autoRuleResolvePlay(p,index,slot,playNext);
       return;
     }
-    const rear=botSlots.slice(3).map(slot=>board[slot].at(-1));
-    const readyRear=rear.filter(autoRuleReadyAttacker).length;
-    const source=rear.find(card=>card?.orientation===0&&
-      (!autoRuleReadyAttacker(card)||readyFront()+readyRear>attackLimit)&&
-      botDefinition(card)?.effects?.some(effect=>effect.brainstorm&&effect.brainstorm.stock<=board.stock.length));
-    const brainstorm=botDefinition(source)?.effects.find(effect=>effect.brainstorm)?.brainstorm;
     const statue=stellaStage(p).find(card=>frierenIs(card,"S128-017")&&card.orientation===0);
     if(statue&&board.stock.length&&board.waiting.some(card=>frierenIs(card,"S108-T04"))){
-      frierenStatue(p,statue,playEvent);return;
+      frierenStatue(p,statue,tryBrainstorm);return;
     }
-    if(brainstorm){resolveBrainstorm(p,source,brainstorm,playEvent);return}
+    tryBrainstorm();
+  }
+  let brainstorms=0;
+  function tryBrainstorm(){
+    if(players.some(b=>b.level.length>=4)){done();return}
+    const front=readyFront();
+    const rear=botSlots.slice(3).map(slot=>board[slot].at(-1));
+    const available=front+rear.filter(autoRuleReadyAttacker).length;
+    const handAttacker=board.hand.some(card=>!botDefinition(card)?.cannotAttack&&
+      !autoRuleLegalPlay(p,card,"main","character"));
+    const needsAttacker=available<attackLimit&&!handAttacker;
+    const activeCombo=botSlots.slice(0,3).some(slot=>{
+      const card=board[slot].at(-1);
+      const cx=autoRuleBotComboCx(card);
+      return autoRuleReadyAttacker(card)&&board.hand.some(entry=>sameBotCardNumber(cx,entry.id)&&
+        !autoRuleLegalPlay(p,entry,"climax","climax",{planning:true}));
+    });
+    const wantsHand=brainstorms===0&&board.hand.length<6&&!activeCombo;
+    if(brainstorms<2&&(needsAttacker||wantsHand)){
+      for(const source of rear){
+        if(source?.orientation!==0)continue;
+        const losesAttacker=autoRuleReadyAttacker(source);
+        const canRestAttacker=available>attackLimit||needsAttacker&&(available>1||brainstorms>0);
+        if(losesAttacker&&!canRestAttacker)continue;
+        const brainstorm=botDefinition(source)?.effects?.find(effect=>effect.brainstorm&&effect.brainstorm.stock<=board.stock.length)?.brainstorm;
+        if(!brainstorm)continue;
+        brainstorms++;
+        resolveBrainstorm(p,source,brainstorm,tryBrainstorm);
+        return;
+      }
+    }
+    sideEffects();
+  }
+  function sideEffects(){
     const heiter=stellaStage(p).find(card=>frierenIs(card,"S136-005")&&stellaStageSlot(board,card).startsWith("back"));
     if(heiter&&board.hand.length<=3&&stellaStage(p).some(card=>card.orientation===180)){
       frierenHeiterSearch(p,heiter,playEvent);return;
@@ -1056,6 +1095,7 @@ function autoRuleBotMain(p,done){
     const rear=["back0","back1"].find(slot=>autoRuleReadyAttacker(board[slot].at(-1)));
     if(rear){
       [board[target],board[rear]]=[board[rear],board[target]];
+      recordBotBattleAction(labels[rear]+" → "+labels[target]+"（攻撃に回す）",p,[board[target].at(-1)]);
       ensureAttacker();return;
     }
     const playable=board.hand.map((card,index)=>({card,index})).filter(({card})=>
@@ -1121,6 +1161,7 @@ function autoRuleBotStep(){
       }
       runRuleOperation(done=>{
         botMove(board,"hand",index,"clock");
+        recordBotBattleAction("クロックで2枚ドロー",p);
         autoRuleDrawAfterCost(p,2,()=>{setTurnPhase("main");done()});
       });
       break;
@@ -1129,6 +1170,8 @@ function autoRuleBotStep(){
       if(isDeckMirror(match.bot.scenario)){
         runRuleOperation(done=>autoRuleBotMain(p,()=>{
           autoRuleArrangeBotFront(p);
+          const ready=botSlots.slice(0,3).filter(slot=>autoRuleAttackAllowed(p,slot,board[slot].at(-1))).length;
+          recordBotBattleAction("メイン終了・攻撃可能 "+ready+"枚／手札 "+board.hand.length+"枚／ストック "+board.stock.length+"枚",p);
           setTurnPhase("climax");done();
         }));
         break;
@@ -1162,7 +1205,7 @@ function autoRuleBotStep(){
     case "attack":{
       const [plan]=botSlots.slice(0,3).map(slot=>autoRuleBotAttackPlan(p,slot)).filter(Boolean)
         .sort((a,b)=>autoRuleBotAttackScore(b)-autoRuleBotAttackScore(a));
-      if(!plan){encoreAction("enter");break}
+      if(!plan){recordBotBattleAction("アタック終了",p);encoreAction("enter");break}
       if(plan.wins)autoRuleLog("Botは"+stellaName(plan.target)+"を倒せるフロントを優先");
       if(plan.type==="direct")autoRuleLog("Botは空いている枠からダイレクトを優先");
       if(plan.type==="side")autoRuleLog("Botはサイドで"+stellaName(plan.attacker)+"を残す");
@@ -1207,18 +1250,24 @@ function resolveBrainstorm(p,source,{stock,reveal,salvage,traits},done){
   const board=players[p];
   autoRulePay(p,stock);
   source.orientation=90;
-  const revealed=[];
+  const revealed=[],drawn=[];
+  recordBotBattleAction("集中を使用・ストック−"+stock,p,[source]);
   function finishDraw(n){
-    if(!n){done();return}
-    botRevealTop(p,card=>{card.faceUp=true;board.hand.push(card)},found=>{
-      if(found)finishDraw(n-1);else done();
+    if(!n){
+      recordBotBattleAction("集中で"+drawn.length+"枚ドロー",p,p===0?drawn:[]);
+      if(p===0&&isDeckMirror(match.bot.scenario))showBotRevealResult("自分の集中・引いたカード",drawn,done);
+      else done();
+      return;
+    }
+    botRevealTop(p,card=>{card.faceUp=true;board.hand.push(card);drawn.push(card)},found=>{
+      finishDraw(found?n-1:0);
     });
   }
   function confirm(){
     const max=revealed.filter(card=>card.cx===true).length;
     for(const card of revealed){card.faceUp=true;board.waiting.push(card)}
-    rememberBotReveal("Brainstorm",p,revealed,revealed.length+"枚公開・CX "+max+"枚");
-    autoRuleLog("集中で"+revealed.length+"枚、CXが"+max+"枚（"+revealed.map(card=>botCardInfo(card).name).join("、")+"）");
+    recordBotBattleAction("集中・"+revealed.length+"枚公開・CX "+max+"枚",p,revealed);
+    autoRuleLog(botPlayerLabel(p)+"・集中で"+revealed.length+"枚、CXが"+max+"枚（"+revealed.map(stellaName).join("、")+"）",false);
     resolveBoardRules(p,()=>{
       const title=(p===0?"自分":"Bot")+"の集中・CX "+max+"枚";
       const afterReveal=next=>isDeckMirror(match.bot.scenario)?showBotRevealResult(title,revealed,next):next();
@@ -1252,14 +1301,22 @@ function resolveBrainstormSalvage(p,max,revealed,done,traits){
   }
   const picks=new Set();
   function finish(){
+    const recovered=[];
     for(const uid of picks){
       const index=board.waiting.findIndex(card=>card.uid===uid);
-      if(index>=0)botMove(board,"waiting",index,"hand");
+      if(index>=0)recovered.push(botMove(board,"waiting",index,"hand"));
     }
-    autoRuleLog("集中でキャラ"+picks.size+"枚を手札へ");
-    done();
+    const entry=recordBotBattleAction("集中で"+recovered.length+"枚を手札に回収",p,recovered);
+    if(recovered.length)match.bot.latestRecovery=entry;
+    autoRuleLog("集中でキャラ"+recovered.length+"枚を手札へ",false);
+    if(isDeckMirror(match.bot.scenario))showBotRevealResult(botPlayerLabel(p)+"の集中・手札に回収",recovered,done);
+    else done();
   }
-  if(p===1){for(const card of candidates.slice(0,limit))picks.add(card.uid);finish();return}
+  if(p===1){
+    candidates.sort((a,b)=>autoRuleBotRecoveryPriority(p,b)-autoRuleBotRecoveryPriority(p,a));
+    for(const card of candidates.slice(0,limit))picks.add(card.uid);
+    finish();return;
+  }
   const body=showResolution("集中・控え室からキャラを"+limit+"枚まで手札へ",[]);
   const details=document.createElement("details"),summary=document.createElement("summary");
   details.open=true;
