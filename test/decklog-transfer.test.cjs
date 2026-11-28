@@ -3075,3 +3075,63 @@ test("南の勇者の登場時にイベントを回収し、能力を与えた�
   assert.equal(page.run("opponent.clock[0].uid"),"early");
   assert.equal(page.run("opponent.waiting[0].uid"),"replace");
 });
+
+test("Botはメインで確実に勝てる対面を作り、ダイレクトよりそのフロントから殴る",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const ownCard=(uid,power)=>({...card("001",uid),botPower:power});
+    opponent.front0.push(ownCard("strong",6500));
+    opponent.front1.push(ownCard("weak",1000));
+    own.front0.push(ownCard("target",4000));
+    match.turn.player=1;
+    match.turn.number=2;
+    match.bot.scenario="stella-sora-mirror";
+    setTurnPhase("main");
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("opponent.front2[0].uid"),"strong");
+  page.run(`
+    opponent.deck.push(ownCard("trigger",1000),ownCard("reserve",1000));
+    own.deck.push(ownCard("damage",1000),ownCard("reserve2",1000));
+    setTurnPhase("attack");
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("opponent.front2[0].orientation"),90);
+  assert.equal(page.run('opponent.front0.concat(opponent.front1).find(c=>c.uid==="weak").orientation'),0);
+  ruleButton(page,"確認して進む");
+  ruleButton(page,"確認して進む");
+  assert.equal(page.run("own.front0[0].orientation"),180);
+});
+
+test("Botはパワー不足でもサイドで攻撃し、トリガーをストックに置く",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    opponent.front0.push(card("001","attacker"));
+    opponent.deck.push(card("001","reserve"),card("001","trigger"));
+    own.front2.push(card("004","lv3"));
+    own.deck.push(card("001","reserve2"));
+    match.turn.player=1;
+    setTurnPhase("attack");
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("opponent.front0[0].orientation"),90);
+  assert.equal(page.run("opponent.stock[0].uid"),"trigger");
+  assert.equal(page.run("own.clock.length"),0);
+  assert.equal(page.run("own.front2[0].orientation"),0);
+});
+
+test("Botは前列2枚と手札4枚があればクロックを省略する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    for(let i=0;i<4;i++)opponent.hand.push(card("001","hand"+i));
+    opponent.front0.push(card("001","front0"));
+    opponent.front1.push(card("001","front1"));
+    match.bot.scenario="stella-sora-mirror";
+    match.turn.player=1;
+    setTurnPhase("clock");
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("match.turn.phase"),"main");
+  assert.equal(page.run("opponent.clock.length"),0);
+  assert.equal(page.run("opponent.hand.length"),4);
+});
