@@ -3281,3 +3281,61 @@ test("Botは集中で回収したカードを表示し、出せるキャラが�
   assert.equal(page.run("match.turn.phase"),"climax");
   assert.ok(page.run("botSlots.slice(0,3).some(slot=>opponent[slot][0]?.uid.startsWith('found'))"));
 });
+
+test("BotのマリガンはLv0とレベル1の対応CXを残し、重複CXや終盤札を交換する",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.settle();
+  page.get("botScenario").value="stella-sora-mirror";
+  page.click("startBotBattle");
+  page.run(`
+    const b=players[1];
+    while(b.hand.length)botMove(b,"hand",0,"deck");
+    for(const number of ["001","031","031","076","094"]){
+      const i=b.deck.findIndex(card=>card.id.endsWith("-"+number));
+      botMove(b,"deck",i,"hand");
+    }
+  `);
+  const original=JSON.parse(page.run("JSON.stringify(players[1].hand)"));
+  page.click("confirmMulligan");
+  const after=snapshot(page);
+  assert.equal(after.players[1].hand.length,5);
+  assert.ok(after.players[1].hand.some(card=>card.uid===original[0].uid));
+  assert.ok(after.players[1].hand.some(card=>card.uid===original[1].uid));
+  assert.deepEqual(after.players[1].waiting.map(card=>card.uid),original.slice(2).reverse().map(card=>card.uid));
+  assert.ok(after.bot.battleLog.some(entry=>entry.p===1&&entry.text==="マリガンで3枚交換"));
+  assert.deepEqual(ruleCounts(after),[50,50]);
+});
+
+test("Botはレベル0でフィレンの対応CXを温存し、レベル置場は対応の緑を優先する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    match.decks[1]=stellaDeck;
+    match.bot.scenario="stella-sora-mirror";
+    match.turn.player=1;
+    match.turn.number=2;
+    opponent.front0.push(card("001","front"));
+    opponent.hand.push(card("031","song",true));
+    opponent.clock.push(card("076","blue"));
+    for(let i=0;i<5;i++)opponent.clock.push(card("076","blue"+i));
+    opponent.clock.push(card("008","green"));
+    setTurnPhase("climax");
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("opponent.cx.length"),0);
+  assert.equal(page.run("opponent.hand[0].uid"),"song");
+  page.run("openMandatoryLevel(1,()=>{})");
+  assert.equal(page.run("opponent.level[0].uid"),"green");
+});
+
+test("フリーレンのBotは対応CXが手札にあれば、レベル0のうちに勇者ヒンメルを回収する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    match.decks[1]=frierenDeck;
+    match.bot.scenario="stella-custom";
+    const fri=(no,uid,cx=false)=>({id:"SFN/"+no,uid,cx,faceUp:true,orientation:0});
+    opponent.hand.push(fri("S108-T09","cx",true));
+    opponent.waiting.push(fri("S136-001","level0"),fri("S108-T04","combo"));
+    stellaSalvage(1,frierenAlly,()=>{});
+  `);
+  assert.equal(page.run("opponent.hand.at(-1).uid"),"combo");
+});

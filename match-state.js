@@ -239,20 +239,29 @@ function renderMulligan(){
     root.append(button);
   });
 }
+function mulliganBoard(old,selection){
+  const board=Object.fromEntries(zones.map(z=>[z,old[z].slice()]));
+  const indices=[...selection].sort((a,b)=>b-a);
+  const discarded=indices.map(index=>board.hand.splice(index,1)[0]);
+  board.waiting.push(...discarded);
+  for(let i=0;i<indices.length;i++)board.hand.push({...board.deck.pop(),faceUp:true});
+  shuffle(board.deck);
+  return {board,discarded};
+}
 function completeMulligan(){
   if(match?.phase!=="mulligan")return;
   if(match.online){onlineMatch.mulligan();return;}
-  const p=match.mulliganPlayer,old=match.players[p];
-  const board=Object.fromEntries(zones.map(z=>[z,old[z].slice()]));
-  const indices=[...mulliganSelection].sort((a,b)=>b-a);
-  const discarded=indices.map(index=>board.hand.splice(index,1)[0]);
-  board.waiting.push(...discarded);
-  for(let i=0;i<indices.length;i++){const c=board.deck.pop();c.faceUp=true;board.hand.push(c);}
-  shuffle(board.deck);
-  const next={...match,players:match.players.map((b,i)=>i===p?board:b),mulliganPlayer:p+1,phase:p===0&&!match.bot?"mulligan":"active",screen:p===0&&!match.bot?"mulligan":"battle"};
+  const p=match.mulliganPlayer;
+  const {board,discarded}=mulliganBoard(match.players[p],mulliganSelection);
+  const nextPlayers=match.players.map((entry,i)=>i===p?board:entry);
+  const bot=isDeckMirror(match.bot?.scenario)?mulliganBoard(match.players[1],autoRuleBotMulligan(1)):null;
+  if(bot)nextPlayers[1]=bot.board;
+  const next={...match,players:nextPlayers,mulliganPlayer:p+1,phase:p===0&&!match.bot?"mulligan":"active",screen:p===0&&!match.bot?"mulligan":"battle"};
+  if(match.bot)next.bot={...match.bot,battleLog:[...(match.bot.battleLog??[])]};
+  recordBotBattleAction("マリガンで"+discarded.length+"枚交換",p,discarded,next);
+  if(bot)recordBotBattleAction("マリガンで"+bot.discarded.length+"枚交換",1,bot.discarded,next);
   if(!writeMatch(next))return;
   match=next;players=next.players;mulliganSelection=new Set();
-  if(match.bot)recordBotBattleAction("マリガンで"+discarded.length+"枚交換",p,discarded);
   showMatchScreen();
   if(p===1||match.bot){ensureTurn();message(match.bot?"マリガンが完了しました":"両プレイヤーのマリガンが完了しました");}
 }

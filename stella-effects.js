@@ -65,7 +65,7 @@ function stellaDiscard(p,done,onlyCx=false){
 }
 function stellaSalvage(p,test,done){
   const board=players[p];
-  stellaChoose(p,"控え室から手札に戻すカードを選ぶ",board.waiting.filter(test),card=>{
+  stellaChoose(p,"控え室から手札に戻すカードを選ぶ",autoRuleBotOrderOpening(p,board.waiting.filter(test)),card=>{
     if(card)stellaMove(board,"waiting",card,"hand");
     done();
   });
@@ -86,7 +86,7 @@ function stellaRevealTop(p,done){
 function stellaLookAndTake(p,max,filter,stockSecond,done){
   const board=players[p];
   botLookUpTo(p,max,viewed=>{
-    const candidates=viewed.filter(filter);
+    const candidates=autoRuleBotOrderOpening(p,viewed.filter(filter));
     stellaChoose(p,"手札に加えるカード",candidates,hand=>{
       function finish(stock){
         stellaShow(p,"選んだカードを公開",[hand,stock].filter(Boolean),()=>{

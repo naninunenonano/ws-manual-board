@@ -37,7 +37,7 @@ function frierenPower(p,card){
 }
 function frierenSearch(p,title,eligible,done){
   const board=players[p];
-  stellaChoose(p,title,board.deck.filter(eligible),card=>{
+  stellaChoose(p,title,autoRuleBotOrderOpening(p,board.deck.filter(eligible)),card=>{
     if(card)stellaMove(board,"deck",card,"hand");
     shuffle(board.deck);
     stellaShow(p,"山札から選んだカードを公開",card?[card]:[],()=>resolveBoardRules(p,done));

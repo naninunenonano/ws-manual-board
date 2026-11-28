@@ -783,11 +783,11 @@ function botRevealTop(p,receive,done){
   });
 }
 const botPlayerLabel=p=>p===0?"自分":"Bot";
-function recordBotBattleAction(text,p=match?.turn?.player,cards=[]){
-  if(!match?.bot||!match.turn)return;
-  const {number,phase}=match.turn;
+function recordBotBattleAction(text,p=match?.turn?.player,cards=[],snapshot=match){
+  if(!snapshot?.bot||!snapshot.turn)return;
+  const {number,phase}=snapshot.turn;
   const entry={turn:number,phase,p,text,cards:cards.map(card=>card.id)};
-  (match.bot.battleLog??=[]).push(entry);
+  (snapshot.bot.battleLog??=[]).push(entry);
   return entry;
 }
 function recordBotMovement(p,card,from,to){
