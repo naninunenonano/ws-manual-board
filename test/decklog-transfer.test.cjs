@@ -3684,9 +3684,9 @@ test("Bot戦の実カードは能力情報があっても手札と拡大に選�
   `);
   assert.equal(face.children.length,1);
   assert.match(face.children[0].src,/wsosks133_002\.jpg$/);
-  const [holder,details]=page.get("dialogBody").children[0].children;
-  assert.equal(holder.children[0].src,face.children[0].src);
-  assert.ok(details.children.some(line=>line.className==="practice-card-effect"));
+  const zoom=page.get("dialogBody").children[0];
+  assert.equal(zoom.children.length,1);
+  assert.equal(zoom.children[0].children[0].src,face.children[0].src);
 
   const img=face.children[0];
   img.remove=()=>face.children.shift();
@@ -3745,4 +3745,46 @@ test("正面からのダメージを無効にしてもバトルを行い、ク�
   assert.equal(page.run('own.clock.map(card=>card.uid).join()'),"guard,damage-5,damage-4,damage-3");
   assert.equal(page.run("own.front2.length"),0);
   assert.equal(page.run("own.deck.length"),3);
+});
+
+test("実カードのマリガンは能力情報があっても選択前後で5枚とも画像を保つ",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    match.mulliganPlayer=0;
+    own.hand.push(...["S133-013","S107-014","S107-044SP","S133-059","S133-037"].map((number,i)=>
+      ({id:"OSK/"+number,uid:"opening-"+i,cx:i===3,faceUp:true,orientation:0})));
+    renderMulligan();
+  `);
+  const root=page.get("mulliganCards");
+  const images=()=>root.children.map(button=>button.children[0].src);
+  const initial=images();
+  assert.equal(initial.length,5);
+  assert.ok(initial.every(url=>url.includes("c-labo-online.jp")));
+  assert.match(initial[2],/wsosks107_011\.jpg$/);
+  root.children[4].onclick();
+  assert.deepEqual(images(),initial);
+  assert.equal(root.children[4].children[1].textContent,"交換");
+  assert.match(page.get("mulliganProgress").textContent,/交換 1枚$/);
+  root.children[4].onclick();
+  assert.deepEqual(images(),initial);
+  assert.equal(root.children[4].children[1].textContent,"残す");
+});
+
+test("Bot戦でストックがなくてもアンコールを見送って次に進める",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    own.front0.push({...card("001","reversed"),orientation:180});
+    own.deck.push(card("001","own-deck"));
+    opponent.deck.push(card("001","opponent-deck"));
+    match.turn.player=0;
+    encoreAction("enter");
+    openEncoreAction();
+  `);
+  assert.equal(page.get("dialogTitle").textContent,"リバースしたキャラを選ぶ");
+  page.get("dialogBody").children[0].children[0].onclick();
+  assert.equal(page.get("dialogTitle").textContent,"アンコール方法");
+  assert.equal(page.get("dialogBody").children[0].textContent,"アンコールしない");
+  ruleButton(page,"アンコールしない");
+  assert.equal(page.run("own.waiting.at(-1).uid"),"reversed");
+  assert.equal(page.run("match.encore.step"),"complete");
 });
