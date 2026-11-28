@@ -3168,7 +3168,7 @@ test("Botは勝てる対面がなければ空き枠へ移動し、ソウルが�
 });
 
 
-test("Botは集中でレストする前に後列のキャラを攻撃に回し、3回の攻撃でストックを増やす",async()=>{
+test("ステラソラBotも攻撃回数が減る場合に集中を1回使う",async()=>{
   const page=await launchStellaAbility();
   page.run(`
     opponent.front0.push(card("001","front"));
@@ -3184,12 +3184,16 @@ test("Botは集中でレストする前に後列のキャラを攻撃に回し�
     match.bot.scenario="stella-sora-mirror";
     setTurnPhase("main");
     autoRuleBotStep();
+  `);
+  assert.equal(page.get("dialogTitle").textContent,"Botの集中・CX 0枚");
+  ruleButton(page,"確認して進む");
+  page.run(`
     match.bot.scenario=autoRuleScenario;
     setTurnPhase("attack");
     for(let i=0;i<3;i++)autoRuleBotStep();
   `);
-  assert.equal(page.run("opponent.stock.length"),4);
-  assert.equal(page.run("botSlots.slice(0,3).filter(slot=>opponent[slot][0]?.orientation===90).length"),3);
+  assert.equal(page.run("opponent.stock.length"),2);
+  assert.equal(page.run("botSlots.slice(0,3).filter(slot=>opponent[slot][0]?.orientation===90).length"),2);
 });
 
 test("Botはレベル1でフィレンに合う色を選び、対応CXで次のターンの手札を補う",async()=>{
@@ -3787,4 +3791,75 @@ test("Bot戦でストックがなくてもアンコールを見送って次に�
   ruleButton(page,"アンコールしない");
   assert.equal(page.run("own.waiting.at(-1).uid"),"reversed");
   assert.equal(page.run("match.encore.step"),"complete");
+});
+
+test("フリーレンBotは攻撃要員がいないとき唯一のCXをクロックして展開する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const sfn=(n,uid,cx=false)=>({id:"SFN/"+n,uid,cx,faceUp:true,orientation:0});
+    match.bot.scenario="stella-custom";
+    match.turn.player=1;
+    match.turn.number=8;
+    match.turn.phase="clock";
+    opponent.level.push(sfn("S108-T04","level-one"),sfn("S128-003","level-two"));
+    opponent.hand.push(sfn("S108-T09","only-hand",true));
+    for(let i=0;i<7;i++)opponent.stock.push(sfn("S136-076","stock-"+i));
+    opponent.deck.push(sfn("S128-003","reserve"),sfn("S136-076","fern"),sfn("S108-T13","himmel"));
+    own.deck.push(card("001","own-reserve"));
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("match.turn.phase"),"main");
+  assert.equal(page.run("opponent.clock.at(-1).uid"),"only-hand");
+  assert.equal(page.run("opponent.hand.length"),2);
+  page.run("autoRuleBotStep()");
+  assert.equal(page.run("opponent.front0.length+opponent.front1.length+opponent.front2.length"),2);
+});
+
+test("手札が尽きたフリーレンBotは3回目の攻撃より集中を優先する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(number,uid)=>({id:"SFN/"+number,uid,cx:false,faceUp:true,orientation:0});
+    match.bot.scenario="stella-custom";
+    match.turn.player=1;
+    match.turn.number=4;
+    match.turn.phase="main";
+    opponent.front0.push(fri("S108-T13","front-one"));
+    opponent.front1.push(fri("S136-076","front-two"));
+    opponent.back0.push(fri("S136-001","brainstorm"));
+    opponent.stock.push(fri("S136-076","payment"));
+    for(let i=0;i<6;i++)opponent.deck.push(fri("S136-076","miss-"+i));
+    own.deck.push(card("001","reserve"));
+    autoRuleBotStep();
+  `);
+  assert.equal(page.get("dialogTitle").textContent,"Botの集中・CX 0枚");
+  ruleButton(page,"確認して進む");
+  assert.equal(page.run("match.turn.phase"),"climax");
+  assert.equal(page.run('opponent.back0[0].uid'),"brainstorm");
+  assert.equal(page.run('opponent.back0[0].orientation'),90);
+  assert.equal(page.run('opponent.front2.length'),0);
+  assert.equal(page.run('opponent.stock.length'),0);
+});
+
+test("フリーレンBotは手札が3枚でも次の展開札がなければ攻撃より集中を優先する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const fri=(number,uid,cx=false)=>({id:"SFN/"+number,uid,cx,faceUp:true,orientation:0});
+    match.bot.scenario="stella-custom";
+    match.turn.player=1;
+    match.turn.number=4;
+    match.turn.phase="main";
+    opponent.front0.push(fri("S108-T13","front-one"));
+    opponent.front1.push(fri("S136-076","front-two"));
+    opponent.back0.push(fri("S136-001","brainstorm"));
+    opponent.hand.push(fri("S128-003","too-high"),fri("S108-T09","cx1",true),fri("S128-022","cx2",true));
+    opponent.stock.push(fri("S136-076","payment"));
+    for(let i=0;i<6;i++)opponent.deck.push(fri("S136-076","miss-"+i));
+    own.deck.push(card("001","reserve"));
+    autoRuleBotStep();
+  `);
+  assert.equal(page.get("dialogTitle").textContent,"Botの集中・CX 0枚");
+  ruleButton(page,"確認して進む");
+  assert.equal(page.run("opponent.hand.length"),3);
+  assert.equal(page.run("opponent.back0[0].orientation"),90);
+  assert.equal(page.run("opponent.front2.length"),0);
 });
