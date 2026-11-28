@@ -3339,3 +3339,25 @@ test("フリーレンのBotは対応CXが手札にあれば、レベル0のう�
   `);
   assert.equal(page.run("opponent.hand.at(-1).uid"),"combo");
 });
+
+test("Botはフィレンの登場時、同名を控え室または手札から用意して2面展開する",async()=>{
+  for(const duplicateZone of ["waiting","hand","deck"]){
+    const page=await launchStellaAbility();
+    page.run(`
+      match.decks[1]=stellaDeck;
+      match.bot.scenario="stella-sora-mirror";
+      match.turn.player=1;
+      match.turn.number=4;
+      opponent.level.push(card("008","green"));
+      opponent.hand.push(card("002","firen"),card("031","song",true),card("094","spare"));
+      opponent.deck.push(card("001","deck"));
+      opponent[${JSON.stringify(duplicateZone)}].push(card("002SP","duplicate"));
+      setTurnPhase("main");
+      autoRuleBotStep();
+    `);
+    const expected=duplicateZone==="deck"?"firen":"duplicate,firen";
+    assert.equal(page.run('botSlots.slice(0,3).flatMap(slot=>opponent[slot]).map(c=>c.uid).sort().join()'),expected,duplicateZone);
+    assert.ok(page.run('opponent.hand.some(c=>c.uid==="song")'));
+    assert.equal(page.run('opponent.hand.some(c=>c.uid==="spare")'),duplicateZone!=="waiting");
+  }
+});

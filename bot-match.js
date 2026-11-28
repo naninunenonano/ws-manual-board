@@ -472,6 +472,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const reisConsole=ability.id==="memory-recollection-top-reveal";
   const simpleReis=reisSearch||reisConsole;
   const firenDuplicate=ability.id==="firen-on-play-duplicate";
+  const isSameFiren=entry=>sameBotCardNumber(entry.id??entry.cardNumber,card.id);
   const firenCombo=ability.id==="firen-cx-combo";
   const waitingBefore=firenCombo?new Set(players[p].waiting.map(card=>card.uid)):null;
   const [selectCost,moveCost]=ability.costs??[];
@@ -601,6 +602,11 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       });
       return;
     }
+    if(p===1&&isAutoRules()&&firenDuplicate&&prompt.kind==="optional"){
+      const {hand,waiting}=players[p];
+      const canDeploy=hand.length>0&&(waiting.some(isSameFiren)||hand.some(isSameFiren));
+      step(canDeploy);return;
+    }
     if((simpleReis||firenDuplicate||handDiscard)&&prompt.kind==="cost"||
        (reisSearch||firenDuplicate||handDiscard)&&prompt.kind==="optional"){
       step(prompt.kind==="optional"?true:undefined);
@@ -622,7 +628,9 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
             const entry={id:card.cardNumber};
             return Number(autoRuleBotKeepsCombo(p,entry))*4+Number(card.type==="climax")+Number(!!autoRuleBotComboCx(entry));
           };
-          const candidates=prompt.from.zone==="hand"?[...prompt.candidates].sort((a,b)=>priority(a)-priority(b)):
+          const needsFiren=firenDuplicate&&prompt.phase==="costs"&&!players[p].waiting.some(isSameFiren);
+          const candidates=needsFiren?prompt.candidates.filter(isSameFiren):
+            prompt.from.zone==="hand"?[...prompt.candidates].sort((a,b)=>priority(a)-priority(b)):
             firenCombo?[...prompt.candidates].sort((a,b)=>autoRuleBotRecoveryPriority(p,{id:b.cardNumber})-
               autoRuleBotRecoveryPriority(p,{id:a.cardNumber})):prompt.candidates;
           step(candidates.slice(0,prompt.max).map(card=>card.uid));
