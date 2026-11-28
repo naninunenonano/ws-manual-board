@@ -975,16 +975,69 @@ function autoRuleBotHasCombo(card,hand){
   const cx=autoRuleBotComboCx(card);
   return Boolean(cx&&hand.some(entry=>sameBotCardNumber(entry.id,cx)));
 }
-function autoRuleBotKeepsCombo(p,card){
+function autoRuleBotOpeningPlan(deck,visible){
+  const options=deck?.cards??[];
+  let best=null,bestScore=-1;
+  for(const card of options){
+    const def=botDefinition(card);
+    if(def?.type!=="character"||def.stats.level!==1)continue;
+    const cx=autoRuleBotComboCx(card),cxDef=botDefinition(cx?{id:cx}:null);
+    const cxCopies=options.reduce((n,entry)=>n+(sameBotCardNumber(entry.id,cx)?entry.num:0),0);
+    if(!cxCopies)continue;
+    const character=def.cardNumber??card.id;
+    const characterCopies=options.reduce((n,entry)=>n+(sameBotCardNumber(entry.id,character)?entry.num:0),0);
+    const prepared=visible.some(entry=>sameBotCardNumber(entry.id,character))+
+      visible.some(entry=>sameBotCardNumber(entry.id,cx));
+    const score=prepared*50+Math.min(characterCopies,cxCopies)*5+characterCopies+cxCopies;
+    if(score>bestScore){
+      best={character,cx,colors:[...new Set([def.color,cxDef?.color].filter(Boolean))]};
+      bestScore=score;
+    }
+  }
+  return best;
+}
+function autoRuleBotEarlyPlan(p){
+  if(players[p].level.length>1)return null;
+  return autoRuleBotOpeningPlan(match.decks[p],stellaStage(p).concat(players[p].hand));
+}
+function autoRuleBotOrderOpening(p,cards){
+  if(p!==1||!isDeckMirror(match.bot.scenario))return cards;
+  const plan=autoRuleBotEarlyPlan(p);
+  if(!plan)return cards;
+  const visible=players[p].hand.concat(stellaStage(p));
+  const needed=[plan.character,plan.cx].filter(number=>!visible.some(card=>sameBotCardNumber(card.id,number)));
+  const priority=card=>Number(needed.some(number=>sameBotCardNumber(card.id,number)));
+  return [...cards].sort((a,b)=>priority(b)-priority(a));
+}
+function autoRuleBotMulligan(p){
   const hand=players[p].hand;
-  return autoRuleBotHasCombo(card,hand)||
+  const plan=autoRuleBotOpeningPlan(match.decks[p],hand);
+  const keep=new Set();
+  for(const number of [plan?.character,plan?.cx]){
+    const index=hand.findIndex(card=>sameBotCardNumber(card.id,number));
+    if(index>=0)keep.add(index);
+  }
+  const attackers=hand.filter(autoRuleReadyAttacker).filter(card=>botDefinition(card).stats.level===0).length;
+  return hand.flatMap((card,index)=>{
+    const def=botDefinition(card);
+    const early=def?.type==="character"&&def.stats.level===0&&(!def.cannotAttack||attackers>=2);
+    return early||keep.has(index)?[]:[index];
+  });
+}
+function autoRuleBotKeepsCombo(p,card){
+  const hand=players[p].hand,plan=autoRuleBotEarlyPlan(p);
+  return sameBotCardNumber(card.id,plan?.character)||sameBotCardNumber(card.id,plan?.cx)||
+    autoRuleBotHasCombo(card,hand)||
     stellaStage(p).concat(hand).some(source=>sameBotCardNumber(autoRuleBotComboCx(source),card.id));
 }
 function autoRuleBotRecoveryPriority(p,card){
   const board=players[p],def=botDefinition(card);
   if(def?.type!=="character")return 0;
   const playable=!def.cannotAttack&&!autoRuleLegalPlay(p,card,"main","character",{planning:true});
-  return Number(autoRuleBotHasCombo(card,board.hand))*8+Number(playable)*4+
+  const plan=autoRuleBotEarlyPlan(p);
+  const missingCombo=plan&&sameBotCardNumber(card.id,plan.character)&&
+    !board.hand.some(entry=>sameBotCardNumber(entry.id,plan.character));
+  return Number(autoRuleBotHasCombo(card,board.hand))*8+Number(missingCombo)*3+Number(playable)*4+
     Number(def.stats.level<=board.level.length+1)+Number(def.stats.cost===0);
 }
 function autoRuleBotLevelIndex(p,clock){
@@ -993,6 +1046,8 @@ function autoRuleBotLevelIndex(p,clock){
   const pairs=stellaStage(p).concat(board.hand).filter(card=>
     botDefinition(card)?.stats.level===1&&autoRuleBotHasCombo(card,board.hand));
   const demands=new Map();
+  const plan=board.level.length===0?autoRuleBotEarlyPlan(p):null;
+  if(plan)for(const color of plan.colors)demands.set(color,1);
   for(const card of pairs){
     const color=botDefinition(card).color;
     demands.set(color,(demands.get(color)??0)+1);
@@ -1127,7 +1182,7 @@ function autoRuleBotStep(){
     case "draw": setTurnPhase("clock");break;
     case "clock":{
       let index=board.hand.findIndex(card=>!card.cx);
-      if(isStellaDeck(match.bot.scenario)){
+      if(isStellaDeck(match.bot.scenario)||isDeckMirror(match.bot.scenario)&&board.level.length<=1){
         const playable=card=>!autoRuleLegalPlay(p,card,"main","character",{planning:true});
         const available=board.hand.filter(playable).length;
         const hasGreen=[...board.level,...board.clock].some(card=>botDefinition(card)?.color==="緑");
@@ -1136,18 +1191,23 @@ function autoRuleBotStep(){
           board.hand.findIndex(card=>card.id.startsWith("SFN/")&&botDefinition(card)?.color==="緑"&&botDefinition(card).stats.level===0):-1;
         const inPlay=stellaStage(p).concat(board.hand);
         const combos=inPlay.filter(card=>botDefinition(card)?.stats.level===1&&autoRuleBotHasCombo(card,board.hand));
-        const needsColor=combos.map(card=>botDefinition(card).color)
-          .find(color=>![...board.level,...board.clock].some(card=>botDefinition(card)?.color===color));
-        const keep=card=>combos.includes(card)||combos.some(source=>sameBotCardNumber(card.id,autoRuleBotComboCx(source)));
-        const comboColor=needsColor&&board.level.length?
-          board.hand.findIndex(card=>!keep(card)&&botDefinition(card)?.color===needsColor):-1;
+        const plan=autoRuleBotEarlyPlan(p);
+        const colors=new Set([...board.level,...board.clock].map(card=>botDefinition(card)?.color));
+        const needsColors=[...combos.map(card=>botDefinition(card).color),...(plan?.colors??[])].filter(color=>!colors.has(color));
+        const keep=card=>sameBotCardNumber(card.id,plan?.character)||sameBotCardNumber(card.id,plan?.cx)||
+          combos.includes(card)||combos.some(source=>sameBotCardNumber(card.id,autoRuleBotComboCx(source)));
+        const comboColor=board.level.length||board.clock.length>=3?
+          board.hand.findIndex(card=>!keep(card)&&needsColors.includes(botDefinition(card)?.color)&&
+            (board.level.length>0||!playable(card)||available>autoRuleAttackLimit(p))):-1;
         const spare=comboColor>=0?comboColor:greenForClock>=0?greenForClock:board.hand.findIndex(card=>!keep(card)&&!card.cx&&!playable(card));
         const readyOnStage=botSlots.filter(slot=>autoRuleReadyAttacker(board[slot].at(-1))).length;
         const costs=board.hand.filter(card=>playable(card)&&!botDefinition(card)?.cannotAttack)
           .map(card=>autoRulePlayCost(p,botDefinition(card))).sort((a,b)=>a-b);
         const missing=Math.max(0,autoRuleAttackLimit(p)-readyOnStage);
         const canFillFront=costs.length>=missing&&costs.slice(0,missing).reduce((sum,cost)=>sum+cost,0)<=board.stock.length;
-        if(comboColor<0&&greenForClock<0&&canFillFront){
+        const hasOpeningPair=plan&&[plan.character,plan.cx].every(number=>inPlay.some(card=>sameBotCardNumber(card.id,number)));
+        const canDrawForCombo=plan&&!hasOpeningPair&&spare>=0;
+        if(comboColor<0&&greenForClock<0&&canFillFront&&!canDrawForCombo){
           autoRuleLog("Botは必要な攻撃回数を確保できるためクロックをスキップ");
           setTurnPhase("main");break;
         }
@@ -1193,8 +1253,10 @@ function autoRuleBotStep(){
       const score=card=>combos.reduce((sum,{cx,level})=>
         sum+(sameBotCardNumber(cx,card.id)?(level===1?4:1):0),0);
       choices.sort((a,b)=>score(b.card)-score(a.card));
-      const choice=choices[0];
-      const index=choice&&(score(choice.card)>0||isStellaDeck(match.bot.scenario)&&attackers.length)?choice.index:-1;
+      const plan=autoRuleBotEarlyPlan(p);
+      const choice=choices.find(({card})=>score(card)>0||isStellaDeck(match.bot.scenario)&&attackers.length&&
+        (!sameBotCardNumber(card.id,plan?.cx)||board.hand.filter(entry=>sameBotCardNumber(entry.id,plan.cx)).length>1));
+      const index=choice?.index??-1;
       if(!isDeckMirror(match.bot.scenario)||index<0||board.cx.length){setTurnPhase("attack");break}
       runRuleOperation(done=>autoRuleResolvePlay(p,index,"cx",()=>{
         match.turn.phase="attack";
