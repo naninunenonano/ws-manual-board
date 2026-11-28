@@ -313,7 +313,7 @@ function initializeOnlineMatch({authenticate,getDecks}) {
     list.className="modalcards";
     for(const card of snapshot?.state.reveals?.[1-side] ?? []){
       const image=document.createElement("img");
-      image.src=officialImageUrl(card.id)||"";image.alt=card.id;
+      setCardImage(image,card.id);image.alt=card.id;
       image.style.cssText="width:86px;height:120px;object-fit:contain";
       list.append(image);
     }

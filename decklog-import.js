@@ -9,9 +9,9 @@
   const imageTypeCache = new Map();
   function detectLandscape(id){
     // The high-resolution prints of 僕達の冒険 are scanned sideways.
-    if(isFrierenTrialClimax(id))return Promise.resolve(true);
+    if(isKnownClimaxImage(id))return Promise.resolve(true);
     if(imageTypeCache.has(id))return imageTypeCache.get(id);
-    const promise=new Promise(resolve=>{const url=officialImageUrl(id);if(!url){resolve(null);return}const img=new Image();img.onload=()=>resolve(img.naturalWidth>img.naturalHeight);img.onerror=()=>resolve(null);img.src=url});
+    const promise=new Promise(resolve=>{const url=cardImageUrl(id);if(!url){resolve(null);return}const img=new Image();img.onload=()=>resolve(img.naturalWidth>img.naturalHeight);setCardImage(img,id,()=>resolve(null))});
     imageTypeCache.set(id,promise);return promise;
   }
   async function classify(deck){
@@ -22,7 +22,7 @@
   function cxReady(deck){return deck.cards.every(c=>typeof c.cx==="boolean")&&cxCount(deck)===8}
   function confirmCx(deck){
     const table=$("deckPreview");const info=document.createElement("p");info.textContent="CX画像判定："+cxCount(deck)+"枚 / 8枚。画像取得失敗・縦長CXなどは下のチェックを修正してください。";table.append(info);
-    for(const card of deck.cards){const label=document.createElement("label");label.style.cssText="display:flex;align-items:center;gap:6px;margin:5px 0";const check=document.createElement("input");check.type="checkbox";check.checked=card.cx===true;check.onchange=()=>{card.cx=check.checked;info.textContent="CX判定："+cxCount(deck)+"枚 / 8枚";$("applyDeck").disabled=!cxReady(deck)};const img=document.createElement("img");img.src=officialImageUrl(card.id)||"";img.style.cssText="width:45px;height:65px;object-fit:contain";label.append(check,img,document.createTextNode(card.id+" × "+card.num));table.append(label)}
+    for(const card of deck.cards){const label=document.createElement("label");label.style.cssText="display:flex;align-items:center;gap:6px;margin:5px 0";const check=document.createElement("input");check.type="checkbox";check.checked=card.cx===true;check.onchange=()=>{card.cx=check.checked;info.textContent="CX判定："+cxCount(deck)+"枚 / 8枚";$("applyDeck").disabled=!cxReady(deck)};const img=document.createElement("img");setCardImage(img,card.id);img.style.cssText="width:45px;height:65px;object-fit:contain";label.append(check,img,document.createTextNode(card.id+" × "+card.num));table.append(label)}
     $("applyDeck").disabled=!cxReady(deck);
   }
   const storageKey=p=>"ws-manual-deck-v1-p"+p;

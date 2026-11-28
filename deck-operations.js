@@ -7,7 +7,7 @@ window.WSDeck = (() => {
   const select = (values,parent,initial) => {const s=document.createElement("select");for(const [value,label] of values){const o=document.createElement("option");o.value=String(value);o.textContent=label;s.append(o)}if(initial!==undefined)s.value=String(initial);parent.append(s);return s};
   const count = (max,parent,initial=1) => select(Array.from({length:max},(_,i)=>[i+1,(i+1)+"枚"]),parent,Math.min(initial,max));
   const modal = title => {const d=$("dialog"),body=$("dialogBody");d.classList.remove("zoom-mode");$("dialogTitle").textContent=title;body.replaceChildren();d.showModal();return {d,body}};
-  const img = (card,parent) => {const url=officialImageUrl(card.id);if(url){const i=document.createElement("img");i.src=url;i.alt=card.id;i.style.cssText="width:65px;height:94px;object-fit:contain";parent.append(i)}else parent.append(document.createTextNode(card.id))};
+  const img = (card,parent) => {const url=cardImageUrl(card.id);if(url){const i=document.createElement("img");setCardImage(i,card.id);i.alt=card.id;i.style.cssText="width:65px;height:94px;object-fit:contain";parent.append(i)}else parent.append(document.createTextNode(card.id))};
   const moveCard = (p,c,to) => {c.faceUp=!["deck","stock"].includes(to);players[p][to].push(c)};
   function refresh(p){
     const b=players[p];if(b.deck.length || !b.waiting.length)return false;
@@ -91,7 +91,7 @@ window.WSDeck = (() => {
       },options);
     }action.onchange=controls;controls();
   }
-  function imageOrientation(id){return new Promise(resolve=>{const url=officialImageUrl(id);if(!url){resolve(null);return}const i=new Image();i.onload=()=>resolve(i.naturalWidth>i.naturalHeight);i.onerror=()=>resolve(null);i.src=url})}
+  function imageOrientation(id){if(isKnownClimaxImage(id))return Promise.resolve(true);return new Promise(resolve=>{const url=cardImageUrl(id);if(!url){resolve(null);return}const i=new Image();i.onload=()=>resolve(i.naturalWidth>i.naturalHeight);setCardImage(i,id,()=>resolve(null))})}
   async function classify(deck){
     const result=new Map();await Promise.all(deck.cards.map(async c=>result.set(c.id,await imageOrientation(c.id))));
     return result;
