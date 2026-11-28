@@ -579,7 +579,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     if(prompt.kind==="commit-cost"){
       if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
       abortable=false;
-      render();
+      if(p===side)render();
       step(botEffectBoard(p));
       return;
     }
@@ -603,7 +603,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     if(prompt.committedState){
       if(!apply(prompt.committedState,new Map(),true)){done?.(false);return}
       abortable=false;
-      render();
+      if(p===side)render();
     }
     if(prompt.kind==="look-next"){
       if(p===1&&isAutoRules())step(prompt.canContinue);

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.89</title>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.92</title>
 <link rel="stylesheet" href="board-layout.css?v=0.59">
 <style>
 :root{font-family:system-ui,-apple-system,sans-serif;color:#edf1f8;background:#101827}*{box-sizing:border-box}body{margin:0}header{padding:12px 14px;background:#1a2840;display:flex;justify-content:space-between;align-items:center;gap:8px}h1{font-size:17px;margin:0}button,select{background:#263e61;color:white;border:1px solid #6581a5;border-radius:8px;padding:9px;font:inherit}button:disabled{opacity:.4}.shell{max-width:680px;margin:auto;padding:10px}.player{border:1px solid #49617e;border-radius:14px;margin:8px 0;padding:9px;background:#18243a}.player.active{border-color:#83b8ff}.player h2{font-size:14px;margin:0 0 8px;display:flex;justify-content:space-between}.modalcards .modal-card{display:flex;flex-direction:column;align-items:center;gap:4px;width:90px;min-height:128px;padding:5px;font-size:10px;overflow-wrap:anywhere}.modal-card img{height:100px;max-width:74px;object-fit:contain}.modal-card .card-back{height:100px;width:70px;background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px)}.zone.selected{outline:3px solid #f4cf73}.zone.empty{visibility:hidden}.stage{background:#30435e}.hand{display:flex;overflow-x:auto;gap:5px;padding:8px 0;min-height:80px}.card{flex:0 0 46px;height:66px;border:1px solid #9db3cc;border-radius:5px;background:#e4eaf1;color:#19273d;font-size:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:grab;user-select:none}.card.back{background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px);color:#fff}.card.selected{outline:3px solid #f4cf73}.card img{width:100%;height:100%;object-fit:contain;border-radius:4px;-webkit-touch-callout:none;-webkit-user-select:none}.card .cardlabel{font-size:9px;overflow-wrap:anywhere;padding:2px}.carddetail{display:grid;grid-template-columns:1fr;gap:7px;font-size:13px}.carddetail img{display:block;width:100%;max-width:100%;max-height:none;object-fit:contain;height:auto;-webkit-touch-callout:none;-webkit-user-select:none}.carddetail{max-width:100%}.carddetail .zoom-actions{display:flex;gap:8px;flex-wrap:wrap}.modalcards .modal-card img{object-fit:contain}#dialog{max-height:94dvh;overflow:auto}#dialog.zoom-mode{width:min(96vw,720px)}#dialog.zoom-mode .carddetail img{max-height:none}#dialog.zoom-mode{padding:8px}#dialog.zoom-mode #dialogTitle{font-size:14px;margin:2px 0 8px}.zone-zoom{border:0;background:#35557b;padding:2px 4px;font-size:10px;line-height:1.2;border-radius:4px;margin-top:2px}.card-zoom{position:absolute;right:0;bottom:0;background:#183453e8;border:0;border-radius:4px;padding:1px 3px;font-size:12px;line-height:1.4;color:white}.card{position:relative}.carddetail strong{color:#e7f0ff}.controls{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.controls button{font-size:12px}.notice{font-size:12px;color:#d3dfed;min-height:35px}.toolbar{display:flex;gap:5px;align-items:center;flex-wrap:wrap}.toolbar label{font-size:12px}dialog{background:#1a2840;color:white;border:1px solid #7191ba;border-radius:12px;max-width:95vw;width:420px}dialog::backdrop{background:#0009}.modalcards{display:flex;flex-wrap:wrap;gap:5px;max-height:50vh;overflow:auto}.muted{opacity:.7;font-size:11px}.count{font-size:11px;color:#bbd2f4}
@@ -9,6 +9,7 @@
 .carddetail > img.rotated-cx-scan{transform:rotate(-90deg) scale(.7171875)}
 .card-zoom-image.rotated-cx-scan{aspect-ratio:640/459;position:relative}
 .card-zoom-image.rotated-cx-scan img{position:absolute;width:71.71875%;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-90deg)}
+body:has(#battleScreen:not([hidden])) #dialog:not(.zoom-mode){margin:auto auto max(8px,env(safe-area-inset-bottom));max-height:calc(100dvh - 16px)}
 [hidden]{display:none!important}.screen-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.turn-result{font-weight:700;color:#f4cf73;padding:7px 0}#setupScreen .player{margin-top:8px}
 #battleScreen .player{padding:5px;margin:4px 0;border-radius:9px}
 #battleScreen .player h2{font-size:12px;margin:0 0 3px}
@@ -25,7 +26,7 @@
 #botRecovery .modalcards li { flex:0 0 72px; justify-items:center; text-align:center; }
 #battleLogText { width:100%; min-height:min(52dvh,420px); resize:vertical; font:inherit; }
 </style><style>.bot-power{position:absolute;z-index:4;top:2px;left:2px;padding:2px 4px;border-radius:4px;background:#091426;color:white;font-size:.68rem;pointer-events:none}</style>
-</head><body><header><h1>WS 手動盤面 <small>Ver.0.89</small></h1></header>
+</head><body><header><h1>WS 手動盤面 <small>Ver.0.92</small></h1></header>
 <main class="shell"><p id="storageWarning" role="status" hidden></p><section id="setupScreen">
 <div class="screen-actions"><button id="openBotDeckEditor" type="button">デッキ作成・Bot戦</button></div>
 <details id="botSetup"><summary>Bot戦・確認パターン</summary>
@@ -119,7 +120,7 @@
   </div>
   <ul id="botDeckCardRows"></ul>
 </section>
-<section id="mulliganScreen" hidden><h2>マリガン</h2><div id="onlineMulligan" hidden><p id="onlineMulliganStatus" role="status"></p><button id="onlineMulliganReconnect" type="button">再接続</button></div><p id="mulliganProgress" role="status"></p><p class="muted">交換するカードを0〜5枚選択。選択カードを控え室へ置き、同じ枚数を引いた後、山札をシャッフルします。</p><div id="mulliganCards" class="modalcards"></div><div class="screen-actions"><button id="confirmMulligan">マリガン確定</button></div></section><section id="battleScreen" hidden><div class="screen-actions"><button id="surrender">降参</button><button id="leaveBattle">対戦を離れる</button><span id="firstPlayerResult" class="turn-result" role="status"></span></div><p class="notice" id="notice" role="status">カードをタップして移動先を選択。ドラッグでも移動できます。</p><section id="onlineBattle" hidden>
+<section id="mulliganScreen" hidden><h2>マリガン</h2><div id="onlineMulligan" hidden><p id="onlineMulliganStatus" role="status"></p><button id="onlineMulliganReconnect" type="button">再接続</button></div><p id="mulliganProgress" role="status"></p><p class="muted">交換するカードを0〜5枚選択。選択カードを控え室へ置き、同じ枚数を引いた後、山札をシャッフルします。</p><div id="mulliganCards" class="modalcards"></div><div class="screen-actions"><button id="confirmMulligan">マリガン確定</button></div></section><section id="battleScreen" hidden><span id="firstPlayerResult" class="turn-result" role="status"></span><div id="boards"></div><div id="playerActions" style="margin:8px 0"><p class="notice" id="notice" role="status">カードをタップして移動先を選択。ドラッグでも移動できます。</p><section id="onlineBattle" hidden>
 <p id="onlineBattleStatus" role="status"></p>
 <div class="toolbar"><button id="onlineBattleReconnect" type="button">再接続</button><button id="onlineRevealDeckTop" type="button">山札の上を1枚公開</button><button id="onlineReveal" type="button">カードを一時公開</button><button id="onlineEndReveal" type="button" hidden>公開を終了</button><button id="onlineOpponentReveal" type="button" hidden>相手の公開カードを見る</button><button id="onlineDeckRequest" type="button">相手の山札操作を依頼</button></div>
 <div id="onlinePublicReveals" aria-live="polite" hidden></div>
@@ -128,7 +129,7 @@
 </section><div class="toolbar"><button id="autoAttack" type="button" hidden>自動アタック</button><button id="attackExchange" type="button" hidden></button><span id="attackExchangeStatus" role="status"></span></div><div id="encorePanel" hidden><p id="encoreStatus" role="status"></p><div class="toolbar"><button id="encoreAction" type="button" hidden></button></div></div><div id="botControls" class="toolbar" hidden><strong id="botModeName"></strong>
 <button id="botStep" type="button">Botの行動を進める</button><button id="botAbility" type="button" hidden>起動能力</button>
 <button id="botBattleLog" type="button">対戦ログ</button>
-<span id="botStatus" role="status"></span></div><div id="boards"></div><div id="botRecovery" hidden></div><div id="playerActions" style="margin:8px 0"><div id="turnControls" style="border:1px solid #6581a5;border-radius:9px;padding:9px;margin:8px 0"><strong id="turnStatus"></strong><p id="stagePlacementHint" role="status" hidden></p><div class="toolbar"><button id="clearSelection" type="button" hidden>選択解除</button><button id="clockAction" hidden>選択した手札をクロックに置いて2枚ドロー</button><button id="clockSkip" hidden>クロックせずメインへ</button><button id="drawReminderResume" hidden>ドロー前確認に戻る</button><button id="nextPhase">次のフェイズへ</button></div></div><div class="toolbar"><label id="battleSideControl">操作する側 <select id="battleSide"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label><button id="viewDecks">自分のデッキ確認</button><button id="shuffle">山札シャッフル</button></div></div><p id="manualBattleHint" class="muted">カード画像は縦横比を維持して表示します。手札の🔍、盤面や一覧の「拡大」で公式画像を大きく確認できます。カード能力は手動で処理します。レベルアップはクロック下から7枚を対象とします。</p></section><section id="resultScreen" hidden><h2>対戦終了</h2><p id="battleResult" role="status"></p><button id="resultBattleLog" type="button" hidden>対戦ログ</button><button id="nextBattle">次の対戦へ</button></section></main>
+<span id="botStatus" role="status"></span></div><div id="botRecovery" hidden></div><div id="turnControls" style="border:1px solid #6581a5;border-radius:9px;padding:9px;margin:8px 0"><strong id="turnStatus"></strong><p id="stagePlacementHint" role="status" hidden></p><div class="toolbar"><button id="clearSelection" type="button" hidden>選択解除</button><button id="clockAction" hidden>選択した手札をクロックに置いて2枚ドロー</button><button id="clockSkip" hidden>クロックせずメインへ</button><button id="drawReminderResume" hidden>ドロー前確認に戻る</button><button id="nextPhase">次のフェイズへ</button></div></div><div class="toolbar"><label id="battleSideControl">操作する側 <select id="battleSide"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label><button id="viewDecks">自分のデッキ確認</button><button id="shuffle">山札シャッフル</button></div><div class="screen-actions"><button id="surrender">降参</button><button id="leaveBattle">対戦を離れる</button></div></div><p id="manualBattleHint" class="muted">カード画像は縦横比を維持して表示します。手札の🔍、盤面や一覧の「拡大」で公式画像を大きく確認できます。カード能力は手動で処理します。レベルアップはクロック下から7枚を対象とします。</p></section><section id="resultScreen" hidden><h2>対戦終了</h2><p id="battleResult" role="status"></p><button id="resultBattleLog" type="button" hidden>対戦ログ</button><button id="nextBattle">次の対戦へ</button></section></main>
 <dialog id="dialog"><h3 id="dialogTitle"></h3><div id="dialogBody"></div><div class="controls"><button id="close">閉じる</button></div></dialog>
 <script src="card-images.js?v=0.86"></script>
 <script>
@@ -136,9 +137,9 @@
 const cardCatalog = Object.freeze({
   "SFN/S128-003": {name:"旅立ちのきっかけ ヒンメル",level:3,cost:2,power:9500,type:"キャラ",rarity:"RR"}
 });
-function addCardImage(parent,card,alt,imageUrl=cardImageUrl,onMissing){
+function addCardImage(parent,card,alt,imageUrl=cardImageUrl,onMissing,loading="lazy"){
   if(match?.bot&&card.id.startsWith("BOT/"))return false;
-  const img=document.createElement("img");img.alt=alt||card.id;img.loading="lazy";img.draggable=false;
+  const img=document.createElement("img");img.alt=alt||card.id;img.loading=loading;img.draggable=false;
   img.onload=()=>{
     const landscape=img.naturalWidth>img.naturalHeight;
     const rotated=!landscape&&(card.cx||isKnownClimaxImage(card.id))&&img.src===cardLaboImageUrl(card.id);
@@ -174,11 +175,6 @@ function showCardDetail(card){
   };
   if(!addCardImage(holder,card,cardInfo(card)?.name||card.id,cardImageUrl,fallback))fallback();
   wrap.append(holder);
-  if(details)appendBotCardDetails(wrap,details);
-  else{
-    const note=document.createElement("div");note.className="muted";note.textContent=card.id+" ・画像を見て能力を確認してください";
-    wrap.append(note);
-  }
   body.append(wrap);d.showModal();
 }
 const zones=["deck","hand","waiting","stock","clock","level","memory","cx","front0","front1","front2","back0","back1"];
@@ -353,7 +349,7 @@ function appendZonePreview(zone, card, z, p) {
   preview.className = "zone-preview " + (sidewaysZones.has(z) ? "sideways" : "portrait");
   if (z === "deck" || z === "stock" || (!card.faceUp && p !== side)) {
     preview.classList.add("card-back");
-  } else if (!addCardImage(preview, card, card.id) && !appendPracticeCardFace(preview,card)) {
+  } else if (!addCardImage(preview, card, card.id,cardImageUrl,undefined,"eager") && !appendPracticeCardFace(preview,card)) {
     preview.textContent = isAutoRules()?botCardInfo(card)?.name??card.id:card.id;
   }
   zone.append(preview);
@@ -381,7 +377,7 @@ function appendZoneFan(zone, cards, z, p) {
       back.className = "card-back";
       slot.append(back);
     } else {
-      if (!addCardImage(slot, card, card.id) && !appendPracticeCardFace(slot,card)) slot.textContent = card.id;
+      if (!addCardImage(slot, card, card.id,cardImageUrl,undefined,"eager") && !appendPracticeCardFace(slot,card)) slot.textContent = card.id;
       slot.title = cardLabel(card);
     }
     slot.onclick = event => {
@@ -544,9 +540,9 @@ function renderHandCardFace(el,card){
     name.textContent=details.shortName;
     el.append(name);
   };
-  if(!addCardImage(el,card,cardInfo(card)?.name||card.id,cardImageUrl,fallback))fallback();
+  if(!addCardImage(el,card,cardInfo(card)?.name||card.id,cardImageUrl,fallback,"eager"))fallback();
 }
-function render(){const root=document.getElementById("boards"),actions=document.getElementById("playerActions");root.replaceChildren();for(const p of (match?.online?[1-side,side]:[1,0])){const pl=players[p],section=document.createElement("section");section.className="player"+(p===side?" active":"");section.dataset.player=String(match?.online?Number(p!==side):p);section.innerHTML='<h2>プレイヤー'+(p+1)+' <span>山札 '+pl.deck.length+' / ストック '+pl.stock.length+' / クロック '+pl.clock.length+'</span></h2>';const board=document.createElement("div");
+function render(){const root=document.getElementById("boards"),actions=document.getElementById("playerActions"),sections=[];for(const p of (match?.online?[1-side,side]:[1,0])){const pl=players[p],section=document.createElement("section");section.className="player"+(p===side?" active":"");section.dataset.player=String(match?.online?Number(p!==side):p);section.innerHTML='<h2>プレイヤー'+(p+1)+' <span>山札 '+pl.deck.length+' / ストック '+pl.stock.length+' / クロック '+pl.clock.length+'</span></h2>';const board=document.createElement("div");
 board.className="board";
 board.dataset.player=section.dataset.player;
 for(const z of zones)if(z!=="hand")board.append(renderZone(p,z,pl[z]));
@@ -555,7 +551,7 @@ if(match?.bot)el.onclick=()=>cardClick(p,"hand",i);
 else{
   el.ondragstart=()=>{selected={p,z:"hand",index:i}};
   bindCardTaps(el,()=>cardClick(p,"hand",i),()=>{if(p===side)manualDestination(p,"hand",i)});
-}if(p===side){const zb=document.createElement("button");zb.className="card-zoom";zb.textContent="🔍";zb.onclick=e=>{e.stopPropagation();showCardDetail(c)};el.append(zb)}hand.append(el)}hand.ondragover=e=>{if(p===side)e.preventDefault()};hand.ondrop=e=>{e.preventDefault();if(selected&&selected.p===p&&!match?.bot)move(p,selected.z,selected.index,"hand")};section.append(hand);if(section.dataset.player==="1")section.insertBefore(hand,board);root.append(section);if(p===side){section.append(actions)}}}
+}if(p===side){const zb=document.createElement("button");zb.className="card-zoom";zb.textContent="🔍";zb.onclick=e=>{e.stopPropagation();showCardDetail(c)};el.append(zb)}hand.append(el)}hand.ondragover=e=>{if(p===side)e.preventDefault()};hand.ondrop=e=>{e.preventDefault();if(selected&&selected.p===p&&!match?.bot)move(p,selected.z,selected.index,"hand")};section.append(hand);if(section.dataset.player==="1")section.insertBefore(hand,board);sections.push(section)}root.replaceChildren(...sections);sections.find(section=>section.className.includes(" active"))?.append(actions)}
 function canPlayClimax(p,z,index){
  return isMatchActive() && match.turn?.phase==="climax" && match.turn.player===p &&
  z==="hand" && players[p].hand[index]?.cx===true;
@@ -1599,12 +1595,11 @@ function chooseEncoreCard(p,zone,index){
  const card=players[p][zone][index];
  if(!encoreCandidates(p).some(candidate=>candidate.card===card))return;
  const d=document.getElementById("dialog");
- if(d.open)d.close();
  if(match.online){
+   if(d.open)d.close();
    onlineMatch.commitEncore("select",{uid:card.uid}).then(ok=>{if(ok&&!d.open)openEncoreCosts()});
  }else{
-   encoreAction("select",{uid:card.uid});
-   if(!d.open)openEncoreCosts();
+   encoreAction("select",{uid:card.uid},openEncoreCosts);
  }
 }
 
@@ -1616,7 +1611,7 @@ function encoreSelected(){
 function openEncoreCosts(custom=false){
  if(!canOperateEncore()||match.encore.step!==(custom?"other":"cost"))return;
  const p=match.encore.actor,board=players[p],target=encoreSelected();
- const body=showResolution(custom?"手動コストの支払い確認":"アンコール方法",target?[target.card]:[]);
+ const body=showResolution(custom?"手動コストの支払い確認":"アンコール方法",[]);
  setRuleModal(false);
  const cancel=()=>{closeResolution();encoreAction("unselect")};
  if(!target){
@@ -1624,6 +1619,7 @@ function openEncoreCosts(custom=false){
  }else if(custom){
    deckButton(body,"支払い済みとしてレスト",()=>resolveEncore("other"));
  }else{
+   deckButton(body,"アンコールしない",()=>resolveEncore("decline"));
    deckButton(body,"3ストック",()=>resolveEncore("stock")).disabled=board.stock.length<3;
    if(isAutoRules()&&oshiEncoreHand(p,target.card).length)deckButton(body,"手札の《芸能界》1枚",openEncoreHand);
    if(!isAutoRules()){
@@ -1632,9 +1628,9 @@ function openEncoreCosts(custom=false){
        .disabled=!board.deck.length&&board.waiting.length<2;
      if(!match.bot)deckButton(body,"その他",()=>{closeResolution();encoreAction("other")});
    }
-   deckButton(body,"アンコールしない",()=>resolveEncore("decline"));
  }
  deckButton(body,"キャラ選択へ戻る",cancel);
+ if(target)appendResolutionCards(body,[target.card],cardImageUrl);
 }
 
 function openEncoreHand(){
@@ -1667,8 +1663,8 @@ function resolveEncore(method,hand){
  const {card,zone,index}=target,p=match.encore.actor,board=players[p];
  const handIndex=board.hand.findIndex(c=>c.uid===hand);
  if(method==="stock" && board.stock.length<3 || method==="hand" && (handIndex<0||isAutoRules()&&!oshiEncoreHand(p,card).includes(board.hand[handIndex])))return;
- closeResolution();
  runRuleOperation(done=>{
+   closeResolution();
    function finish(){
      encoreAction("resolve",{method,hand},done);
      if(pendingMarkerChoices.length)showPendingMarkerChoices();
@@ -1763,12 +1759,12 @@ document.getElementById("clockSkip").onclick=()=>{if(match?.turn?.phase==="clock
 <script src="card-catalog.js?v=5"></script>
 <script src="effects/engine.js?v=stepwise-look-1"></script>
 <script src="card-data/load.js?v=2"></script>
-<script src="match-state.js?v=0.78"></script>
+<script src="match-state.js?v=0.90"></script>
 <script src="auto-rules.js?v=0.89"></script>
 <script src="stella-effects.js?v=0.84"></script>
 <script src="frieren-effects.js?v=0.89"></script>
 <script src="oshi-effects.js?v=0.89"></script>
-<script src="bot-match.js?v=0.89"></script>
+<script src="bot-match.js?v=0.91"></script>
 <script src="bot-deck-editor.js?v=0.86"></script>
 <script src="cloud-decks.js?v=0.52"></script>
 <script src="online-match.js?v=0.78"></script>

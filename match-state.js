@@ -213,9 +213,9 @@ function renderMulligan(){
   match.players[p].hand.forEach((card,i)=>{
     const button=document.createElement("button");
     button.type="button";
-    button.style.cssText="width:90px;min-height:140px;border:"+(mulliganSelection.has(i)?"3px solid #f4cf73":"1px solid #6581a5");
+    button.style.cssText="width:90px;min-height:140px"+(mulliganSelection.has(i)?";box-shadow:inset 0 0 0 2px #f4cf73":"");
     button.setAttribute("aria-pressed",String(mulliganSelection.has(i)));
-    const details=botCardDetails(card);
+    const details=card.id.startsWith("BOT/")?botCardDetails(card):null;
     if(details){
       button.className="practice-mulligan-card";
       button.style.cssText="";
@@ -226,9 +226,11 @@ function renderMulligan(){
       appendBotCardDetails(button,details);
     }else{
       const img=document.createElement("img");
-      const url=cardImageUrl(card.id);
-      if(url){setCardImage(img,card.id);img.alt=cardLabel(card);img.style.cssText="width:75px;height:105px;object-fit:contain";button.append(img);}
-      else button.textContent=cardLabel(card);
+      img.alt=cardLabel(card);
+      img.style.cssText="width:75px;height:105px;object-fit:contain";
+      const fallback=()=>button.prepend(document.createTextNode(cardLabel(card)));
+      if(setCardImage(img,card.id,()=>{img.remove();fallback()}))button.append(img);
+      else fallback();
     }
     const label=document.createElement("span");
     if(details)label.className="practice-mulligan-status";
