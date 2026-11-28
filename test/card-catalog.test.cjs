@@ -16,8 +16,9 @@ test("card numbers normalize and use the existing image URL convention",()=>{
   assert.equal(officialImageUrl("TEST/S001-001A*"),null);
 });
 
-test("registered normal cards use matching Card Labo images and unavailable variants use the same official printing",()=>{
-  for(const {cardNumber} of require("../card-data/catalog.json").cards){
+test("implemented normal cards use matching Card Labo images and unavailable variants use the same official printing",()=>{
+  for(const {cardNumber,catalogOnly} of require("../card-data/catalog.json").cards){
+    if(catalogOnly)continue;
     assert.ok(cardLaboImageUrl(cardNumber),cardNumber);
     assert.equal(effectChoiceImageUrl(cardNumber),cardLaboImageUrl(cardNumber));
   }
@@ -39,6 +40,20 @@ test("image load failures first try the official printing",()=>{
   assert.equal(missing,0);
   img.onerror();
   assert.equal(missing,1);
+});
+
+test("Stella Sora and Frieren regular releases are present with playable stats",()=>{
+  const cards=require("../card-data/catalog.json").cards;
+  const expected=[["STS/W140",100,3],["STS/W140-T",20,2],["SFN/S108",111,3],
+    ["SFN/S108-T",20,2],["SFN/S128",111,3],["SFN/S136",100,3]];
+  for(const [set,count,width] of expected){
+    for(let number=1;number<=count;number++){
+      const prefix=set+(set.endsWith("-T")?"":"-")+String(number).padStart(width,"0");
+      const card=cards.find(entry=>entry.cardNumber===prefix||entry.cardNumber===prefix+"A");
+      assert.ok(card,prefix);
+      if(card.type==="character")assert.ok(Number.isInteger(card.stats.power),prefix);
+    }
+  }
 });
 
 test("type-dependent stats keep zero distinct from null and reject invalid numbers",()=>{

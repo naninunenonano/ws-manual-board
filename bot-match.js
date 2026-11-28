@@ -123,6 +123,10 @@ function startBotMatch(deck,scenario,editedOpponent){
   const redBlue=isDeckMirror(scenario);
   const custom=scenario===stellaCustomScenario;
   if(custom&&!editedOpponent)return;
+  if(custom&&[deck,editedOpponent].some(entry=>entry?.cards.some(card=>botDefinition(card)?.catalogOnly))){
+    message("Bot未対応のカードが含まれています");
+    return;
+  }
   const mirrorDeck=custom?deck:scenario===stellaTrialScenario?stellaTrialDeck:scenario===stellaScenario?stellaDeck:redBlueDeck;
   if(isStellaDeck(scenario)&&!botCatalog){message("カードデータの読み込みをお待ちください");return}
   const opening=scenario==="opening"||redBlue;

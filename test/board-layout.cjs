@@ -293,8 +293,8 @@ async function checkBotDeckEditor(browser,url){
   try {
     await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
     await page.route("https://www.c-labo-online.jp/data/c-labo/product/**",route=>route.fulfill({
-      contentType:"image/png",
-      body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGZkAAAAASUVORK5CYII=","base64")
+      contentType:"image/svg+xml",
+      body:'<svg xmlns="http://www.w3.org/2000/svg" width="459" height="640"><rect width="459" height="640" fill="#456"/></svg>'
     }));
     await page.goto(url);
     await page.locator("#openBotDeckEditor").tap();
@@ -303,11 +303,16 @@ async function checkBotDeckEditor(browser,url){
     await page.getByRole("button",{name:"巡遊者 グレイを1枚減らす",exact:true}).tap();
     assert.equal(await start.isDisabled(),true);
     const kohaku=page.locator(".bot-deck-card-row").filter({hasText:"銃弾のロンド コハク"});
+    await kohaku.scrollIntoViewIfNeeded();
     const preview=kohaku.locator(".bot-deck-card-preview img");
     assert.match(await preview.getAttribute("src"),/wsstsw140_138\.jpg$/);
     await kohaku.getByRole("combobox",{name:"銃弾のロンド コハクのバージョン",exact:true}).selectOption("STS/W140-038SSP");
     assert.match(await preview.getAttribute("src"),/wsstsw140_004\.jpg$/);
-    await preview.waitFor();
+    await preview.evaluate(async img=>{
+      img.loading="eager";
+      await img.decode();
+    });
+    await preview.waitFor({state:"visible"});
     await page.getByRole("button",{name:"銃弾のロンド コハク（SSP）を1枚増やす",exact:true}).tap();
     assert.equal(await start.isEnabled(),true);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);

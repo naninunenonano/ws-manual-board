@@ -2805,7 +2805,8 @@ test("大会レシピ1TK8A8の16種をBot側に指定し、ステラソラ対フ
   page.get("botDeckPreset").value="frieren";
   page.click("applyBotDeckPreset");
   assert.equal(page.get("builderTitleFilter").value,"SFN");
-  assert.equal(page.get("botDeckCardRows").children.length,23);
+  assert.equal(page.get("botDeckCardRows").children.length,page.run('botCatalog.cards.filter(card=>card.cardNumber.startsWith("SFN/")).length'));
+  assert.ok(page.get("botDeckCardRows").children.some(row=>row.children[0].children.some(child=>child.textContent.includes("Bot未対応"))));
   assert.equal(page.get("startEditedBotBattle").disabled,false);
   page.click("startEditedBotBattle");
   const game=snapshot(page);
@@ -3360,4 +3361,17 @@ test("Botはフィレンの登場時、同名を控え室または手札から�
     assert.ok(page.run('opponent.hand.some(c=>c.uid==="song")'));
     assert.equal(page.run('opponent.hand.some(c=>c.uid==="spare")'),duplicateZone!=="waiting");
   }
+});
+
+
+test("カード情報のみの収録カードを含むデッキはBot戦を開始できない",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.settle();
+  page.run(`
+    const newDeck={...stellaDeck,cards:stellaDeck.cards.map(card=>
+      card.id==="STS/W140-094"?{...card,id:"STS/W140-005"}:card)};
+    startBotMatch(newDeck,stellaCustomScenario,stellaDeck);
+  `);
+  assert.equal(page.run("isDeckSetup()"),true);
+  assert.match(page.get("setupNotice").textContent,/Bot未対応/);
 });

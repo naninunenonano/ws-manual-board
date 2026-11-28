@@ -91,14 +91,19 @@ const connectDeckBuilder=(()=>{
       total:sum.total+card.num,cx:sum.cx+(card.cx?card.num:0)
     }),{total:0,cx:0,mixed:groups(deck).size>1});
   }
+  function catalogOnlyCount(deck){
+    return cards.reduce((total,card)=>total+(card.catalogOnly?totalCopies(deck,variants(card)):0),0);
+  }
   const complete=({total,cx,mixed})=>total===50&&cx===8&&!mixed;
   const describe=({total,cx,mixed})=>total+"/50枚（CX "+cx+"/8枚）"+(mixed?" ／ タイトルを1つにそろえてください":"");
   function refreshCounts(){
     const summaries=counts.map(summarize);
+    const pending=counts.map(catalogOnlyCount);
     totals.textContent=newDeck()?describe(summarize(newDraft)):
-      summaries.map((summary,p)=>(p===0?"自分":"Bot")+" "+describe(summary)).join(" ／ ");
+      summaries.map((summary,p)=>(p===0?"自分":"Bot")+" "+describe(summary)+
+        (pending[p]?"（Bot未対応 "+pending[p]+"枚）":"")).join(" ／ ");
     save.disabled=!deckName.value.trim()||!complete(summarize(currentDeck()));
-    start.disabled=!summaries.every(complete);
+    start.disabled=!summaries.every(complete)||pending.some(Boolean);
     start.hidden=newDeck();
     tabs.forEach((tab,p)=>tab.setAttribute("aria-pressed",String(p===editing)));
     rowUpdates.forEach(update=>update());
@@ -118,6 +123,7 @@ const connectDeckBuilder=(()=>{
       preview.className="bot-deck-card-preview carddetail";
       const info=document.createElement("small");
       info.textContent=card.cardNumber+" ／ "+card.color+" ／ "+(card.type==="climax"?"CX":(card.type==="event"?"イベント ":"")+"Lv"+card.stats.level);
+      if(card.catalogOnly)info.textContent+=" ／ Bot未対応";
       label.append(info);
       const editions=document.createElement("select");
       const editionNames=ids.map(id=>({S:"SR",R:"RRR"}[id.slice(card.cardNumber.length)]??(id.slice(card.cardNumber.length)||"通常")));
