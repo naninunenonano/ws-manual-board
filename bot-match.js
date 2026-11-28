@@ -605,15 +605,15 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
         case "branch":step(players[p].clock.length>=5?Math.min(1,prompt.labels.length-1):0);break;
         case "select":{
           const priority=card=>{
-            const def=botDefinition({id:card.cardNumber});
-            return Number(card.type==="climax")+Number(!!(def?.lookOnAttack||def?.millOnAttack));
+            const entry={id:card.cardNumber};
+            return Number(autoRuleBotKeepsCombo(p,entry))*4+Number(card.type==="climax")+Number(!!autoRuleBotComboCx(entry));
           };
           const candidates=prompt.from.zone==="hand"?[...prompt.candidates].sort((a,b)=>priority(a)-priority(b)):prompt.candidates;
           step(candidates.slice(0,prompt.max).map(card=>card.uid));
           break;
         }
         case "heal":step(prompt.max);break;
-        case "destination":step(prompt.destinations[0]);break;
+        case "destination":step((firenCombo&&prompt.destinations.find(destination=>destination.zone==="stock"))||prompt.destinations[0]);break;
         case "treasure":step(prompt.canStock);break;
         default:step();break;
       }
