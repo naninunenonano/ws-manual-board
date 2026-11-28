@@ -229,7 +229,7 @@ const oshiAdditionalActions={
         amount=oshiLevel(top)+1;
         top.faceUp=true;
         players[p].waiting.push(top);
-      },found=>found?botAbilityDamage(1-p,amount,done):done());
+      },found=>found?botAbilityDamage(1-p,amount,done,card):done());
     });
   },
   "oshi-kana-valentine":(p,card,done)=>oshiStageCost(p,card,paid=>{
@@ -240,7 +240,7 @@ const oshiAdditionalActions={
       if(board.clock.length)botMove(board,"clock",board.clock.length-1,"stock");
       done();
     }
-    function burn(){botAbilityDamage(1-p,1,()=>oshiTopTake(p,oshiAlly,done))}
+    function burn(){botAbilityDamage(1-p,1,()=>oshiTopTake(p,oshiAlly,done),card)}
     if(p===1){if(board.clock.length>=2)heal();else burn();return}
     const body=showResolution("有馬かな・解決する効果",[card]);
     deckButton(body,"クロックの上をストックへ",()=>{closeResolution();heal()});

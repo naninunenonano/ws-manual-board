@@ -587,7 +587,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
       if(!botApplyEffect(prompt.state,new Map(),p)){done?.(false);return}
       abortable=false;
       const target=prompt.side==="self"?p:1-p;
-      botAbilityDamage(target,prompt.amount,damage=>step({state:botEffectBoard(p),damage}));
+      botAbilityDamage(target,prompt.amount,damage=>step({state:botEffectBoard(p),damage}),card);
       return;
     }
     if(prompt.kind==="deck-empty"){
@@ -879,7 +879,12 @@ function showBotRevealResult(title,cards,done){
   deckButton(body,"確認して進む",()=>{closeResolution();done()});
 }
 
-function botAbilityDamage(target,amount,done){
+function botAbilityDamage(target,amount,done,source){
+  if(autoRuleOpposingDamageBlocked(target,source)){
+    autoRuleLog("正面のキャラの効果で能力ダメージを与えられない");
+    done({cards:[],cancelled:false});
+    return;
+  }
   const battle=autoRuleFrontBattle?.[target];
   const current=battle&&players[target][battle.slot].at(-1);
   if(current?.uid===battle?.uid&&frierenIs(current,"S128-003")&&frierenEisenCount(target)&&frierenStatues(target)>=3){

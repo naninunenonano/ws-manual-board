@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.88</title>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.89</title>
 <link rel="stylesheet" href="board-layout.css?v=0.59">
 <style>
 :root{font-family:system-ui,-apple-system,sans-serif;color:#edf1f8;background:#101827}*{box-sizing:border-box}body{margin:0}header{padding:12px 14px;background:#1a2840;display:flex;justify-content:space-between;align-items:center;gap:8px}h1{font-size:17px;margin:0}button,select{background:#263e61;color:white;border:1px solid #6581a5;border-radius:8px;padding:9px;font:inherit}button:disabled{opacity:.4}.shell{max-width:680px;margin:auto;padding:10px}.player{border:1px solid #49617e;border-radius:14px;margin:8px 0;padding:9px;background:#18243a}.player.active{border-color:#83b8ff}.player h2{font-size:14px;margin:0 0 8px;display:flex;justify-content:space-between}.modalcards .modal-card{display:flex;flex-direction:column;align-items:center;gap:4px;width:90px;min-height:128px;padding:5px;font-size:10px;overflow-wrap:anywhere}.modal-card img{height:100px;max-width:74px;object-fit:contain}.modal-card .card-back{height:100px;width:70px;background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px)}.zone.selected{outline:3px solid #f4cf73}.zone.empty{visibility:hidden}.stage{background:#30435e}.hand{display:flex;overflow-x:auto;gap:5px;padding:8px 0;min-height:80px}.card{flex:0 0 46px;height:66px;border:1px solid #9db3cc;border-radius:5px;background:#e4eaf1;color:#19273d;font-size:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:grab;user-select:none}.card.back{background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px);color:#fff}.card.selected{outline:3px solid #f4cf73}.card img{width:100%;height:100%;object-fit:contain;border-radius:4px;-webkit-touch-callout:none;-webkit-user-select:none}.card .cardlabel{font-size:9px;overflow-wrap:anywhere;padding:2px}.carddetail{display:grid;grid-template-columns:1fr;gap:7px;font-size:13px}.carddetail img{display:block;width:100%;max-width:100%;max-height:none;object-fit:contain;height:auto;-webkit-touch-callout:none;-webkit-user-select:none}.carddetail{max-width:100%}.carddetail .zoom-actions{display:flex;gap:8px;flex-wrap:wrap}.modalcards .modal-card img{object-fit:contain}#dialog{max-height:94dvh;overflow:auto}#dialog.zoom-mode{width:min(96vw,720px)}#dialog.zoom-mode .carddetail img{max-height:none}#dialog.zoom-mode{padding:8px}#dialog.zoom-mode #dialogTitle{font-size:14px;margin:2px 0 8px}.zone-zoom{border:0;background:#35557b;padding:2px 4px;font-size:10px;line-height:1.2;border-radius:4px;margin-top:2px}.card-zoom{position:absolute;right:0;bottom:0;background:#183453e8;border:0;border-radius:4px;padding:1px 3px;font-size:12px;line-height:1.4;color:white}.card{position:relative}.carddetail strong{color:#e7f0ff}.controls{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.controls button{font-size:12px}.notice{font-size:12px;color:#d3dfed;min-height:35px}.toolbar{display:flex;gap:5px;align-items:center;flex-wrap:wrap}.toolbar label{font-size:12px}dialog{background:#1a2840;color:white;border:1px solid #7191ba;border-radius:12px;max-width:95vw;width:420px}dialog::backdrop{background:#0009}.modalcards{display:flex;flex-wrap:wrap;gap:5px;max-height:50vh;overflow:auto}.muted{opacity:.7;font-size:11px}.count{font-size:11px;color:#bbd2f4}
@@ -25,7 +25,7 @@
 #botRecovery .modalcards li { flex:0 0 72px; justify-items:center; text-align:center; }
 #battleLogText { width:100%; min-height:min(52dvh,420px); resize:vertical; font:inherit; }
 </style><style>.bot-power{position:absolute;z-index:4;top:2px;left:2px;padding:2px 4px;border-radius:4px;background:#091426;color:white;font-size:.68rem;pointer-events:none}</style>
-</head><body><header><h1>WS 手動盤面 <small>Ver.0.88</small></h1></header>
+</head><body><header><h1>WS 手動盤面 <small>Ver.0.89</small></h1></header>
 <main class="shell"><p id="storageWarning" role="status" hidden></p><section id="setupScreen">
 <div class="screen-actions"><button id="openBotDeckEditor" type="button">デッキ作成・Bot戦</button></div>
 <details id="botSetup"><summary>Bot戦・確認パターン</summary>
@@ -1764,11 +1764,11 @@ document.getElementById("clockSkip").onclick=()=>{if(match?.turn?.phase==="clock
 <script src="effects/engine.js?v=stepwise-look-1"></script>
 <script src="card-data/load.js?v=2"></script>
 <script src="match-state.js?v=0.78"></script>
-<script src="auto-rules.js?v=0.85"></script>
+<script src="auto-rules.js?v=0.89"></script>
 <script src="stella-effects.js?v=0.84"></script>
-<script src="frieren-effects.js?v=0.84"></script>
-<script src="oshi-effects.js?v=0.85"></script>
-<script src="bot-match.js?v=0.85"></script>
+<script src="frieren-effects.js?v=0.89"></script>
+<script src="oshi-effects.js?v=0.89"></script>
+<script src="bot-match.js?v=0.89"></script>
 <script src="bot-deck-editor.js?v=0.86"></script>
 <script src="cloud-decks.js?v=0.52"></script>
 <script src="online-match.js?v=0.78"></script>

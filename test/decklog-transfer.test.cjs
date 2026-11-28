@@ -3695,3 +3695,54 @@ test("Bot戦の実カードは能力情報があっても手札と拡大に選�
   img.onerror();
   assert.ok(face.children.some(child=>child.className==="practice-card-face"));
 });
+
+test("アタック宣言で連鎖した退場時能力をすべて解決してからトリガーする",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    match.turn.player=1;
+    match.turn.phase="attack";
+    match.turn.number=3;
+    opponent.front0.push(card("001","attacker"));
+    opponent.back0.push(card("035","first"));
+    opponent.back1.push(card("016","second"));
+    opponent.deck.push(card("001","keep"),card("001","trigger"));
+    for(let i=0;i<5;i++)own.deck.push(card("001","damage-"+i));
+    const original=botTriggeredActions, trace=[];
+    botTriggeredActions=(p,source,timing,context)=>{
+      if(source.uid==="attacker"&&timing==="on_attack")return [{run:next=>{
+        trace.push("宣言");
+        botMove(opponent,"back0",0,"waiting");
+        next();
+      }}];
+      if(timing==="from_stage_to_waiting")return [{run:next=>{
+        trace.push(source.uid+":"+opponent.stock.length);
+        if(source.uid==="first")botMove(opponent,"back1",0,"waiting");
+        next();
+      }}];
+      return original(p,source,timing,context);
+    };
+    autoRuleAttack(1,"front0","attacker","direct");
+  `);
+  assert.equal(page.run("trace.join()"),"宣言,first:0,second:0");
+  assert.equal(page.run("opponent.stock.at(-1).uid"),"trigger");
+});
+
+test("正面からのダメージを無効にしてもバトルを行い、クロック送り後のバーンは通る",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    match.turn.player=1;
+    match.turn.phase="attack";
+    match.turn.number=3;
+    const attacker=card("004","attacker");
+    const guard={...card("001","guard"),botEntryBattleBuff:{blocksOpposingDamage:true,until:3}};
+    botDefinition(attacker).reverseMove={zone:"clock",damage:3};
+    opponent.front0.push(attacker);
+    own.front2.push(guard);
+    opponent.deck.push(card("001","keep"),card("001","trigger"));
+    for(let i=0;i<6;i++)own.deck.push(card("001","damage-"+i));
+    autoRuleAttack(1,"front0","attacker","front");
+  `);
+  assert.equal(page.run('own.clock.map(card=>card.uid).join()'),"guard,damage-5,damage-4,damage-3");
+  assert.equal(page.run("own.front2.length"),0);
+  assert.equal(page.run("own.deck.length"),3);
+});

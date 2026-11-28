@@ -754,7 +754,7 @@ function autoRuleDrawAfterCost(p,count,done){
   });
 }
 
-function autoRuleMillOnAttack(p,{cxId,count},done){
+function autoRuleMillOnAttack(p,{cxId,count},done,source){
   if(!players[p].cx.some(cx=>sameBotCardNumber(cx.id,cxId))){done();return}
   const target=1-p,board=players[target];
   let moved=0,climaxes=0;
@@ -762,7 +762,7 @@ function autoRuleMillOnAttack(p,{cxId,count},done){
     if(moved===count||!board.deck.length||board.level.length>=4){
       autoRuleLog("ゲートCXコンボ・山札の下から"+moved+"枚／CX "+climaxes+"枚");
       if(!climaxes||board.level.length>=4){done();return}
-      botAbilityDamage(target,climaxes,done);
+      botAbilityDamage(target,climaxes,done,source);
       return;
     }
     const card=botMove(board,"deck",0,"waiting");
@@ -793,11 +793,11 @@ function autoRuleResolveReversals(reversals,done){
     const methode=frierenIs(source,"S136-036")&&botEffectCard(target).level>=2&&players[owner].cx.length;
     const mage=frierenIs(target,"S108-T11")&&botEffectCard(source).level!=null&&botEffectCard(source).level<=0;
     return [
-      ...effects.filter(Boolean).map(effect=>({owner,target,slot,...effect})),
+      ...effects.filter(Boolean).map(effect=>({owner,source,target,slot,...effect})),
       ...granted.map(()=>({owner:1-owner,target:source,slot:sourceSlot,clockSwap:true})),
       ...oshiReverseActions(owner,source,target).map(action=>({owner,...action})),
       ...oshiTournamentReversals(owner,source,target),
-      ...(methode?[{owner,methode:true}]:[]),
+      ...(methode?[{owner,source,methode:true}]:[]),
       ...(oshiIs(source,"S121-030")&&oshiOther(owner,source).length>=2?[{owner,source,oshiReturn:true}]:[]),
       ...(mage?[{owner:1-owner,target:source,slot:sourceSlot,zone:"deck",position:"bottom",optional:true,anyOrientation:true}]:[]),
       ...(stellaIs(target,"025")?[{owner:1-owner,target:source,slot:sourceSlot,clockSwap:true,maxLevel:0}]:[]),
@@ -811,7 +811,7 @@ function autoRuleResolveReversals(reversals,done){
     const rival=players[1-owner];
     if(effect.run){effect.run(next);return}
     if(effect.oshiReturn){oshiAquaRubyReturn(owner,effect.source,next);return}
-    if(effect.methode){frierenMethodeReverse(owner,next);return}
+    if(effect.methode){frierenMethodeReverse(owner,next,effect.source);return}
     if(effect.frierenRetreat){frierenRetreat(owner,effect.source,next);return}
     if(effect.retreat){stellaT03Retreat(owner,effect.source,next);return}
     if(effect.clockSwap){
@@ -836,7 +836,10 @@ function autoRuleResolveReversals(reversals,done){
       autoRulePay(owner,stock);
       botMove(rival,slot,targetIndex,zone,effect.position??"top");
       autoRuleLog(botCardInfo(target).name+"を"+labels[zone]+"へ"+(stock?"（"+stock+"ストック支払い）":""));
-      resolveBoardRules(owner,()=>resolveBoardRules(1-owner,next));
+      resolveBoardRules(owner,()=>resolveBoardRules(1-owner,()=>{
+        if(effect.damage&&rival.level.length<4)botAbilityDamage(1-owner,effect.damage,next,effect.source);
+        else next();
+      }));
     }
     if((!stock&&!effect.optional)||owner===1){moveReversed();return}
     const destination=effect.position==="bottom"?"山札の下":labels[zone];
@@ -851,6 +854,13 @@ function autoRuleResolveReversals(reversals,done){
     run:next=>resolve(effect,next)
   }));
   botResolveTriggered(turn,actions(turn),()=>botResolveTriggered(1-turn,actions(1-turn),done));
+}
+function autoRuleOpposingDamageBlocked(target,source){
+  if(!source)return false;
+  const slot=botSlots.slice(0,3).find(zone=>players[1-target][zone].at(-1)?.uid===source.uid);
+  if(!slot)return false;
+  const defender=players[target][autoRuleOpposite(slot)].at(-1);
+  return autoRuleEntryBattleBuff(defender)?.blocksOpposingDamage===true;
 }
 let autoRuleFrontBattle;
 function autoRuleAttack(p,zone,uid,type){
@@ -870,26 +880,40 @@ function autoRuleAttack(p,zone,uid,type){
     autoRuleLog(action,false);
     const current=()=>board[zone].find(c=>c.uid===uid);
     const defender=()=>rival[opposite].find(c=>c.uid===targetUid);
+    function checkpoint(next){
+      autoRuleResolveWaiting(()=>{
+        if(rival.level.length>=4||board.level.length>=4||!isMatchActive())done();
+        else next();
+      });
+    }
+    function battle(){
+      if(type==="front")autoRuleResolveReversals(botBattle(p,zone,uid,targetUid,opposite)??[],done);
+      else done();
+    }
     function damage(){
       const active=current();
       if(!active){done();return}
+      if(autoRuleOpposingDamageBlocked(1-p,active)){
+        autoRuleLog("正面のキャラの効果でアタックダメージを与えられない");
+        battle();return;
+      }
       const amount=Math.max(0,botStats(p,active).soul??0);
       autoRuleLog("ソウル "+amount);
-      botDamage(1-p,amount,()=>{
-        if(type==="front")autoRuleResolveReversals(botBattle(p,zone,uid,targetUid,opposite)??[],done);
-        else done();
-      });
+      botDamage(1-p,amount,()=>checkpoint(battle));
     }
-    function counter(){if(type==="front")autoRuleCounter(1-p,current(),defender(),damage);else damage()}
+    function counter(){
+      if(type==="front")autoRuleCounter(1-p,current(),defender(),()=>checkpoint(damage));
+      else damage();
+    }
     let completedChecks=0;
     function trigger(remaining){
       if(!remaining){
         if(completedChecks===2&&oshiIs(attacker,"S107-035")&&board.stock.length)botMove(board,"stock",board.stock.length-1,"waiting");
-        counter();return
+        checkpoint(counter);return
       }
       let revealed;
       botRevealTop(p,card=>{revealed=card},found=>{
-        if(!found){counter();return}
+        if(!found){checkpoint(counter);return}
         completedChecks++;
         const icons=botTriggerIcons(p,revealed);
         const souls=icons.filter(icon=>icon==="ソウル").length;
@@ -897,10 +921,7 @@ function autoRuleAttack(p,zone,uid,type){
           if(current())autoRuleAddTurnStat(current(),"soul",souls);
           recordBotBattleAction("トリガーチェック"+(souls?"・ソウル＋"+souls:""),p,[revealed]);
           autoRuleLog("トリガー "+stellaName(revealed)+(souls?"（ソウル＋"+souls+"）":""),false);
-          botResolveAttackTrigger(p,revealed,current,()=>{
-            if(rival.level.length>=4||board.level.length>=4)done();
-            else trigger(remaining-1);
-          });
+          botResolveAttackTrigger(p,revealed,current,()=>checkpoint(()=>trigger(remaining-1)));
         }
         if(!isDeckMirror(match.bot.scenario)){resolve();return}
         const body=showResolution((p===side?"自分":"Bot")+"のトリガーチェック",[revealed]);
@@ -918,12 +939,16 @@ function autoRuleAttack(p,zone,uid,type){
     function afterAttackAbilities(){
       if(rival.level.length>=4||board.level.length>=4){done();return}
       const definition=botDefinition(attacker);
-      const check=()=>triggerChecks?trigger(triggerChecks):autoRuleTriggerCount(p,definition?.extraTriggerCost,trigger);
+      const startChecks=n=>checkpoint(()=>trigger(n));
+      const check=()=>checkpoint(()=>{
+        if(triggerChecks)trigger(triggerChecks);
+        else autoRuleTriggerCount(p,definition?.extraTriggerCost,startChecks);
+      });
       const afterLook=()=>{
         if(!definition?.millOnAttack){check();return}
         autoRuleMillOnAttack(p,definition.millOnAttack,()=>{
           if(rival.level.length>=4)done();else check();
-        });
+        },attacker);
       };
       if(definition?.lookOnAttack)autoRuleLookOnAttack(p,definition.lookOnAttack,afterLook);
       else afterLook();
