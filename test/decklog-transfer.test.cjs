@@ -3864,3 +3864,29 @@ test("フリーレンBotは手札が3枚でも次の展開札がなければ攻�
   assert.equal(page.run("opponent.back0[0].orientation"),90);
   assert.equal(page.run("opponent.front2.length"),0);
 });
+
+test("デッキ作成で採用版だけを表示し、画像を拡大できる",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.click("openBotDeckEditor");
+  page.click("editNewDeck");
+  const list=page.get("botDeckCardRows");
+  const find=()=>list.children.find(row=>row.children[0]?.textContent==="爽風の才媛 ナツカ");
+  const versions=find().children[0].children[1];
+  versions.value="STS/W140-004SP";
+  versions.onchange();
+  find().children[1].children[2].onclick();
+  const filter=page.get("builderIncludedOnly");
+  filter.checked=true;
+  filter.onchange();
+  assert.equal(list.children.length,1);
+  const [label,controls,preview]=find().children;
+  assert.equal(label.children.length,1);
+  preview.onclick();
+  assert.equal(page.get("dialogTitle").textContent,"爽風の才媛 ナツカ");
+  assert.match(page.get("dialogBody").children[0].children[0].children[0].src,/wsstsw140_009\.jpg$/);
+  controls.children[0].onclick();
+  assert.equal(list.children[0].textContent,"採用カードがありません");
+  filter.checked=false;
+  filter.onchange();
+  assert.ok(list.children.length>1);
+});

@@ -55,6 +55,7 @@ const connectDeckBuilder=(()=>{
   const save=get("saveBuiltOnlineDeck"), deckName=get("builtOnlineDeckName");
   const presetSelect=get("botDeckPreset"), savedSelect=get("loadBuilderDeck");
   const load=get("applyBuilderDeck"), titleFilter=get("builderTitleFilter");
+  const includedOnly=get("builderIncludedOnly");
   let counts,cards=[],editing=0,newDraft={},readSavedDecks;
   const newDeck=()=>editing===2;
   const currentDeck=()=>newDeck()?newDraft:counts[editing];
@@ -142,15 +143,27 @@ const connectDeckBuilder=(()=>{
   function renderRows(){
     list.replaceChildren();
     rowUpdates.length=0;
-    for(const card of cards.filter(card=>card.cardNumber.startsWith((titleFilter.value||"STS")+"/"))){
-      const ids=variants(card),row=document.createElement("li");
+    const deck=currentDeck(),adopted=includedOnly.checked;
+    const visible=cards.filter(card=>adopted?totalCopies(deck,variants(card))>0:
+      card.cardNumber.startsWith((titleFilter.value||"STS")+"/"));
+    if(adopted&&!visible.length){
+      const empty=document.createElement("li");
+      empty.textContent="採用カードがありません";
+      list.append(empty);
+    }
+    for(const card of visible){
+      const allIds=variants(card);
+      const ids=adopted?allIds.filter(id=>deck[id]>0):allIds;
+      const row=document.createElement("li");
       let selectedId=ids.find(id=>currentDeck()[id])??card.cardNumber;
       let previewId;
       row.className="bot-deck-card-row";
       const label=document.createElement("div");
       label.className="bot-deck-card-info";
       label.textContent=card.name;
-      const preview=document.createElement("div");
+      const preview=document.createElement("button");
+      preview.type="button";
+      preview.onclick=()=>showCardDetail({id:selectedId,cx:card.type==="climax"},card.name);
       preview.className="bot-deck-card-preview carddetail";
       const info=document.createElement("small");
       info.textContent=card.cardNumber+" ／ "+card.color+" ／ "+(card.type==="climax"?"CX":(card.type==="event"?"イベント ":"")+"Lv"+card.stats.level);
@@ -187,10 +200,11 @@ const connectDeckBuilder=(()=>{
       plus.textContent="＋";
       function change(delta){
         const deck=currentDeck(),num=(deck[selectedId]??0)+delta;
-        if(num<0||(delta>0&&totalCopies(deck,ids)>=4))return;
+        if(num<0||(delta>0&&totalCopies(deck,allIds)>=4))return;
         if(num)deck[selectedId]=num;
         else delete deck[selectedId];
         if(!newDeck())saveCounts();
+        if(adopted&&num===0)renderRows();
         refreshCounts();
       }
       minus.onclick=()=>change(-1);
@@ -201,13 +215,14 @@ const connectDeckBuilder=(()=>{
         if(previewId!==selectedId){
           previewId=selectedId;
           preview.replaceChildren();
+          preview.setAttribute("aria-label",card.name+edition+"を拡大");
           addCardImage(preview,{id:selectedId},card.name+edition,effectChoiceImageUrl);
         }
         amount.textContent=String(num);
         minus.setAttribute("aria-label",card.name+edition+"を1枚減らす");
         plus.setAttribute("aria-label",card.name+edition+"を1枚増やす");
         minus.disabled=num===0;
-        plus.disabled=totalCopies(deck,ids)>=4;
+        plus.disabled=totalCopies(deck,allIds)>=4;
         for(const [index,id] of ids.entries()){
           if(ids.length>1)editions.children[index].textContent=editionNames[index]+" · "+(deck[id]??0)+"枚";
         }
@@ -298,6 +313,7 @@ const connectDeckBuilder=(()=>{
     refreshCounts();
   };
   titleFilter.onchange=()=>{renderRows();refreshCounts()};
+  includedOnly.onchange=()=>{titleFilter.disabled=includedOnly.checked;renderRows();refreshCounts()};
   presetSelect.onchange=refreshPresetSource;
   apply.onclick=()=>{
     const preset=presets[presetSelect.value];

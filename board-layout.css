@@ -367,3 +367,8 @@ button.zone-fan-card[data-clock-index] {
   line-height: 1.3;
 }
 .stage-placement-target:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+
+button.bot-deck-card-preview {
+  padding: 0;
+  cursor: zoom-in;
+}
