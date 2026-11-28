@@ -30,9 +30,9 @@ test("implemented normal cards use matching Card Labo images and unavailable var
   assert.equal(isKnownClimaxImage("SFN/S108-T04"),false);
 });
 
-test("the two tournament recipes use their Card Labo prints when available",()=>{
+test("tournament recipe cards use their Card Labo prints when available",()=>{
   const cards=require("../card-data/catalog.json").cards.filter(card=>/^(OSK|AOH)\//.test(card.cardNumber));
-  assert.equal(cards.length,39);
+  assert.equal(cards.length,52);
   for(const {cardNumber,type} of cards){
     if(cardNumber==="OSK/S133-P01"){
       assert.equal(cardImageUrl(cardNumber),officialImageUrl(cardNumber));

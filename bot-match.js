@@ -389,6 +389,7 @@ function botTriggeredActions(p,card,timing,context={}){
     else if(Object.hasOwn(frierenActions,effect.id))frierenActions[effect.id](p,card,resume);
     else if(Object.hasOwn(oshiActions,effect.id))oshiActions[effect.id](p,card,resume);
     else if(Object.hasOwn(oshiAdditionalActions,effect.id))oshiAdditionalActions[effect.id](p,card,resume,context);
+    else if(Object.hasOwn(oshiTournamentActions,effect.id))oshiTournamentActions[effect.id](p,card,resume);
     else if(effect.reorderTop)autoRuleReorderTop(p,resume);
     else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
     else if(effect.traitLoot)autoRuleTraitLoot(p,card,effect,resume);
@@ -1056,6 +1057,7 @@ function renderBotControls(){
 function botDefinitionForAbilities(card){
   if(!card||match.turn.player!==0||match.turn.phase!=="main"||ruleBusy)return [];
   return (botDefinition(card)?.effects??[]).filter(ability=>ability.type==="activated"&&
+    oshiTournamentAbilityReady(0,card,ability.id)&&
     (ability.id!=="oshi-tsukuyomi-clock"||oshiTsukuyomiReady(0,card))&&
     (ability.id!=="teresa-recall"||card.orientation===0&&players[0].hand.length>0)&&
     (ability.id!=="replace-with-natsuka"||players[0].level.length>=3)&&
@@ -1142,6 +1144,7 @@ function openBotAbility(){
     if(Object.hasOwn(stellaActions,ability.id)){runRuleOperation(done=>stellaActions[ability.id](0,card,done));return}
     if(Object.hasOwn(frierenActions,ability.id)){runRuleOperation(done=>frierenActions[ability.id](0,card,done));return}
     if(Object.hasOwn(oshiActions,ability.id)){runRuleOperation(done=>oshiActions[ability.id](0,card,done));return}
+    if(Object.hasOwn(oshiTournamentActions,ability.id)){runRuleOperation(done=>oshiTournamentActions[ability.id](0,card,done));return}
     runRuleOperation(done=>botGuide(card,ability,done));
   });
 }

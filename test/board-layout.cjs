@@ -301,7 +301,7 @@ async function checkBotDeckEditor(browser,url){
     await page.getByRole("heading",{name:"デッキ作成・Bot戦"}).waitFor();
     const start=page.locator("#startEditedBotBattle");
     await page.locator("#editNewDeck").tap();
-    for(const [preset,title,count] of [["sakurarium","OSK",21],["aogiri","AOH",18]]){
+    for(const [preset,title,count] of [["sakurarium","OSK",34],["r6d3n","OSK",34],["vhl0","OSK",34],["aogiri","AOH",18]]){
       await page.locator("#botDeckPreset").selectOption(preset);
       await page.locator("#applyBotDeckPreset").tap();
       assert.equal(await page.locator("#builderTitleFilter").inputValue(),title);

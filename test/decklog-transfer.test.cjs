@@ -3615,3 +3615,60 @@ test("共鳴の手札コストは、公開できる個人間オーディショ�
   assert.equal(page.run("opponent.waiting.at(-1).uid"),"ruby");
   assert.equal(page.run("opponent.hand[0].uid"),"event");
 });
+
+test("R6D3Nと13VHL0をプリセットから対戦に設定できる",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.settle();
+  page.click("openBotDeckEditor");
+  await page.settle();
+  for(const [tab,preset] of [["editOwnBotDeck","r6d3n"],["editOpponentBotDeck","vhl0"]]){
+    page.click(tab);
+    page.get("botDeckPreset").value=preset;
+    page.click("applyBotDeckPreset");
+  }
+  assert.equal(page.get("startEditedBotBattle").disabled,false);
+  page.click("startEditedBotBattle");
+  assert.equal(page.run("match.phase"),"mulligan");
+  assert.equal(page.run("match.decks.map(d=>d.cards.length).join()"),"19,21");
+  assert.equal(page.run("match.decks.map(d=>d.cards.reduce((sum,c)=>sum+c.num,0)).join()"),"50,50");
+  assert.equal(page.run("match.decks.map(d=>d.cards.filter(c=>c.cx).reduce((sum,c)=>sum+c.num,0)).join()"),"8,8");
+  assert.equal(page.run('match.decks[0].cards.find(c=>c.id==="OSK/S133-013").num'),4);
+  assert.equal(page.run('match.decks[1].cards.find(c=>c.id==="OSK/S121-045").num'),2);
+});
+
+test("経験MEMちょは合計5で強化と手札アンコールを得る",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const osk=(n,uid)=>({id:"OSK/S"+n,uid,faceUp:true,orientation:0,cx:false});
+    match.turn.player=1;
+    const mem=osk("133-013","mem");
+    opponent.front0.push(mem);
+    opponent.hand.push(osk("133-003","cost"));
+    opponent.level.push(osk("133-037","level3"));
+  `);
+  assert.equal(page.run("botStats(1,mem).power"),7000);
+  assert.equal(page.run("oshiEncoreHand(1,mem).length"),0);
+  page.run('opponent.level.push(osk("121-047","level2"));');
+  assert.equal(page.run("botStats(1,mem).power"),12000);
+  page.run('oshiHandEncore(1,"front0",mem,oshiEncoreHand(1,mem)[0]);');
+  assert.equal(page.run("opponent.front0[0].orientation"),90);
+  assert.equal(page.run("opponent.waiting[0].uid"),"cost");
+});
+
+test("本番前ルビーの助太刀でリバースした相手を思い出へ置く",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const osk=(n,uid)=>({id:"OSK/S"+n,uid,faceUp:true,orientation:0,cx:false});
+    match.turn.player=0;
+    own.front0.push(osk("133-003","attacker"));
+    opponent.front2.push(osk("107-034","defender"));
+    opponent.hand.push(osk("107-014","backup"));
+    opponent.level.push(osk("133-037","level1"),osk("121-047","level2"));
+    opponent.stock.push(osk("133-003","stock"));
+    autoRuleCounter(1,own.front0[0],opponent.front2[0],()=>{});
+    const result=botBattle(0,"front0","attacker","defender","front2");
+    autoRuleResolveReversals(result,()=>{});
+  `);
+  assert.equal(page.run("own.memory[0]?.uid"),"attacker");
+  assert.equal(page.run("opponent.front2[0].turnPowerBonus"),3000);
+});
