@@ -273,7 +273,7 @@ function botStats(p,card){
       }
     }
   }
-  if(power!=null)power+=stellaPower(p,card)+frierenPower(p,card);
+  if(power!=null)power+=stellaPower(p,card)+frierenPower(p,card)+oshiPower(p,card);
   return {power,soul};
 }
 
@@ -332,6 +332,9 @@ function botStageEntry(p,card,from,done){
 function botAttackTriggeredActions(p,attacker){
   const board=players[p];
   const actions=frierenHimmelMemoryActions(p,attacker);
+  if(oshiAlly(attacker))for(const ruby of oshiFrontRuby(p))actions.push({
+    label:stellaName(ruby)+"・山札上を確認",run:next=>oshiRubyTop(p,next)
+  });
   if(["巡遊者","魔王"].some(trait=>matchesPracticeTrait(attacker,trait))){
     for(const marker of attacker.markers??[]){
       const effect=marker.faceUp&&botMarkerAbility(marker.card,"marker_host_attack");
@@ -383,6 +386,7 @@ function botTriggeredActions(p,card,timing,context={}){
   return effects.map(effect=>({label:stellaName(card)+"・"+(effect.category??effect.id),run:resume=>{
     if(Object.hasOwn(stellaActions,effect.id))stellaActions[effect.id](p,card,resume,context);
     else if(Object.hasOwn(frierenActions,effect.id))frierenActions[effect.id](p,card,resume);
+    else if(Object.hasOwn(oshiActions,effect.id))oshiActions[effect.id](p,card,resume);
     else if(effect.reorderTop)autoRuleReorderTop(p,resume);
     else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
     else if(effect.traitLoot)autoRuleTraitLoot(p,card,effect,resume);
@@ -990,6 +994,7 @@ function botTriggerEffect(p,trigger,done){
     return;
   }
   function stock(){trigger.faceUp=false;board.stock.push(trigger);done()}
+  if(botTriggerIcons(p,trigger).includes("スタンバイ")){oshiStandby(p,stock);return}
   if(frierenChoice(trigger)){frierenChoiceTrigger(p,stock);return}
   if(isAutoRules()){stock();return}
   const body=showResolution("トリガーチェック",[trigger]);

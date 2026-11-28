@@ -545,7 +545,9 @@ function autoRuleDispatchBoard(p,timing,done){
   botResolveTriggered(p,actions,done);
 }
 function autoRuleAttackStart(done){
-  autoRuleDispatchBoard(1-match.turn.player,"at_opponent_attack_start",()=>autoRuleResolveWaiting(done));
+  const turn=match.turn.player;
+  autoRuleDispatchBoard(turn,"at_attack_start",()=>
+    autoRuleDispatchBoard(1-turn,"at_opponent_attack_start",()=>autoRuleResolveWaiting(done)));
 }
 function autoRuleDraw(p){
   match.turn.drawPending=true;

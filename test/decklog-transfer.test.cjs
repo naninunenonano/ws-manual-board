@@ -79,6 +79,7 @@ function launch(hash = "", storage = new Map(), replaceState = null, randomValue
   vm.runInContext(read("auto-rules.js"),context);
   vm.runInContext(read("stella-effects.js"),context);
   vm.runInContext(read("frieren-effects.js"),context);
+  vm.runInContext(read("oshi-effects.js"),context);
   vm.runInContext(read("bot-match.js"),context);
   vm.runInContext(read("bot-deck-editor.js"),context);
   vm.runInContext(importScript,context);
@@ -3374,4 +3375,44 @@ test("カード情報のみの収録カードを含むデッキはBot戦を開�
   `);
   assert.equal(page.run("isDeckSetup()"),true);
   assert.match(page.get("setupNotice").textContent,/Bot未対応/);
+});
+
+test("スタンバイでレベル＋1までのキャラをレストで出し、ルビーが対応CXを使ってスタンドする",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const oshi=(number,uid,cx=false)=>({id:"OSK/"+number,uid,cx,faceUp:true,orientation:0});
+    match.turn.player=1;
+    match.turn.phase="climax";
+    opponent.level.push(oshi("S133-003","red"),oshi("S133-043","second"));
+    opponent.back0.push(oshi("S133-003","ally-1"));
+    opponent.back1.push(oshi("S133-043","ally-2"));
+    opponent.waiting.push(oshi("S133-037","ruby"),oshi("S133-003","recover"));
+    opponent.hand.push(oshi("S133-059","standby",true));
+    opponent.deck.push(oshi("S133-003","deck"));
+    autoRuleResolvePlay(1,0,"cx",()=>{});
+  `);
+  assert.equal(page.run("opponent.front0[0].orientation"),90);
+  assert.equal(page.run("botStats(1,opponent.front0[0]).power"),11000);
+  page.run('match.turn.phase="attack";autoRuleAttackStart(()=>{});');
+  assert.equal(page.run("opponent.front0[0].orientation"),0);
+  assert.equal(page.run("opponent.cx.length"),0);
+  assert.equal(page.run('opponent.waiting.some(card=>card.uid==="standby")'),true);
+  assert.equal(page.run("opponent.hand[0].uid"),"recover");
+});
+
+test("ルビーの攻撃時コンボは公開した山札上を残し、そのレベル以下のキャラだけ回収する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const oshi=(number,uid,cx=false)=>({id:"OSK/"+number,uid,cx,faceUp:true,orientation:0});
+    match.turn.player=1;
+    opponent.front0.push(oshi("S133-043","ruby"));
+    opponent.back0.push(oshi("S133-003","ally"));
+    opponent.deck.push(oshi("S133-059","top",true));
+    opponent.cx.push(oshi("S133-060","combo",true));
+    opponent.waiting.push(oshi("S133-037","too-high"),oshi("S133-003","eligible"));
+    botDispatch(opponent.front0[0],"on_attack",()=>{},1);
+  `);
+  assert.equal(page.run("opponent.deck.at(-1).uid"),"top");
+  assert.equal(page.run("opponent.hand[0].uid"),"eligible");
+  assert.equal(page.run("botStats(1,opponent.front0[0]).power"),8000);
 });
