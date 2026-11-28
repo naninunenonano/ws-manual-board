@@ -3416,3 +3416,78 @@ test("ルビーの攻撃時コンボは公開した山札上を残し、その�
   assert.equal(page.run("opponent.hand[0].uid"),"eligible");
   assert.equal(page.run("botStats(1,opponent.front0[0]).power"),8000);
 });
+
+test("双星は芸能界4枚で早出しでき、登場時に回復し、バトルに勝つと手札へ戻れる",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const oshi=(number,uid)=>({id:"OSK/"+number,uid,faceUp:true,orientation:0,cx:false});
+    match.turn.player=1;
+    match.turn.phase="main";
+    for(const slot of botSlots.slice(1))opponent[slot].push(oshi("S133-003",slot));
+    opponent.hand.push(oshi("S121-030","aqua-ruby"));
+    opponent.level.push(oshi("S133-003","red"),oshi("S133-043","second"));
+    opponent.clock.push(oshi("S133-003","damage"));
+    opponent.stock.push(oshi("S133-003","stock1"),oshi("S133-003","stock2"));
+    opponent.deck.push(oshi("S133-003","deck"));
+    own.front2.push(card("001","opponent"));
+  `);
+  assert.equal(page.run('autoRuleLegalPlay(1,opponent.hand[0],"main","character")'),"");
+  page.run('autoRuleResolvePlay(1,0,"front0",()=>{});');
+  assert.equal(page.run("opponent.clock.length"),0);
+  assert.equal(page.run("botStats(1,opponent.front0[0]).power"),10000);
+  page.run('autoRuleResolveReversals(botBattle(1,"front0","aqua-ruby","opponent","front2"),()=>{});');
+  assert.equal(page.run("opponent.hand[0]?.uid"),"aqua-ruby");
+});
+
+test("ツクヨミは自身以外を強化し、コストを払いクロックの下の札も回収する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const oshi=(number,uid)=>({id:"OSK/"+number,uid,faceUp:true,orientation:0,cx:false});
+    match.turn.player=1;
+    opponent.back0.push(oshi("S133-046","tsukuyomi"));
+    opponent.front0.push(oshi("S133-003","ally"));
+    opponent.stock.push(oshi("S133-003","stock1"),oshi("S133-003","stock2"));
+    opponent.hand.push(oshi("S133-003","discard"));
+    opponent.clock.push(oshi("S133-003","bottom"),oshi("S133-043","top"));
+  `);
+  assert.equal(page.run("botStats(1,opponent.back0[0]).power"),5000);
+  assert.equal(page.run("botStats(1,opponent.front0[0]).power"),2500);
+  page.run('oshiTsukuyomiClock(1,opponent.back0[0],()=>{});');
+  assert.equal(page.run("opponent.stock.length"),0);
+  assert.equal(page.run("opponent.back0[0].orientation"),90);
+  assert.equal(page.run("opponent.hand[0].uid"),"bottom");
+  assert.equal(page.run("opponent.clock[0].uid"),"top");
+});
+
+test("メモ魔の助太刀は芸能界のキャラの枚数だけ相手の山札の下を落とす",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const oshi=(number,uid)=>({id:"OSK/"+number,uid,faceUp:true,orientation:0,cx:false});
+    opponent.front0.push(oshi("S133-003","defender"));
+    opponent.back0.push(oshi("S133-046","ally"));
+    opponent.hand.push(oshi("S107-093","backup"));
+    opponent.stock.push(oshi("S133-003","stock"));
+    opponent.level.push(oshi("S133-003","lv1"),oshi("S133-003","lv2"));
+    own.deck.push(card("001","bottom"),card("001","middle"),card("001","top"));
+    autoRuleCounter(1,card("001","attacker"),opponent.front0[0],()=>{});
+  `);
+  assert.equal(page.run("opponent.front0[0].turnPowerBonus"),3000);
+  assert.equal(page.run('own.waiting.map(card=>card.uid).join()'),"bottom,middle");
+  assert.equal(page.run("own.deck[0].uid"),"top");
+});
+
+test("個人間オーディションは山札上の1枚を手札に加え、青の手札を捨てると戻る",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const oshi=(number,uid)=>({id:"OSK/"+number,uid,faceUp:true,orientation:0,cx:false});
+    opponent.front0.push(oshi("S133-003","ally"));
+    opponent.hand.push(oshi("S133-095","event"),oshi("S133-061","blue"));
+    opponent.stock.push(oshi("S133-003","stock"));
+    opponent.deck.push(oshi("S133-003","unseen"),oshi("S133-003","third"),oshi("S133-003","second"),oshi("S133-003","first"));
+    const definition=botDefinition(opponent.hand[0]);
+    autoRuleResolveEvent(1,0,definition,autoRuleEventEffect(definition),()=>{});
+  `);
+  assert.equal(page.run('opponent.hand.map(card=>card.uid).join()'),"first,event");
+  assert.equal(page.run('opponent.waiting.map(card=>card.uid).sort().join()'),"blue,second,stock,third");
+  assert.equal(page.run("opponent.deck[0].uid"),"unseen");
+});

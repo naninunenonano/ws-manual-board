@@ -1054,6 +1054,7 @@ function renderBotControls(){
 function botDefinitionForAbilities(card){
   if(!card||match.turn.player!==0||match.turn.phase!=="main"||ruleBusy)return [];
   return (botDefinition(card)?.effects??[]).filter(ability=>ability.type==="activated"&&
+    (ability.id!=="oshi-tsukuyomi-clock"||oshiTsukuyomiReady(0,card))&&
     (ability.id!=="teresa-recall"||card.orientation===0&&players[0].hand.length>0)&&
     (ability.id!=="replace-with-natsuka"||players[0].level.length>=3)&&
     (ability.id!=="frieren-statue"||card.orientation===0&&players[0].stock.length>0)&&
@@ -1138,6 +1139,7 @@ function openBotAbility(){
     if(ability.id==="replace-with-natsuka"){runRuleOperation(done=>botReplaceWithNatsuka(0,card,done));return}
     if(Object.hasOwn(stellaActions,ability.id)){runRuleOperation(done=>stellaActions[ability.id](0,card,done));return}
     if(Object.hasOwn(frierenActions,ability.id)){runRuleOperation(done=>frierenActions[ability.id](0,card,done));return}
+    if(Object.hasOwn(oshiActions,ability.id)){runRuleOperation(done=>oshiActions[ability.id](0,card,done));return}
     runRuleOperation(done=>botGuide(card,ability,done));
   });
 }

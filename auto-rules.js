@@ -475,7 +475,7 @@ function autoRuleResolvePlay(p,index,zone,done){
   if(zone==="cx")botResolveTriggered(p,[...botTriggeredActions(p,card,"on_cx_play"),...frierenEisenActions(p,card)],finish);
   else botStageEntry(p,card,"hand",finish);
 }
-const autoRuleEventEffects=Object.freeze({"光景":resolveKoukei,"ヴェルジュ":(p,done)=>stellaVerge(p,done),"銅像の錆":(p,done)=>frierenRustMagic(p,done),"未来予知":(p,done)=>frierenProphecy(p,done)});
+const autoRuleEventEffects=Object.freeze({"光景":resolveKoukei,"ヴェルジュ":(p,done)=>stellaVerge(p,done),"銅像の錆":(p,done)=>frierenRustMagic(p,done),"未来予知":(p,done)=>frierenProphecy(p,done),"個人間オーディション":(p,done)=>oshiAudition(p,done)});
 function autoRuleEventEffect(definition){
   const name=definition?.effects?.some(effect=>effect.id==="verge-event")?"ヴェルジュ":definition?.eventEffect;
   return definition?.type==="event"&&Object.hasOwn(autoRuleEventEffects,name)?autoRuleEventEffects[name]:null;
@@ -789,6 +789,7 @@ function autoRuleResolveReversals(reversals,done){
       ...effects.filter(Boolean).map(effect=>({owner,target,slot,...effect})),
       ...granted.map(()=>({owner:1-owner,target:source,slot:sourceSlot,clockSwap:true})),
       ...(methode?[{owner,methode:true}]:[]),
+      ...(oshiIs(source,"S121-030")&&oshiOther(owner,source).length>=2?[{owner,source,oshiReturn:true}]:[]),
       ...(mage?[{owner:1-owner,target:source,slot:sourceSlot,zone:"deck",position:"bottom",optional:true,anyOrientation:true}]:[]),
       ...(stellaIs(target,"025")?[{owner:1-owner,target:source,slot:sourceSlot,clockSwap:true,maxLevel:0}]:[]),
       ...(source.gainedAbilities??[]).flatMap(id=>id==="frieren-reverse-memory"?[{owner,target,slot,zone:"memory",optional:true}]:
@@ -799,6 +800,7 @@ function autoRuleResolveReversals(reversals,done){
   function resolve(effect,next){
     const {owner,target,slot,zone,stock=0}=effect;
     const rival=players[1-owner];
+    if(effect.oshiReturn){oshiAquaRubyReturn(owner,effect.source,next);return}
     if(effect.methode){frierenMethodeReverse(owner,next);return}
     if(effect.frierenRetreat){frierenRetreat(owner,effect.source,next);return}
     if(effect.retreat){stellaT03Retreat(owner,effect.source,next);return}
@@ -834,7 +836,7 @@ function autoRuleResolveReversals(reversals,done){
   }
   const turn=match.turn.player;
   const actions=p=>pending.filter(effect=>effect.owner===p).map(effect=>({
-    label:effect.methode?"猛攻 メトーデ・相手の山札下5枚":effect.frierenRetreat?"仲間を後列へ移動":effect.retreat?stellaName(effect.source)+"・後列へ移動":
+    label:effect.oshiReturn?stellaName(effect.source)+"・手札に戻す":effect.methode?"猛攻 メトーデ・相手の山札下5枚":effect.frierenRetreat?"仲間を後列へ移動":effect.retreat?stellaName(effect.source)+"・後列へ移動":
       stellaName(effect.target)+"を"+(effect.position==="bottom"?"山札の下":labels[effect.clockSwap?"clock":effect.zone])+"へ",
     run:next=>resolve(effect,next)
   }));
@@ -1136,6 +1138,9 @@ function autoRuleBotMain(p,done){
     sideEffects();
   }
   function sideEffects(){
+    const tsukuyomi=stellaStage(p).find(card=>oshiIs(card,"S133-046")&&
+      stellaStageSlot(board,card).startsWith("back")&&oshiTsukuyomiReady(p,card));
+    if(tsukuyomi&&board.clock.length>=4){oshiTsukuyomiClock(p,tsukuyomi,playEvent);return}
     const heiter=stellaStage(p).find(card=>frierenIs(card,"S136-005")&&stellaStageSlot(board,card).startsWith("back"));
     if(heiter&&board.hand.length<=3&&stellaStage(p).some(card=>card.orientation===180)){
       frierenHeiterSearch(p,heiter,playEvent);return;

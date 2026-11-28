@@ -13,7 +13,8 @@ function oshiPower(p,card){
   if(!card.faceUp||!oshiAlly(card)||!stellaStage(p).includes(card))return 0;
   const rubyPower=1000*oshiFrontRuby(p).length;
   const ownTurnPower=oshiIs(card,"S133-043")&&match.turn.player===p&&oshiOther(p,card).length?3000:0;
-  return rubyPower+ownTurnPower;
+  const tsukuyomiPower=1000*oshiOther(p,card).filter(source=>oshiIs(source,"S133-046")).length;
+  return rubyPower+ownTurnPower+tsukuyomiPower;
 }
 
 function oshiStandby(p,done){
@@ -60,7 +61,60 @@ function oshiRubyTop(p,done){
   deckButton(body,"控え室に置く",()=>{closeResolution();move(true)});
 }
 
+function oshiAquaRubyReturn(p,card,done){
+  const board=players[p],slot=stellaStageSlot(board,card);
+  if(!slot){done();return}
+  stellaConfirm(p,"導かれし双星を手札に戻す？",use=>{
+    if(use)stellaMove(board,slot,card,"hand");
+    done();
+  });
+}
+
+function oshiTsukuyomiReady(p,card){
+  const board=players[p];
+  return card.orientation===0&&board.stock.length>=2&&board.hand.length>0&&board.clock.length>0;
+}
+
+function oshiTsukuyomiClock(p,card,done){
+  if(!oshiTsukuyomiReady(p,card)){done();return}
+  const board=players[p];
+  stellaChoose(p,"ツクヨミ・控え室に置く手札",board.hand,cost=>{
+    if(!cost){done();return}
+    autoRulePay(p,2);
+    stellaMove(board,"hand",cost,"waiting");
+    card.orientation=90;
+    stellaChoose(p,"ツクヨミ・クロックから手札に戻すカード",board.clock,target=>{
+      if(target)stellaMove(board,"clock",target,"hand");
+      done();
+    });
+  },{optional:true});
+}
+
+function oshiAudition(p,done){
+  const board=players[p];
+  if(!stellaStage(p).every(oshiAlly)){done();return}
+  autoRuleLookTop(p,3,"個人間オーディション","カード",()=>true,()=>{
+    if(players.some(player=>player.level.length>=4)){done();return}
+    stellaChoose(p,"個人間オーディション・再利用に使う青の手札",
+      board.hand.filter(card=>botDefinition(card)?.color==="青"),cost=>{
+        if(cost)stellaMove(board,"hand",cost,"waiting");
+        done(cost?"hand":"waiting");
+      },{optional:true});
+  });
+}
+
 const oshiActions=Object.freeze({
+  "oshi-aqua-ruby-heal":(p,card,done)=>{
+    const clock=players[p].clock;
+    if(!clock.length){done();return}
+    stellaConfirm(p,"導かれし双星・クロックの上から1枚を回復する？",use=>{
+      if(use)stellaMove(players[p],"clock",clock.at(-1),"waiting");
+      done();
+    });
+  },
+  "oshi-akane-backup-mill":(p,card,done)=>
+    frierenMill(1-p,stellaStage(p).filter(oshiAlly).length,true,()=>done()),
+  "oshi-tsukuyomi-clock":oshiTsukuyomiClock,
   "oshi-standby":(p,card,done)=>oshiStandby(p,done),
   "oshi-ruby-ready":(p,card,done)=>{
     const board=players[p],cx=board.cx.find(entry=>oshiIs(entry,"S133-059"));
