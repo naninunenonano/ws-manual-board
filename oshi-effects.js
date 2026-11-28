@@ -16,7 +16,10 @@ function oshiPower(p,card){
   const tsukuyomiPower=1000*oshiOther(p,card).filter(source=>oshiIs(source,"S133-046")).length;
   const idolPower=1500*oshiOther(p,card).filter(source=>oshiIs(source,"S107-044")).length;
   const coffeePower=oshiIs(card,"S121-065")&&match.turn.player===p?1000:0;
-  return rubyPower+ownTurnPower+tsukuyomiPower+idolPower+coffeePower;
+  const gotandaPower=500*oshiOther(p,card).filter(source=>oshiIs(source,"S133-079")).length;
+  const bladePower=oshiIs(card,"S121-047")&&players[p].front1.includes(card)?1500*oshiOther(p,card).length:0;
+  const memPower=oshiIs(card,"S133-013")&&match.turn.player===p&&oshiExperience(p)>=5?5000:0;
+  return rubyPower+ownTurnPower+tsukuyomiPower+idolPower+coffeePower+gotandaPower+bladePower+memPower;
 }
 
 function oshiStandby(p,done){
@@ -382,4 +385,204 @@ function oshiAquaCover(p,target,done){
 
 function oshiCanMove(card){
   return !(isAutoRules()&&card?.oshiLockedUntil>=match.turn.number);
+}
+
+const oshiExperience=p=>players[p].level.reduce((sum,card)=>sum+oshiLevel(card),0);
+function oshiEncoreHand(p,card){
+  const required=botDefinition(card)?.oshiEncoreExperience;
+  return required!==undefined&&oshiExperience(p)>=required?players[p].hand.filter(oshiAlly):[];
+}
+
+function oshiHandEncore(p,slot,card,cost){
+  const board=players[p];
+  stellaMove(board,"hand",cost,"waiting");
+  stellaMove(board,slot,card,"waiting");
+  const entrant=stellaMove(board,"waiting",card,slot);
+  if(entrant)entrant.orientation=90;
+}
+
+function oshiRemoveSource(p,card){
+  const board=players[p],slot=stellaStageSlot(board,card);
+  return slot&&stellaMove(board,slot,card,"waiting");
+}
+
+function oshiClockCost(p,done,onPay){
+  const board=players[p];
+  if(!board.stock.length){done(false);return}
+  stellaChoose(p,"クロックの下に置く《芸能界》",board.waiting.filter(oshiAlly),card=>{
+    if(!card){done(false);return}
+    autoRulePay(p,1);
+    botMove(board,"waiting",board.waiting.indexOf(card),"clock","bottom");
+    onPay?.();
+    resolveBoardRules(p,()=>done(board.level.length<4));
+  },{optional:true});
+}
+
+function oshiKanaLookTwo(p,done){
+  const board=players[p];
+  botLookUpTo(p,2,viewed=>{
+    const chosen=[];
+    function finish(){
+      stellaShow(p,"選んだカードを公開",chosen,()=>{
+        for(const card of viewed)stellaMove(board,"deck",card,chosen.includes(card)?"hand":"waiting");
+        resolveBoardRules(p,done);
+      });
+    }
+    function choose(){
+      const candidates=viewed.filter(card=>oshiAlly(card)&&!chosen.includes(card));
+      if(!candidates.length){finish();return}
+      stellaChoose(p,"手札に加える《芸能界》",candidates,card=>{
+        if(!card){finish();return}
+        chosen.push(card);
+        choose();
+      },{optional:true});
+    }
+    choose();
+  });
+}
+
+function oshiSlotOptions(p,title,slots,done){
+  if(!slots.length){done(null);return}
+  if(p===1||slots.length===1){done(slots[0]);return}
+  const body=showResolution(title,[]);
+  for(const slot of slots)deckButton(body,labels[slot],()=>{closeResolution();done(slot)});
+}
+
+function oshiTournamentAbilityReady(p,card,id){
+  const board=players[p],rival=players[1-p];
+  switch(id){
+    case "oshi-akane-xmas-bounce":return stellaStage(1-p).length>0;
+    case "oshi-gotanda-mill":return card.orientation===0&&board.stock.length>=2;
+    case "oshi-ruby-newyear-look":return board.stock.length>0;
+    case "oshi-kana-more-move":return board.hand.length>0&&oshiOther(p,card).length>0&&
+      botSlots.some(slot=>!rival[slot].length)&&stellaStage(1-p).some(oshiCanMove);
+    case "oshi-miyazaki-salvage":return board.hand.length>0;
+    case "oshi-ruby-report":return card.orientation===0;
+    default:return true;
+  }
+}
+
+const oshiTournamentActions={
+  "oshi-akane-xmas-look":(p,card,done)=>oshiHandCost(p,0,()=>true,paid=>{
+    if(paid)stellaLookAndTake(p,4,oshiAlly,false,done);
+    else done();
+  }),
+  "oshi-akane-xmas-bounce":(p,card,done)=>{
+    const rival=players[1-p];
+    if(!oshiRemoveSource(p,card)){done();return}
+    stellaChoose(p,"手札に戻す相手キャラ",stellaStage(1-p),target=>{
+      if(target)stellaMove(rival,stellaStageSlot(rival,target),target,"hand");
+      done();
+    });
+  },
+  "oshi-gotanda-mill":(p,card,done)=>{
+    autoRulePay(p,2);
+    card.orientation=90;
+    frierenMill(1-p,12,false,()=>done());
+  },
+  "oshi-ruby-newyear-power":(p,card,done)=>stellaRevealTop(p,top=>{
+    if(!top||!oshiAlly(top)){done();return}
+    oshiStageBuff(p,()=>true,2000,0,done);
+  }),
+  "oshi-ruby-newyear-look":(p,card,done)=>{
+    autoRulePay(p,1);
+    oshiRemoveSource(p,card);
+    stellaLookAndTake(p,4,oshiAlly,false,done);
+  },
+  "oshi-kana-more-look":(p,card,done)=>oshiClockCost(p,paid=>paid?oshiKanaLookTwo(p,done):done()),
+  "oshi-kana-more-move":(p,card,done)=>oshiHandCost(p,0,()=>true,paid=>{
+    if(!paid){done();return}
+    oshiRemoveSource(p,card);
+    const rival=players[1-p];
+    stellaChoose(p,"移動させる相手キャラ",stellaStage(1-p).filter(oshiCanMove),target=>{
+      if(!target){done();return}
+      oshiSlotOptions(p,"移動先の空き枠",botSlots.filter(slot=>!rival[slot].length),slot=>{
+        if(slot)stellaMove(rival,stellaStageSlot(rival,target),target,slot);
+        done();
+      });
+    });
+  }),
+  "oshi-miyazaki-mill":(p,card,done)=>stellaConfirm(p,"山札の上3枚を控え室に置く？",use=>
+    use?frierenMill(p,3,false,()=>done()):done()),
+  "oshi-miyazaki-salvage":(p,card,done)=>oshiHandCost(p,0,()=>true,paid=>{
+    if(!paid){done();return}
+    oshiRemoveSource(p,card);
+    stellaSalvage(p,oshiAlly,done);
+  }),
+  "oshi-blade-look":(p,card,done)=>stellaLookAndTake(p,4,target=>target.cx,false,taken=>{
+    if(!taken){done();return}
+    stellaDiscard(p,()=>done());
+  }),
+  "oshi-ruby-report":(p,card,done)=>{
+    card.orientation=90;
+    autoRuleReorderTop(p,()=>{
+      const board=players[p];
+      if(board.memory.length>2){done();return}
+      stellaChoose(p,"思い出にする“B小町”アイ",board.waiting.filter(target=>oshiIs(target,"S107-034")),target=>{
+        if(target)stellaMove(board,"waiting",target,"memory");
+        done();
+      },{optional:true});
+    },true);
+  },
+  "oshi-kana-fan-top":(p,card,done)=>frierenTopMove(p,p,false,()=>{
+    autoRuleAddTurnStat(card,"power",3000);
+    done();
+  }),
+  "oshi-kana-fan-take":(p,card,done)=>oshiStageCost(p,card,paid=>paid?oshiTopTake(p,oshiAlly,done):done()),
+  "oshi-ruby-b-cx":(p,card,done)=>stellaRevealTop(p,top=>{
+    if(!top||oshiLevel(top)<1){done();return}
+    oshiStageBuff(p,oshiAlly,1000,1,done);
+  })
+};
+
+function oshiStageBuff(p,eligible,power,soul,done){
+  stellaChoose(p,"強化するキャラ",stellaStage(p).filter(eligible),target=>{
+    if(target){
+      autoRuleAddTurnStat(target,"power",power);
+      autoRuleAddTurnStat(target,"soul",soul);
+    }
+    done();
+  });
+}
+
+function oshiTournamentReversals(owner,source,target){
+  const actions=[];
+  if(oshiIs(source,"S133-013")&&oshiLevel(target)>=2)actions.push({
+    owner,label:stellaName(source)+"・山札上を公開して回収",run:done=>
+      stellaRevealTop(owner,top=>{
+        if(!top||!oshiAlly(top)){done();return}
+        const board=players[owner];
+        stellaChoose(owner,"手札に戻す《芸能界》",board.waiting.filter(oshiAlly),card=>{
+          if(card)stellaMove(board,"waiting",card,"hand");
+          done();
+        },{optional:true});
+      })
+  });
+  if(oshiIs(target,"S107-034"))actions.push({
+    owner:1-owner,label:stellaName(target)+"・思い出と山札サーチ",run:done=>{
+      const p=1-owner,board=players[p];
+      const slot=stellaStageSlot(board,target);
+      if(!slot){done();return}
+      oshiClockCost(p,paid=>{
+        if(!paid){done();return}
+        frierenSearch(p,"山札から《芸能界》を選ぶ",oshiAlly,done);
+      },()=>stellaMove(board,slot,target,"memory"));
+    }
+  });
+  return actions;
+}
+
+function oshiMeltCover(p,target,done){
+  const board=players[p];
+  if(!oshiAlly(target)){done();return}
+  const actions=oshiOther(p,target).filter(card=>oshiIs(card,"S107-095")).map(card=>({
+    label:stellaName(card)+"・バトル中のキャラを＋3000",run:next=>{
+      if(!stellaStage(p).includes(target)){next();return}
+      stellaConfirm(p,"メルトを控え室に置いてバトル中のキャラを強化する？",use=>{
+        if(use&&oshiRemoveSource(p,card))autoRuleAddTurnStat(target,"power",3000);
+        next();
+      });
+    }
+  }));
+  botResolveTriggered(p,actions,done);
 }

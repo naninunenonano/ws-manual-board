@@ -373,7 +373,7 @@ function autoRuleBuff(p,card){
     if(front!==i&&front!==i+1)continue;
     const source=live[slot].at(-1);
     const assist=source?.faceUp?botDefinition(source)?.assist:null;
-    if(assist)totals.power+=(assist.power??0)+(assist.powerPerLevel??0)*level;
+    if(assist&&(!assist.trait||matchesPracticeTrait(card,assist.trait)))totals.power+=(assist.power??0)+(assist.powerPerLevel??0)*level;
   }
   const traitBuff=botDefinition(card)?.otherTraitBuff;
   if(traitBuff&&botSlots.some(slot=>live[slot].some(c=>c.uid===card.uid))){
@@ -475,7 +475,8 @@ function autoRuleResolvePlay(p,index,zone,done){
   botMove(board,"hand",index,zone);
   autoRuleLog(botCardInfo(card).name+"をプレイ"+(cost?"（ストック−"+cost+"）":""));
   const finish=()=>resolveBoardRules(p,done);
-  if(zone==="cx")botResolveTriggered(p,[...botTriggeredActions(p,card,"on_cx_play"),...frierenEisenActions(p,card)],finish);
+  if(zone==="cx")botResolveTriggered(p,[...botTriggeredActions(p,card,"on_cx_play"),...frierenEisenActions(p,card),
+    ...stellaStage(p).flatMap(source=>botTriggeredActions(p,source,"own_cx_placed"))],finish);
   else botStageEntry(p,card,"hand",finish);
 }
 const autoRuleEventEffects=Object.freeze({"光景":resolveKoukei,"ヴェルジュ":(p,done)=>stellaVerge(p,done),"銅像の錆":(p,done)=>frierenRustMagic(p,done),"未来予知":(p,done)=>frierenProphecy(p,done),"個人間オーディション":(p,done)=>oshiAudition(p,done)});
@@ -795,6 +796,7 @@ function autoRuleResolveReversals(reversals,done){
       ...effects.filter(Boolean).map(effect=>({owner,target,slot,...effect})),
       ...granted.map(()=>({owner:1-owner,target:source,slot:sourceSlot,clockSwap:true})),
       ...oshiReverseActions(owner,source,target).map(action=>({owner,...action})),
+      ...oshiTournamentReversals(owner,source,target),
       ...(methode?[{owner,methode:true}]:[]),
       ...(oshiIs(source,"S121-030")&&oshiOther(owner,source).length>=2?[{owner,source,oshiReturn:true}]:[]),
       ...(mage?[{owner:1-owner,target:source,slot:sourceSlot,zone:"deck",position:"bottom",optional:true,anyOrientation:true}]:[]),
@@ -927,10 +929,10 @@ function autoRuleAttack(p,zone,uid,type){
       else afterLook();
     }
     botResolveTriggered(p,attackActions,()=>{
-      if(type==="front"&&defender())oshiAquaCover(1-p,defender(),()=>{
+      if(type==="front"&&defender())oshiMeltCover(1-p,defender(),()=>oshiAquaCover(1-p,defender(),()=>{
         if(defender())stellaLaarRetreat(1-p,defender(),afterAttackAbilities);
         else afterAttackAbilities();
-      });
+      }));
       else afterAttackAbilities();
     });
   });
@@ -1093,7 +1095,7 @@ function autoRuleBotMain(p,done){
       const back=slot.startsWith("back"),occupant=board[slot].at(-1);
       const playable=board.hand.map((card,index)=>({card,index,definition:botDefinition(card)}))
         .filter(({card})=>!autoRuleLegalPlay(p,card,"main","character"));
-      const isSupport=({definition:def})=>!!(def?.assist||def?.namedStageBuff||def?.cannotAttack||def?.cardNumber==="SFN/S136-005"||def?.effects?.some(effect=>effect.brainstorm));
+      const isSupport=({definition:def})=>!!(def?.assist||def?.namedStageBuff||def?.cannotAttack||["SFN/S136-005","OSK/S133-079"].includes(def?.cardNumber)||def?.effects?.some(effect=>effect.brainstorm));
       const combo=entry=>entry.definition.stats.level===1&&autoRuleBotHasCombo(entry.card,board.hand);
       let candidate;
       if(back&&!occupant){
@@ -1154,6 +1156,17 @@ function autoRuleBotMain(p,done){
     sideEffects();
   }
   function sideEffects(){
+    const gotanda=stellaStage(p).find(card=>oshiIs(card,"S133-079")&&
+      stellaStageSlot(board,card).startsWith("back")&&oshiTournamentAbilityReady(p,card,"oshi-gotanda-mill"));
+    const enemy=players[1-p];
+    if(gotanda&&enemy.level.length>=2&&enemy.deck.length<=12){
+      oshiTournamentActions["oshi-gotanda-mill"](p,gotanda,playEvent);return;
+    }
+    const ruby=stellaStage(p).find(card=>oshiIs(card,"S121-045")&&
+      stellaStageSlot(board,card).startsWith("back")&&oshiTournamentAbilityReady(p,card,"oshi-ruby-report"));
+    if(ruby&&board.memory.length<=2&&board.waiting.some(card=>oshiIs(card,"S107-034"))){
+      oshiTournamentActions["oshi-ruby-report"](p,ruby,playEvent);return;
+    }
     const tsukuyomi=stellaStage(p).find(card=>oshiIs(card,"S133-046")&&
       stellaStageSlot(board,card).startsWith("back")&&oshiTsukuyomiReady(p,card));
     if(tsukuyomi&&board.clock.length>=4){oshiTsukuyomiClock(p,tsukuyomi,playEvent);return}
@@ -1307,7 +1320,9 @@ function autoRuleBotStep(){
       if(match.encore.step==="complete"){encoreAction("end");break}
       const candidate=encoreCandidates(p)[0];
       if(!candidate){encoreAction("done");break}
-      botMove(board,candidate.zone,candidate.index,"waiting");
+      const handCost=oshiEncoreHand(p,candidate.card)[0];
+      if(handCost)oshiHandEncore(p,candidate.zone,candidate.card,handCost);
+      else botMove(board,candidate.zone,candidate.index,"waiting");
       match.encorePrivate[p].done.push(candidate.card.uid);
       autoRuleAdvanceEncore();
       updateBoard();

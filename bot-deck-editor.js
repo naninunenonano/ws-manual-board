@@ -28,6 +28,19 @@ const connectDeckBuilder=(()=>{
       ["S107-035",3],["S133-061",4],["S121-065",2],["S133-095",2],["S133-059",4],
       ["S133-060",4]
     ])},
+    r6d3n:{url:"https://ws-tcg.com/deckrecipe/5652/",deck:recipeDeck("OSK",[
+      ["S107-044",4],["S133-037",3],["S133-063",4],["S133-005",1],["S133-013",4],
+      ["S107-014",1],["S133-046",1],["S107-041",1],["S121-073",1],["S133-043",4],
+      ["S133-079",1],["S133-001",4],["S133-003",4],["S121-033",2],["S121-034",2],
+      ["S121-069",1],["S133-061",4],["S133-059",4],["S133-060",4]
+    ])},
+    vhl0:{url:"https://ws-tcg.com/deckrecipe/5651/",deck:recipeDeck("OSK",[
+      ["S107-044",4],["S133-037",2],["S133-063",3],["S133-005",1],["S107-014",1],
+      ["S121-047",1],["S107-041",1],["S107-095",2],["S121-045",2],["S133-043",4],
+      ["S133-078",2],["S133-079",1],["S107-001",1],["S133-003",4],["S133-P01",2],
+      ["S107-034",2],["S121-027",4],["S121-034",1],["S133-061",4],["S133-059",4],
+      ["S133-060",4]
+    ])},
     aogiri:{url:"https://ws-tcg.com/deckrecipe/5855/",deck:recipeDeck("AOH",[
       ["W127-003",2],["W127-008",4],["W127-065",2],["W127-108",1],["W127-032",4],
       ["W127-033",4],["W127-070",1],["W127-014",4],["W127-005",1],["W127-028",3],
@@ -144,7 +157,12 @@ const connectDeckBuilder=(()=>{
       if(card.catalogOnly)info.textContent+=" ／ Bot未対応";
       label.append(info);
       const editions=document.createElement("select");
-      const editionNames=ids.map(id=>({S:"SR",R:"RRR"}[id.slice(card.cardNumber.length)]??(id.slice(card.cardNumber.length)||"通常")));
+      const isPromo=card.cardNumber.split("-").at(-1).startsWith("P");
+      const editionNames=ids.map(id=>{
+        const suffix=id.slice(card.cardNumber.length);
+        if(isPromo)return {S:"PR（箔押し）",EX:"PR+（サイン）"}[suffix]??(suffix||"通常");
+        return {S:"SR",R:"RRR"}[suffix]??(suffix||"通常");
+      });
       if(ids.length>1){
         editions.className="bot-deck-edition";
         editions.setAttribute("aria-label",card.name+"のバージョン");
