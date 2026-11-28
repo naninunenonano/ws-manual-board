@@ -75,7 +75,7 @@ const bondTargetNumbers=["BOT/W000-114"];
 function discardHandSteps(trait){
   const hand=ownZone("hand");
   return [
-    ruleStep("selectCards",{from:hand,as:"discard",count:1,...(trait?{traits:{names:[trait],mode:"any"}}:{})}),
+    ruleStep("selectCards",{from:hand,as:"discard",count:1,...(trait?{cardType:"character",traits:{names:[trait],mode:"any"}}:{})}),
     ruleStep("move",{from:hand,to:ownZone("waiting"),selection:"discard"})
   ];
 }
@@ -344,7 +344,8 @@ function autoRuleStartWaiting(){
   return true;
 }
 
-function autoRuleLog(text){
+function autoRuleLog(text,record=true){
+  if(record)recordBotBattleAction(text);
   const lines=match.bot.log??=[];
   lines.push(text);
   if(lines.length>8)lines.shift();
@@ -496,6 +497,7 @@ function autoRuleResolveEvent(p,index,definition,effect,done){
   const board=players[p];
   autoRulePay(p,definition.stats.cost);
   const [card]=board.hand.splice(index,1);
+  recordBotBattleAction("イベントを使用・ストック−"+definition.stats.cost,p,[card]);
   effect(p,(destination="waiting")=>{
     card.faceUp=true;
     board[destination].push(card);
@@ -575,9 +577,14 @@ function autoRuleBeforeTurnEnd(){
   else finishEndTurn();
 }
 function autoRuleOpposite(zone){return "front"+(2-Number(zone.slice(-1)))}
+function autoRuleReadyAttacker(card){
+  if(!card?.faceUp||card.orientation!==0)return false;
+  const def=botDefinition(card);
+  return def?.type==="character"&&!def.cannotAttack;
+}
+function autoRuleAttackLimit(p){return match.turn.number===1&&p===match.firstPlayer?1:3}
 function autoRuleAttackAllowed(p,zone,card){
-  return card?.faceUp&&card.orientation===0&&zone.startsWith("front")&&botDefinition(card)?.type==="character"&&!botDefinition(card)?.cannotAttack&&
-    !(match.turn.number===1&&p===match.firstPlayer&&match.bot.attacked);
+  return zone.startsWith("front")&&autoRuleReadyAttacker(card)&&!(autoRuleAttackLimit(p)===1&&match.bot.attacked);
 }
 function autoRuleAttackTypes(card,target){
   if(!target)return ["direct"];
@@ -844,7 +851,9 @@ function autoRuleAttack(p,zone,uid,type){
   runRuleOperation(finish=>{
     if(type==="front")autoRuleFrontBattle={[p]:{slot:zone,uid},[1-p]:{slot:opposite,uid:targetUid}};
     function done(){autoRuleFrontBattle=undefined;finish()}
-    autoRuleLog(({front:"フロント",side:"サイド",direct:"ダイレクト"})[type]+"アタック");
+    const action=({front:"フロント",side:"サイド",direct:"ダイレクト"})[type]+"アタック";
+    recordBotBattleAction(labels[zone]+"から"+action,p,target?[attacker,target]:[attacker]);
+    autoRuleLog(action,false);
     const current=()=>board[zone].find(c=>c.uid===uid);
     const defender=()=>rival[opposite].find(c=>c.uid===targetUid);
     function damage(){
@@ -867,7 +876,8 @@ function autoRuleAttack(p,zone,uid,type){
         const souls=icons.filter(icon=>icon==="ソウル").length;
         function resolve(){
           if(current())autoRuleAddTurnStat(current(),"soul",souls);
-          autoRuleLog("トリガー "+botCardInfo(revealed).name+(souls?"（ソウル＋"+souls+"）":""));
+          recordBotBattleAction("トリガーチェック"+(souls?"・ソウル＋"+souls:""),p,[revealed]);
+          autoRuleLog("トリガー "+stellaName(revealed)+(souls?"（ソウル＋"+souls+"）":""),false);
           botResolveAttackTrigger(p,revealed,current,()=>{
             if(rival.level.length>=4||board.level.length>=4)done();
             else trigger(remaining-1);
@@ -955,42 +965,120 @@ function autoRuleArrangeBotFront(p){
   }
 }
 
+function autoRuleBotComboCx(card){
+  const def=botDefinition(card);
+  return def?.preferredCx??def?.lookOnAttack?.cxId??def?.millOnAttack?.cxId??
+    def?.effects?.filter(effect=>effect.timing==="on_attack").flatMap(effect=>effect.conditions??[])
+      .find(condition=>condition.handler==="cxName")?.params?.cardNumbers?.[0];
+}
+function autoRuleBotHasCombo(card,hand){
+  const cx=autoRuleBotComboCx(card);
+  return Boolean(cx&&hand.some(entry=>sameBotCardNumber(entry.id,cx)));
+}
+function autoRuleBotKeepsCombo(p,card){
+  const hand=players[p].hand;
+  return autoRuleBotHasCombo(card,hand)||
+    stellaStage(p).concat(hand).some(source=>sameBotCardNumber(autoRuleBotComboCx(source),card.id));
+}
+function autoRuleBotRecoveryPriority(p,card){
+  const board=players[p],def=botDefinition(card);
+  if(def?.type!=="character")return 0;
+  const playable=!def.cannotAttack&&!autoRuleLegalPlay(p,card,"main","character",{planning:true});
+  return Number(autoRuleBotHasCombo(card,board.hand))*8+Number(playable)*4+
+    Number(def.stats.level<=board.level.length+1)+Number(def.stats.cost===0);
+}
+function autoRuleBotLevelIndex(p,clock){
+  const board=players[p];
+  const colors=new Set(board.level.map(card=>botDefinition(card)?.color));
+  const pairs=stellaStage(p).concat(board.hand).filter(card=>
+    botDefinition(card)?.stats.level===1&&autoRuleBotHasCombo(card,board.hand));
+  const demands=new Map();
+  for(const card of pairs){
+    const color=botDefinition(card).color;
+    demands.set(color,(demands.get(color)??0)+1);
+  }
+  return clock.reduce((best,card,index)=>{
+    const score=entry=>{
+      const color=botDefinition(entry)?.color;
+      return colors.has(color)?0:(demands.get(color)??0)*10+
+        Number(board.hand.some(hand=>botDefinition(hand)?.stats.level===1&&botDefinition(hand)?.color===color));
+    };
+    return score(card)>score(clock[best])?index:best;
+  },0);
+}
 function autoRuleBotMain(p,done){
   const board=players[p];
-  const slots=["back0","back1","front0","front1","front2"];
+  const slots=[...botSlots];
+  const attackLimit=autoRuleAttackLimit(p);
+  const readyFront=()=>botSlots.slice(0,3).filter(slot=>autoRuleAttackAllowed(p,slot,board[slot].at(-1))).length;
   function playNext(){
     if(players.some(b=>b.level.length>=4)){done();return}
     const slot=slots.shift();
     if(slot){
-      if(board[slot].length){playNext();return}
-      const back=slot.startsWith("back");
+      const back=slot.startsWith("back"),occupant=board[slot].at(-1);
       const playable=board.hand.map((card,index)=>({card,index,definition:botDefinition(card)}))
         .filter(({card})=>!autoRuleLegalPlay(p,card,"main","character"));
       const isSupport=({definition:def})=>!!(def?.assist||def?.namedStageBuff||def?.cannotAttack||def?.cardNumber==="SFN/S136-005"||def?.effects?.some(effect=>effect.brainstorm));
-      const suitable=playable.filter(entry=>isSupport(entry)===back);
-      if(!back&&suitable.some(({card})=>card.id.startsWith("SFN/"))){
-        const priority=({definition:def})=>def.stats.level*10+(def.cardNumber==="SFN/S136-036"?1:0);
-        suitable.sort((a,b)=>priority(b)-priority(a));
+      const combo=entry=>entry.definition.stats.level===1&&autoRuleBotHasCombo(entry.card,board.hand);
+      let candidate;
+      if(back&&!occupant){
+        candidate=playable.find(isSupport)??(!readyFront()?playable.find(entry=>!entry.definition.cannotAttack):undefined);
+      }else if(!back&&readyFront()<attackLimit){
+        const attackers=playable.filter(entry=>!entry.definition.cannotAttack);
+        const score=entry=>{
+          const cost=board.level.length<=1?autoRulePlayCost(p,entry.definition):0;
+          return Number(combo(entry))*100+Number(!isSupport(entry))*4+entry.definition.stats.level-cost*10;
+        };
+        if(!autoRuleReadyAttacker(occupant))candidate=attackers.sort((a,b)=>score(b)-score(a))[0];
       }
-      let candidate=suitable[0];
-      if(isStellaDeck(match.bot.scenario)){
-        const frontCount=botSlots.slice(0,3).filter(zone=>board[zone].length).length;
-        if(back&&!frontCount&&playable.length===1)candidate=undefined;
-        if(!back&&!candidate&&!frontCount)candidate=playable.find(entry=>!entry.definition.cannotAttack);
+      if(!back&&autoRuleReadyAttacker(occupant)&&!autoRuleBotHasCombo(occupant,board.hand)){
+        const openAttacks=attackLimit-readyFront();
+        const spareCombos=playable.filter(entry=>!entry.definition.cannotAttack&&combo(entry));
+        if(spareCombos.length>openAttacks)candidate=spareCombos[0];
       }
       const index=candidate?.index??-1;
       if(index<0)playNext();
       else autoRuleResolvePlay(p,index,slot,playNext);
       return;
     }
-    const source=[board.back0.at(-1),board.back1.at(-1)].find(card=>
-      card?.orientation===0&&botDefinition(card)?.effects?.some(effect=>effect.brainstorm&&effect.brainstorm.stock<=board.stock.length));
-    const brainstorm=botDefinition(source)?.effects.find(effect=>effect.brainstorm)?.brainstorm;
     const statue=stellaStage(p).find(card=>frierenIs(card,"S128-017")&&card.orientation===0);
     if(statue&&board.stock.length&&board.waiting.some(card=>frierenIs(card,"S108-T04"))){
-      frierenStatue(p,statue,playEvent);return;
+      frierenStatue(p,statue,tryBrainstorm);return;
     }
-    if(brainstorm){resolveBrainstorm(p,source,brainstorm,playEvent);return}
+    tryBrainstorm();
+  }
+  let brainstorms=0;
+  function tryBrainstorm(){
+    if(players.some(b=>b.level.length>=4)){done();return}
+    const front=readyFront();
+    const rear=botSlots.slice(3).map(slot=>board[slot].at(-1));
+    const available=front+rear.filter(autoRuleReadyAttacker).length;
+    const handAttacker=board.hand.some(card=>!botDefinition(card)?.cannotAttack&&
+      !autoRuleLegalPlay(p,card,"main","character"));
+    const needsAttacker=available<attackLimit&&!handAttacker;
+    const activeCombo=botSlots.slice(0,3).some(slot=>{
+      const card=board[slot].at(-1);
+      const cx=autoRuleBotComboCx(card);
+      return autoRuleReadyAttacker(card)&&board.hand.some(entry=>sameBotCardNumber(cx,entry.id)&&
+        !autoRuleLegalPlay(p,entry,"climax","climax",{planning:true}));
+    });
+    const wantsHand=brainstorms===0&&board.hand.length<6&&!activeCombo;
+    if(brainstorms<2&&(needsAttacker||wantsHand)){
+      for(const source of rear){
+        if(source?.orientation!==0)continue;
+        const losesAttacker=autoRuleReadyAttacker(source);
+        const canRestAttacker=available>attackLimit||needsAttacker&&(available>1||brainstorms>0);
+        if(losesAttacker&&!canRestAttacker)continue;
+        const brainstorm=botDefinition(source)?.effects?.find(effect=>effect.brainstorm&&effect.brainstorm.stock<=board.stock.length)?.brainstorm;
+        if(!brainstorm)continue;
+        brainstorms++;
+        resolveBrainstorm(p,source,brainstorm,tryBrainstorm);
+        return;
+      }
+    }
+    sideEffects();
+  }
+  function sideEffects(){
     const heiter=stellaStage(p).find(card=>frierenIs(card,"S136-005")&&stellaStageSlot(board,card).startsWith("back"));
     if(heiter&&board.hand.length<=3&&stellaStage(p).some(card=>card.orientation===180)){
       frierenHeiterSearch(p,heiter,playEvent);return;
@@ -1001,14 +1089,19 @@ function autoRuleBotMain(p,done){
     playEvent();
   }
   function ensureAttacker(){
-    if(!isStellaDeck(match.bot.scenario)||players.some(b=>b.level.length>=4)){done();return}
-    const front=botSlots.slice(0,3),ready=card=>card?.faceUp&&card.orientation===0&&botDefinition(card)?.type==="character"&&!botDefinition(card)?.cannotAttack;
-    if(front.some(slot=>ready(board[slot].at(-1)))){done();return}
-    const target=front.find(slot=>!board[slot].length)??front[0];
-    const playable=board.hand.findIndex(card=>!botDefinition(card)?.cannotAttack&&!autoRuleLegalPlay(p,card,"main","character"));
-    if(playable>=0){autoRuleResolvePlay(p,playable,target,done);return}
-    const rear=["back0","back1"].find(slot=>ready(board[slot].at(-1)));
-    if(rear)[board[target],board[rear]]=[board[rear],board[target]];
+    if(players.some(b=>b.level.length>=4)||readyFront()>=attackLimit){done();return}
+    const target=botSlots.slice(0,3).find(slot=>!autoRuleReadyAttacker(board[slot].at(-1)));
+    if(!target){done();return}
+    const rear=["back0","back1"].find(slot=>autoRuleReadyAttacker(board[slot].at(-1)));
+    if(rear){
+      [board[target],board[rear]]=[board[rear],board[target]];
+      recordBotBattleAction(labels[rear]+" → "+labels[target]+"（攻撃に回す）",p,[board[target].at(-1)]);
+      ensureAttacker();return;
+    }
+    const playable=board.hand.map((card,index)=>({card,index})).filter(({card})=>
+      !botDefinition(card)?.cannotAttack&&!autoRuleLegalPlay(p,card,"main","character"));
+    const next=playable.find(({card})=>autoRuleBotHasCombo(card,board.hand))??playable[0];
+    if(next){autoRuleResolvePlay(p,next.index,target,ensureAttacker);return}
     done();
   }
   function playEvent(){
@@ -1041,20 +1134,34 @@ function autoRuleBotStep(){
         const hasGreenPayoff=board.hand.some(card=>{const def=botDefinition(card);return card.id.startsWith("SFN/")&&def?.color==="緑"&&def.stats.level>=2;});
         const greenForClock=!hasGreen&&hasGreenPayoff&&board.level.length>0?
           board.hand.findIndex(card=>card.id.startsWith("SFN/")&&botDefinition(card)?.color==="緑"&&botDefinition(card).stats.level===0):-1;
-        const spare=greenForClock>=0?greenForClock:board.hand.findIndex(card=>!card.cx&&!playable(card));
-        const frontReady=botSlots.slice(0,3).filter(slot=>autoRuleAttackAllowed(p,slot,board[slot].at(-1))).length;
-        if(greenForClock<0&&frontReady>=2&&board.hand.length>=4){
-          autoRuleLog("Botは前列と手札がそろっているためクロックをスキップ");
+        const inPlay=stellaStage(p).concat(board.hand);
+        const combos=inPlay.filter(card=>botDefinition(card)?.stats.level===1&&autoRuleBotHasCombo(card,board.hand));
+        const needsColor=combos.map(card=>botDefinition(card).color)
+          .find(color=>![...board.level,...board.clock].some(card=>botDefinition(card)?.color===color));
+        const keep=card=>combos.includes(card)||combos.some(source=>sameBotCardNumber(card.id,autoRuleBotComboCx(source)));
+        const comboColor=needsColor&&board.level.length?
+          board.hand.findIndex(card=>!keep(card)&&botDefinition(card)?.color===needsColor):-1;
+        const spare=comboColor>=0?comboColor:greenForClock>=0?greenForClock:board.hand.findIndex(card=>!keep(card)&&!card.cx&&!playable(card));
+        const readyOnStage=botSlots.filter(slot=>autoRuleReadyAttacker(board[slot].at(-1))).length;
+        const costs=board.hand.filter(card=>playable(card)&&!botDefinition(card)?.cannotAttack)
+          .map(card=>autoRulePlayCost(p,botDefinition(card))).sort((a,b)=>a-b);
+        const missing=Math.max(0,autoRuleAttackLimit(p)-readyOnStage);
+        const canFillFront=costs.length>=missing&&costs.slice(0,missing).reduce((sum,cost)=>sum+cost,0)<=board.stock.length;
+        if(comboColor<0&&greenForClock<0&&canFillFront){
+          autoRuleLog("Botは必要な攻撃回数を確保できるためクロックをスキップ");
           setTurnPhase("main");break;
         }
-        if(spare>=0)index=spare;
-        else if(available===1)index=board.hand.filter(card=>card.cx).length>1?board.hand.findIndex(card=>card.cx):-1;
+        const extraCx=board.hand.filter(card=>card.cx).length>1?board.hand.findIndex(card=>card.cx&&
+          (!keep(card)||board.hand.some(entry=>entry!==card&&sameBotCardNumber(card.id,entry.id)))):-1;
+        index=spare>=0?spare:extraCx>=0?extraCx:available>1?
+          board.hand.findIndex(card=>!keep(card)&&!card.cx):-1;
       }
-      if(!isDeckMirror(match.bot.scenario)||index<0||board.hand.length>=7||board.level.length>=3){
+      if(!isDeckMirror(match.bot.scenario)||index<0||(!isStellaDeck(match.bot.scenario)&&board.hand.length>=7)||board.level.length>=3){
         setTurnPhase("main");break;
       }
       runRuleOperation(done=>{
         botMove(board,"hand",index,"clock");
+        recordBotBattleAction("クロックで2枚ドロー",p);
         autoRuleDrawAfterCost(p,2,()=>{setTurnPhase("main");done()});
       });
       break;
@@ -1063,6 +1170,8 @@ function autoRuleBotStep(){
       if(isDeckMirror(match.bot.scenario)){
         runRuleOperation(done=>autoRuleBotMain(p,()=>{
           autoRuleArrangeBotFront(p);
+          const ready=botSlots.slice(0,3).filter(slot=>autoRuleAttackAllowed(p,slot,board[slot].at(-1))).length;
+          recordBotBattleAction("メイン終了・攻撃可能 "+ready+"枚／手札 "+board.hand.length+"枚／ストック "+board.stock.length+"枚",p);
           setTurnPhase("climax");done();
         }));
         break;
@@ -1078,12 +1187,14 @@ function autoRuleBotStep(){
       setTurnPhase("climax");break;
     }
     case "climax":{
-      const combos=botSlots.slice(0,3).map(slot=>botDefinition(board[slot].at(-1)))
-        .map(def=>def?.lookOnAttack?.cxId??def?.millOnAttack?.cxId??def?.preferredCx);
-      const findCx=condition=>board.hand.findIndex(card=>condition(card)&&!autoRuleLegalPlay(p,card,"climax","climax"));
-      const comboIndex=findCx(card=>combos.some(number=>sameBotCardNumber(number,card.id)));
-      const index=comboIndex>=0||!isStellaDeck(match.bot.scenario)?comboIndex:
-        findCx(card=>board.front0.length+board.front1.length+board.front2.length>0&&card.cx);
+      const attackers=botSlots.slice(0,3).map(slot=>board[slot].at(-1)).filter(autoRuleReadyAttacker);
+      const combos=attackers.map(source=>({cx:autoRuleBotComboCx(source),level:botDefinition(source).stats.level}));
+      const choices=board.hand.map((card,index)=>({card,index})).filter(({card})=>!autoRuleLegalPlay(p,card,"climax","climax"));
+      const score=card=>combos.reduce((sum,{cx,level})=>
+        sum+(sameBotCardNumber(cx,card.id)?(level===1?4:1):0),0);
+      choices.sort((a,b)=>score(b.card)-score(a.card));
+      const choice=choices[0];
+      const index=choice&&(score(choice.card)>0||isStellaDeck(match.bot.scenario)&&attackers.length)?choice.index:-1;
       if(!isDeckMirror(match.bot.scenario)||index<0||board.cx.length){setTurnPhase("attack");break}
       runRuleOperation(done=>autoRuleResolvePlay(p,index,"cx",()=>{
         match.turn.phase="attack";
@@ -1094,7 +1205,7 @@ function autoRuleBotStep(){
     case "attack":{
       const [plan]=botSlots.slice(0,3).map(slot=>autoRuleBotAttackPlan(p,slot)).filter(Boolean)
         .sort((a,b)=>autoRuleBotAttackScore(b)-autoRuleBotAttackScore(a));
-      if(!plan){encoreAction("enter");break}
+      if(!plan){recordBotBattleAction("アタック終了",p);encoreAction("enter");break}
       if(plan.wins)autoRuleLog("Botは"+stellaName(plan.target)+"を倒せるフロントを優先");
       if(plan.type==="direct")autoRuleLog("Botは空いている枠からダイレクトを優先");
       if(plan.type==="side")autoRuleLog("Botはサイドで"+stellaName(plan.attacker)+"を残す");
@@ -1112,7 +1223,10 @@ function autoRuleBotStep(){
       break;
     }
     case "end":
-      while(board.hand.length>7)botMove(board,"hand",0,"waiting");
+      while(board.hand.length>7){
+        const index=board.hand.findIndex(card=>!autoRuleBotKeepsCombo(p,card));
+        botMove(board,"hand",Math.max(index,0),"waiting");
+      }
       finishEndTurn();
       break;
   }
@@ -1136,18 +1250,24 @@ function resolveBrainstorm(p,source,{stock,reveal,salvage,traits},done){
   const board=players[p];
   autoRulePay(p,stock);
   source.orientation=90;
-  const revealed=[];
+  const revealed=[],drawn=[];
+  recordBotBattleAction("集中を使用・ストック−"+stock,p,[source]);
   function finishDraw(n){
-    if(!n){done();return}
-    botRevealTop(p,card=>{card.faceUp=true;board.hand.push(card)},found=>{
-      if(found)finishDraw(n-1);else done();
+    if(!n){
+      recordBotBattleAction("集中で"+drawn.length+"枚ドロー",p,p===0?drawn:[]);
+      if(p===0&&isDeckMirror(match.bot.scenario))showBotRevealResult("自分の集中・引いたカード",drawn,done);
+      else done();
+      return;
+    }
+    botRevealTop(p,card=>{card.faceUp=true;board.hand.push(card);drawn.push(card)},found=>{
+      finishDraw(found?n-1:0);
     });
   }
   function confirm(){
     const max=revealed.filter(card=>card.cx===true).length;
     for(const card of revealed){card.faceUp=true;board.waiting.push(card)}
-    rememberBotReveal("Brainstorm",p,revealed,revealed.length+"枚公開・CX "+max+"枚");
-    autoRuleLog("集中で"+revealed.length+"枚、CXが"+max+"枚（"+revealed.map(card=>botCardInfo(card).name).join("、")+"）");
+    recordBotBattleAction("集中・"+revealed.length+"枚公開・CX "+max+"枚",p,revealed);
+    autoRuleLog(botPlayerLabel(p)+"・集中で"+revealed.length+"枚、CXが"+max+"枚（"+revealed.map(stellaName).join("、")+"）",false);
     resolveBoardRules(p,()=>{
       const title=(p===0?"自分":"Bot")+"の集中・CX "+max+"枚";
       const afterReveal=next=>isDeckMirror(match.bot.scenario)?showBotRevealResult(title,revealed,next):next();
@@ -1181,14 +1301,22 @@ function resolveBrainstormSalvage(p,max,revealed,done,traits){
   }
   const picks=new Set();
   function finish(){
+    const recovered=[];
     for(const uid of picks){
       const index=board.waiting.findIndex(card=>card.uid===uid);
-      if(index>=0)botMove(board,"waiting",index,"hand");
+      if(index>=0)recovered.push(botMove(board,"waiting",index,"hand"));
     }
-    autoRuleLog("集中でキャラ"+picks.size+"枚を手札へ");
-    done();
+    const entry=recordBotBattleAction("集中で"+recovered.length+"枚を手札に回収",p,recovered);
+    if(recovered.length)match.bot.latestRecovery=entry;
+    autoRuleLog("集中でキャラ"+recovered.length+"枚を手札へ",false);
+    if(isDeckMirror(match.bot.scenario))showBotRevealResult(botPlayerLabel(p)+"の集中・手札に回収",recovered,done);
+    else done();
   }
-  if(p===1){for(const card of candidates.slice(0,limit))picks.add(card.uid);finish();return}
+  if(p===1){
+    candidates.sort((a,b)=>autoRuleBotRecoveryPriority(p,b)-autoRuleBotRecoveryPriority(p,a));
+    for(const card of candidates.slice(0,limit))picks.add(card.uid);
+    finish();return;
+  }
   const body=showResolution("集中・控え室からキャラを"+limit+"枚まで手札へ",[]);
   const details=document.createElement("details"),summary=document.createElement("summary");
   details.open=true;

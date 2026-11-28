@@ -125,6 +125,7 @@ function showMatchScreen() {
   matchElement("botDeckEditorScreen").hidden = !editorVisible;
   matchElement("battleScreen").hidden = !isMatchActive();
   matchElement("botControls").hidden=!match?.bot;
+  if(!match?.bot)matchElement("botRecovery").hidden=true;
   for(const id of ["battleSideControl","shuffle","manualBattleHint"])matchElement(id).hidden=!!match?.bot;
   matchElement("mulliganScreen").hidden = match?.phase !== "mulligan";
   if(match?.phase === "mulligan") renderMulligan();
@@ -146,8 +147,7 @@ function showMatchScreen() {
     renderTurnControls();
     checkMandatoryLevel();
   } else if (match?.phase === "ended") {
-    matchElement("resultRevealControls").hidden=!match.bot;
-    if(match.bot)renderBotRevealButtons("result");
+    matchElement("resultBattleLog").hidden=!match.bot;
     const { reason, winner } = match.result;
     matchElement("battleResult").textContent = reason === "level"
       ? winner===0?"Botがレベル4になりました。あなたの勝ちです":"レベル4になりました。Botの勝ちです"
@@ -245,12 +245,15 @@ function completeMulligan(){
   const p=match.mulliganPlayer,old=match.players[p];
   const board=Object.fromEntries(zones.map(z=>[z,old[z].slice()]));
   const indices=[...mulliganSelection].sort((a,b)=>b-a);
-  for(const i of indices)board.waiting.push(board.hand.splice(i,1)[0]);
+  const discarded=indices.map(index=>board.hand.splice(index,1)[0]);
+  board.waiting.push(...discarded);
   for(let i=0;i<indices.length;i++){const c=board.deck.pop();c.faceUp=true;board.hand.push(c);}
   shuffle(board.deck);
   const next={...match,players:match.players.map((b,i)=>i===p?board:b),mulliganPlayer:p+1,phase:p===0&&!match.bot?"mulligan":"active",screen:p===0&&!match.bot?"mulligan":"battle"};
   if(!writeMatch(next))return;
-  match=next;players=next.players;mulliganSelection=new Set();showMatchScreen();
+  match=next;players=next.players;mulliganSelection=new Set();
+  if(match.bot)recordBotBattleAction("マリガンで"+discarded.length+"枚交換",p,discarded);
+  showMatchScreen();
   if(p===1||match.bot){ensureTurn();message(match.bot?"マリガンが完了しました":"両プレイヤーのマリガンが完了しました");}
 }
 function finishMatch(reason) {

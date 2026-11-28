@@ -92,6 +92,7 @@ function botMove(board,from,index,to,position="top"){
   autoRuleStageChange(card,from,to,players.indexOf(board));
   if(position==="bottom")board[to].unshift(card);
   else board[to].push(card);
+  recordBotMovement(players.indexOf(board),card,from,to);
   return card;
 }
 function prepareBotScenario(board){
@@ -211,6 +212,7 @@ function botApplyEffect(state,destinations,p){
   }
   const next=Object.fromEntries(zones.map(zone=>[zone,[]]));
   const releasedMarkers={waiting:[],memory:[]};
+  const moves=[];
   for(const [zone,cards] of Object.entries(state.self)){
     for(const entry of cards){
       const old=all.get(entry.uid);
@@ -231,12 +233,14 @@ function botApplyEffect(state,destinations,p){
       if(old.zone!==target){
         card.faceUp=!["deck","stock"].includes(target);
         autoRuleStageChange(card,old.zone,target,p);
+        moves.push([card,old.zone,target]);
       }
       next[target].push(card);
     }
   }
   for(const [zone,cards] of Object.entries(releasedMarkers))next[zone].push(...cards);
   Object.assign(board,next);
+  for(const [card,from,to] of moves)recordBotMovement(p,card,from,to);
   return true;
 }
 function botStats(p,card){
@@ -469,6 +473,7 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
   const simpleReis=reisSearch||reisConsole;
   const firenDuplicate=ability.id==="firen-on-play-duplicate";
   const firenCombo=ability.id==="firen-cx-combo";
+  const waitingBefore=firenCombo?new Set(players[p].waiting.map(card=>card.uid)):null;
   const [selectCost,moveCost]=ability.costs??[];
   const handDiscard=!card.id.startsWith("BOT/")&&ability.optional&&ability.costs?.length===2&&selectCost?.handler==="selectCards"&&
     selectCost.params.count===1&&selectCost.params.from?.side==="self"&&selectCost.params.from.zone==="hand"&&
@@ -490,7 +495,16 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
     const text=success?"解決しました":result.status==="success"?"舞台の空き枠がありません":result.message;
     if(!isAutoRules())botMessage((ability.category??ability.id)+" · "+text);
     else if(result.status!=="condition-not-met")autoRuleLog((ability.category??ability.id)+" · "+text);
-    if(!success||!entered.length){done?.(success,result);return}
+    if(!success||!entered.length){
+      if(success&&waitingBefore&&isDeckMirror(match.bot.scenario)){
+        const hand=players[p].hand.filter(card=>waitingBefore.has(card.uid));
+        const stock=players[p].stock.filter(card=>waitingBefore.has(card.uid));
+        const recovered=[...hand,...stock],destination=hand.length?"手札に回収":"ストックへ";
+        if(recovered.length)recordBotBattleAction("フィレンのCXコンボ・"+destination,p,recovered);
+        showBotRevealResult(botPlayerLabel(p)+"のフィレン・"+destination,recovered,()=>done?.(success,result));
+      }else done?.(success,result);
+      return;
+    }
     function dispatch(index){
       if(index===entered.length){done?.(true,result);return}
       const entry=entered[index];
@@ -605,15 +619,21 @@ function botGuide(card,ability,done,p=0,abortable=true,context={}){
         case "branch":step(players[p].clock.length>=5?Math.min(1,prompt.labels.length-1):0);break;
         case "select":{
           const priority=card=>{
-            const def=botDefinition({id:card.cardNumber});
-            return Number(card.type==="climax")+Number(!!(def?.lookOnAttack||def?.millOnAttack));
+            const entry={id:card.cardNumber};
+            return Number(autoRuleBotKeepsCombo(p,entry))*4+Number(card.type==="climax")+Number(!!autoRuleBotComboCx(entry));
           };
-          const candidates=prompt.from.zone==="hand"?[...prompt.candidates].sort((a,b)=>priority(a)-priority(b)):prompt.candidates;
+          const candidates=prompt.from.zone==="hand"?[...prompt.candidates].sort((a,b)=>priority(a)-priority(b)):
+            firenCombo?[...prompt.candidates].sort((a,b)=>autoRuleBotRecoveryPriority(p,{id:b.cardNumber})-
+              autoRuleBotRecoveryPriority(p,{id:a.cardNumber})):prompt.candidates;
           step(candidates.slice(0,prompt.max).map(card=>card.uid));
           break;
         }
         case "heal":step(prompt.max);break;
-        case "destination":step(prompt.destinations[0]);break;
+        case "destination":{
+          const zone=players[p].hand.length<6?"hand":"stock";
+          step((firenCombo&&prompt.destinations.find(destination=>destination.zone===zone))||prompt.destinations[0]);
+          break;
+        }
         case "treasure":step(prompt.canStock);break;
         default:step();break;
       }
@@ -762,52 +782,76 @@ function botRevealTop(p,receive,done){
     resolveBoardRules(p,()=>done(!!card));
   });
 }
-const botRevealTitles={Brainstorm:"集中の公開カード",Damage:"ダメージの公開カード"};
-function rememberBotReveal(kind,player,cards,summary){
-  if(!match?.bot||!cards.length)return;
-  const history=match.bot.reveals??={};
-  history[kind]=[{player,summary,cards:cards.map(card=>({id:card.id}))},...(history[kind]??[])].slice(0,10);
+const botPlayerLabel=p=>p===0?"自分":"Bot";
+function recordBotBattleAction(text,p=match?.turn?.player,cards=[]){
+  if(!match?.bot||!match.turn)return;
+  const {number,phase}=match.turn;
+  const entry={turn:number,phase,p,text,cards:cards.map(card=>card.id)};
+  (match.bot.battleLog??=[]).push(entry);
+  return entry;
 }
-function renderBotRevealButtons(prefix){
-  for(const kind of Object.keys(botRevealTitles)){
-    document.getElementById(prefix+kind+"Reveals").disabled=ruleBusy||!match.bot.reveals?.[kind]?.length;
-  }
+function recordBotMovement(p,card,from,to){
+  if(!match?.bot||!isMatchActive()||p<0||from===to)return;
+  const publicZone=zone=>isStageZone(zone)||["waiting","clock","level","memory","cx"].includes(zone);
+  if(!publicZone(from)&&!publicZone(to))return;
+  const text=labels[from]+" → "+labels[to];
+  const entry=recordBotBattleAction(text,p,[card]);
+  if(to==="hand"&&publicZone(from))match.bot.latestRecovery=entry;
 }
-function openBotReveals(kind){
-  const history=match?.bot?.reveals?.[kind];
-  if(!history?.length||ruleBusy||document.getElementById("dialog").open)return;
-  const description=entry=>(entry.player===0?"自分":"Bot")+"・"+entry.summary;
-  const body=showResolution(botRevealTitles[kind],[]);
+function renderBotRecovery(){
+  const host=document.getElementById("botRecovery"),entry=match.bot.latestRecovery;
+  host.hidden=!entry;
+  if(!entry||host.recoveryEntry===entry)return;
+  host.recoveryEntry=entry;
+  const title=document.createElement("strong");
+  title.textContent=botPlayerLabel(entry.p)+"が手札に回収";
+  host.replaceChildren(title);
+  appendResolutionCards(host,entry.cards.map(id=>({id})),effectChoiceImageUrl);
+}
+function botBattleLogText(){
+  const entries=match.bot.battleLog??[];
+  const result=document.getElementById("battleResult").textContent;
+  const lines=entries.map(entry=>{
+    const cards=entry.cards.map(id=>stellaName({id})+" ["+id+"]");
+    return "T"+entry.turn+" "+(TURN_NAMES[entry.phase]??entry.phase)+" "+botPlayerLabel(entry.p)+"｜"+entry.text+
+      (cards.length?"｜"+cards.join("、"):"");
+  });
+  return ["WS 手動盤面 対戦ログ",match.decks.map(deck=>deck.title).join(" vs "),
+    "先攻: "+botPlayerLabel(match.firstPlayer),...lines,...(match.phase==="ended"?[result]:[])].join("\n");
+}
+function openBotBattleLog(){
+  if(!match?.bot||document.getElementById("dialog").open)return;
+  const body=showResolution("対戦ログ",[]);
   setRuleModal(false);
-  const cards=document.createElement("div");
-  if(history.length===1){
-    const summary=document.createElement("p");
-    summary.textContent=description(history[0]);
-    body.append(summary);
-  }else{
-    const entries=document.createElement("select");
-    entries.setAttribute("aria-label","公開履歴（新しい順）");
-    for(const [index,entry] of history.entries()){
-      const option=document.createElement("option");
-      option.value=String(index);
-      option.textContent=(index+1)+"．"+description(entry);
-      entries.append(option);
+  const text=document.createElement("textarea");
+  text.id="battleLogText";
+  text.readOnly=true;
+  text.setAttribute("aria-label","対戦ログ");
+  text.value=botBattleLogText();
+  body.append(text);
+  deckButton(body,"コピー",async()=>{
+    try{
+      await navigator.clipboard.writeText(text.value);
+      status.textContent="コピーしました";
+    }catch{
+      text.focus();
+      text.select();
+      status.textContent="選択したログをコピーできます";
     }
-    entries.onchange=()=>{
-      const entry=history[Number(entries.value)];
-      if(!entry)return;
-      cards.replaceChildren();
-      appendResolutionCards(cards,entry.cards,effectChoiceImageUrl);
-    };
-    body.append(entries);
-  }
-  appendResolutionCards(cards,history[0].cards,effectChoiceImageUrl);
-  body.append(cards);
+  });
+  deckButton(body,"テキストを保存",()=>{
+    const link=document.createElement("a");
+    link.href=URL.createObjectURL(new Blob([text.value],{type:"text/plain;charset=utf-8"}));
+    link.download="ws-battle-log.txt";
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+  });
+  const status=document.createElement("p");
+  status.setAttribute("role","status");
+  body.append(status);
 }
-for(const kind of Object.keys(botRevealTitles)){
-  for(const prefix of ["bot","result"]){
-    document.getElementById(prefix+kind+"Reveals").onclick=()=>openBotReveals(kind);
-  }
+for(const id of ["botBattleLog","resultBattleLog"]){
+  document.getElementById(id).onclick=openBotBattleLog;
 }
 
 function showBotRevealResult(title,cards,done){
@@ -832,13 +876,13 @@ function botDamage(target,amount,done){
     const destination=cancel?"waiting":"clock";
     const damage={cards:revealed.map(card=>card.uid),cancelled:cancel};
     const result=cancel?"CXでダメージをキャンセル":"ダメージ "+revealed.length+"枚";
-    rememberBotReveal("Damage",target,revealed,cancel?result+"・"+revealed.length+"枚公開":result);
+    recordBotBattleAction(result,target,revealed);
     function apply(){
       for(const card of revealed){card.faceUp=true;board[destination].push(card)}
       resolveBoardRules(target,()=>done(damage));
     }
     if(isAutoRules()){
-      autoRuleLog(result+(revealed.length?"（"+revealed.map(stellaName).join("、")+"）":""));
+      autoRuleLog(result+(revealed.length?"（"+revealed.map(stellaName).join("、")+"）":""),false);
       if(isDeckMirror(match.bot.scenario)){
         showBotRevealResult((target===0?"自分":"Bot")+"の"+result,revealed,apply);
       }else apply();
@@ -975,7 +1019,7 @@ function scheduleBotTurn(){
 }
 function renderBotControls(){
   document.getElementById("botControls").hidden=false;
-  renderBotRevealButtons("bot");
+  renderBotRecovery();
   document.getElementById("botModeName").textContent="Bot戦 · "+((match.bot.scenario===stellaCustomScenario?match.decks.map(deck=>deck.title).join(" vs "):match.bot.scenario===stellaTrialScenario?stellaTrialDeck.title+" vs DAQBE":match.bot.scenario===stellaScenario?stellaDeck.title:match.bot.scenario===redBlueScenario?redBlueDeck.title:practiceTitles[match.bot.scenario])??(isAutoRules()?autoRuleTitle:botScenarioNames[match.bot.scenario]));
   const button=document.getElementById("botStep");
   button.hidden=isDeckMirror(match.bot.scenario);

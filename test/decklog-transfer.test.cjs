@@ -1616,19 +1616,24 @@ test("赤青同士ではBotの効果選択を自動で処理し、トリガー�
   assert.equal(snapshot(page).turn.phase,"climax");
   assert.ok(!page.get("dialog").open);
   assert.ok(snapshot(page).bot.log.some(line=>line.includes("公開と手札交換")));
-  assert.ok(snapshot(page).players[1].front1.some(c=>c.id==="BOT/W000-106"));
+  assert.ok(["front0","front1","front2"].some(slot=>snapshot(page).players[1][slot].some(c=>c.id==="BOT/W000-106")));
   page.click("botStep");
-  assert.equal(snapshot(page).players[1].cx[0].id,"BOT/W000-104");
-  page.click("botStep");
-  assert.equal(page.get("dialogTitle").textContent,"Botのトリガーチェック");
-  ruleButton(page,"確認して進む");
-  assert.match(page.get("dialogTitle").textContent,/自分の.*ダメージ/);
-  ruleButton(page,"確認して進む");
-  page.click("botStep");
-  ruleButton(page,"確認して進む");
-  assert.match(page.get("dialogTitle").textContent,/自分の.*ダメージ/);
-  ruleButton(page,"確認して進む");
-  assert.ok(snapshot(page).bot.log.some(line=>line.includes("CXコンボで")));
+  assert.equal(snapshot(page).players[1].cx[0]?.id,"BOT/W000-104");
+  page.run(`
+    const deck=players[0].deck;
+    const cancel=deck.filter(c=>c.cx).slice(0,3);
+    for(const card of cancel)deck.push(...deck.splice(deck.indexOf(card),1));
+  `);
+  let sawCombo=false;
+  for(let attack=0;attack<3;attack++){
+    page.click("botStep");
+    sawCombo||=snapshot(page).bot.log.some(line=>line.includes("CXコンボで"));
+    assert.equal(page.get("dialogTitle").textContent,"Botのトリガーチェック");
+    ruleButton(page,"確認して進む");
+    assert.match(page.get("dialogTitle").textContent,/自分の.*ダメージ/);
+    ruleButton(page,"確認して進む");
+  }
+  assert.ok(sawCombo);
   assert.ok(!page.get("dialog").open);
   assert.deepEqual(ruleCounts(snapshot(page)),[50,50]);
 });
@@ -2395,6 +2400,10 @@ test("フィレンのCXコンボは控え室の対象が1枚なら移動先だ�
     ruleButton(page,choice);
     const zone={"手札へ":"hand","ストックへ":"stock","使わない":"waiting"}[choice];
     assert.equal(page.run(`b.${zone}.at(-1).uid`),"target");
+    if(choice!=="使わない"){
+      assert.match(page.get("dialogTitle").textContent,/自分のフィレン・(手札に回収|ストックへ)/);
+      ruleButton(page,"確認して進む");
+    }
     assert.equal(page.get("dialog").open,false);
   }
 });
@@ -2414,26 +2423,22 @@ test("Bot戦では手動コマンドを隠し、舞台内の移動と公開領�
   assert.ok(buttons.every(button=>!["移動先を選択","縦向き","右90°","180°"].includes(button.textContent)));
 });
 
-test("集中でCXが0枚でも公開順に後から見返せる",()=>{
+test("集中はCXが0枚でも対戦ログに公開順で残す",()=>{
   const page=launchRules();
-  assert.equal(page.get("botBrainstormReveals").disabled,true);
   page.run(`
     var concentration=players[0];
     concentration.deck=[...concentration.deck.filter(c=>c.cx),...concentration.deck.filter(c=>!c.cx)];
-    var revealOrder=concentration.deck.slice(-2).reverse().map(c=>({id:c.id}));
+    var revealOrder=concentration.deck.slice(-2).reverse().map(c=>c.id);
     activateBrainstorm(0,concentration.front0[0],{stock:1,reveal:2});
   `);
-  assert.equal(page.run("JSON.stringify(match.bot.reveals.Brainstorm[0].cards)"),page.run("JSON.stringify(revealOrder)"));
-  assert.equal(page.get("botBrainstormReveals").disabled,false);
-  page.click("botBrainstormReveals");
-  assert.match(page.get("dialogBody").children[0].textContent,/2枚公開・CX 0枚/);
-  assert.equal(page.get("dialogBody").children[1].children[0].children.length,2);
+  assert.equal(page.run('JSON.stringify(match.bot.battleLog.at(-1).cards)'),page.run("JSON.stringify(revealOrder)"));
+  page.click("botBattleLog");
+  assert.match(page.get("dialogBody").children[0].value,/2枚公開・CX 0枚/);
   assert.equal(page.get("close").hidden,false);
 });
 
-test("成立とキャンセルのダメージ公開をリロード後も確認できる",()=>{
+test("成立とキャンセルのダメージと公開順はリロード後も対戦ログで確認できる",()=>{
   const page=launchRules();
-  assert.equal(page.get("botDamageReveals").disabled,true);
   page.run(`
     var own=players[0],opponent=players[1];
     function moveToTop(board,cx){
@@ -2446,22 +2451,18 @@ test("成立とキャンセルのダメージ公開をリロード後も確認�
     var cancelCx=moveToTop(opponent,true),beforeCx=moveToTop(opponent,false);
     runRuleOperation(done=>botDamage(1,3,done));
   `);
-  const [cancel,hit]=snapshot(page).bot.reveals.Damage;
-  assert.match(cancel.summary,/キャンセル/);
-  assert.equal(cancel.player,1);
-  assert.deepEqual(cancel.cards.map(c=>c.id),[page.run("beforeCx"),page.run("cancelCx")]);
-  assert.equal(hit.player,0);
-  assert.deepEqual(hit.cards,[{id:page.run("first")}]);
+  const [hit,cancel]=snapshot(page).bot.battleLog;
+  assert.equal(hit.p,0);
+  assert.deepEqual(hit.cards,[page.run("first")]);
+  assert.match(cancel.text,/キャンセル/);
+  assert.equal(cancel.p,1);
+  assert.deepEqual(cancel.cards,[page.run("beforeCx"),page.run("cancelCx")]);
   const reopened=launch("",page.storage);
-  assert.equal(reopened.get("botDamageReveals").disabled,false);
-  reopened.click("botDamageReveals");
-  const [entries,cards]=reopened.get("dialogBody").children;
-  assert.match(entries.children[0].textContent,/Bot.*キャンセル/);
-  assert.equal(cards.children[0].children.length,2);
-  entries.value="1";
-  entries.onchange();
-  assert.match(entries.children[1].textContent,/自分.*ダメージ 1枚/);
-  assert.equal(cards.children[0].children.length,1);
+  reopened.click("botBattleLog");
+  const text=reopened.get("dialogBody").children[0].value;
+  assert.match(text,/自分｜ダメージ 1枚/);
+  assert.match(text,/Bot｜CXでダメージをキャンセル/);
+  assert.ok(text.includes("["+cancel.cards[0]+"]、"));
 });
 
 test("ステラソラのLv0追加4種でDAQBEと初手から対戦できる",async()=>{
@@ -2868,7 +2869,7 @@ test("ヒンメルのCXコンボは下3枚のCXの枚数だけ2点を繰り返�
   ruleButton(page,"確認して進む");
   assert.equal(page.run("opponent.waiting.map(card=>card.uid).join()"),"bottom1,bottom2,bottom3");
   assert.equal(page.run("opponent.clock.length"),4);
-  assert.equal(page.run("match.bot.reveals.Damage.length"),2);
+  assert.equal(page.run("match.bot.battleLog.filter(entry=>entry.text.startsWith(\"ダメージ\")).length"),2);
 });
 
 test("対応CXを置いた瞬間に思い出にアイゼンがなければ、控え室のアイゼン4枚を一度に思い出へ置ける",async()=>{
@@ -3162,4 +3163,121 @@ test("Botは勝てる対面がなければ空き枠へ移動し、ソウルが�
   assert.equal(page.run("opponent.front2[0].orientation"),90);
   assert.equal(page.run("opponent.front0[0].orientation"),0);
   assert.match(page.run("match.bot.log.join()"),/ダイレクトを優先/);
+});
+
+
+test("Botは集中でレストする前に後列のキャラを攻撃に回し、3回の攻撃でストックを増やす",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    opponent.front0.push(card("001","front"));
+    opponent.back0.push(card("T03","support"));
+    opponent.back1.push(card("008","brainstorm"));
+    opponent.stock.push(card("001","starting-stock"));
+    for(let i=0;i<12;i++){
+      opponent.deck.push(card("002","trigger"+i));
+      own.deck.push(card("001","damage"+i));
+    }
+    match.turn.player=1;
+    match.turn.number=2;
+    match.bot.scenario="stella-sora-mirror";
+    setTurnPhase("main");
+    autoRuleBotStep();
+    match.bot.scenario=autoRuleScenario;
+    setTurnPhase("attack");
+    for(let i=0;i<3;i++)autoRuleBotStep();
+  `);
+  assert.equal(page.run("opponent.stock.length"),4);
+  assert.equal(page.run("botSlots.slice(0,3).filter(slot=>opponent[slot][0]?.orientation===90).length"),3);
+});
+
+test("Botはレベル1でフィレンに合う色を選び、対応CXで次のターンの手札を補う",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    opponent.hand.push(card("032","other-cx",true),card("002","firen"),card("031R","song",true));
+    for(let i=0;i<6;i++)opponent.clock.push(card("076","blue"+i));
+    opponent.clock.push(card("008","green"));
+    opponent.waiting.push(card("025","salvage"));
+    for(let i=0;i<5;i++){
+      opponent.deck.push(card("001","trigger"+i));
+      own.deck.push(card("001","damage"+i));
+    }
+    match.turn.player=1;
+    match.turn.number=2;
+    match.bot.scenario="stella-sora-mirror";
+    openMandatoryLevel(1,()=>{});
+    setTurnPhase("main");
+    autoRuleBotStep();
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("opponent.level[0].uid"),"green");
+  assert.equal(page.run("opponent.cx[0].uid"),"song");
+  assert.equal(page.run('botSlots.slice(0,3).some(slot=>opponent[slot][0]?.uid==="firen")'),true);
+  page.run("autoRuleBotStep()");
+  ruleButton(page,"確認して進む");
+  ruleButton(page,"確認して進む");
+  ruleButton(page,"確認して進む");
+  assert.equal(page.run("opponent.stock.length"),1);
+  assert.equal(page.run("opponent.hand.at(-1).uid"),"salvage");
+  assert.equal(page.get("botRecovery").hidden,false);
+});
+
+
+test("Botは出せるキャラがなければ、集中で外した後にもう一度集中できる",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    opponent.back0.push(card("008","concentration1"));
+    opponent.back1.push(card("008","concentration2"));
+    opponent.stock.push(card("001","stock1"),card("001","stock2"));
+    for(let i=0;i<10;i++)opponent.deck.push(card("001","miss"+i));
+    match.turn.player=1;
+    match.turn.number=2;
+    match.bot.scenario="stella-sora-mirror";
+    setTurnPhase("main");
+    autoRuleBotStep();
+  `);
+  for(let i=0;i<2;i++){
+    assert.equal(page.get("dialogTitle").textContent,"Botの集中・CX 0枚");
+    ruleButton(page,"確認して進む");
+  }
+  assert.equal(page.run("opponent.stock.length"),0);
+  assert.equal(page.run("match.turn.phase"),"climax");
+});
+
+test("手札が6枚あるBotはフィレンの対応をストックに置き、対象を公開する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    for(let i=0;i<6;i++)opponent.hand.push(card("001","hand"+i));
+    opponent.front0.push(card("002","firen"));
+    opponent.cx.push(card("031","song",true));
+    opponent.waiting.push(card("025","salvage"));
+    match.bot.scenario="stella-sora-mirror";
+    runRuleOperation(done=>botDispatch(opponent.front0[0],"on_attack",done,1));
+  `);
+  assert.equal(page.get("dialogTitle").textContent,"Botのフィレン・ストックへ");
+  assert.equal(page.run("opponent.stock[0].uid"),"salvage");
+  ruleButton(page,"確認して進む");
+});
+
+test("Botは集中で回収したカードを表示し、出せるキャラが手に入れば2回目を使わない",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    opponent.back0.push(card("008","concentration1"));
+    opponent.back1.push(card("008","concentration2"));
+    opponent.stock.push(card("032","stock1",true),card("032","stock2",true));
+    for(let i=0;i<8;i++)opponent.deck.push(card("T03","found"+i));
+    opponent.deck.push(card("031","hit",true));
+    match.turn.player=1;
+    match.turn.number=2;
+    match.bot.scenario="stella-sora-mirror";
+    setTurnPhase("main");
+    autoRuleBotStep();
+  `);
+  assert.equal(page.get("dialogTitle").textContent,"Botの集中・CX 1枚");
+  ruleButton(page,"確認して進む");
+  assert.equal(page.get("dialogTitle").textContent,"Botの集中・手札に回収");
+  assert.equal(page.get("dialogBody").children[0].children.length,1);
+  ruleButton(page,"確認して進む");
+  assert.equal(page.run("opponent.stock.length"),1);
+  assert.equal(page.run("match.turn.phase"),"climax");
+  assert.ok(page.run("botSlots.slice(0,3).some(slot=>opponent[slot][0]?.uid.startsWith('found'))"));
 });
