@@ -55,7 +55,7 @@ const connectDeckBuilder=(()=>{
   const save=get("saveBuiltOnlineDeck"), deckName=get("builtOnlineDeckName");
   const presetSelect=get("botDeckPreset"), savedSelect=get("loadBuilderDeck");
   const load=get("applyBuilderDeck"), titleFilter=get("builderTitleFilter");
-  let counts,cards=[],editing=0,openedFromOnline=false,newDraft={},readSavedDecks;
+  let counts,cards=[],editing=0,newDraft={},readSavedDecks;
   const newDeck=()=>editing===2;
   const currentDeck=()=>newDeck()?newDraft:counts[editing];
   function setCurrentDeck(deck){
@@ -253,11 +253,10 @@ const connectDeckBuilder=(()=>{
     renderRows();
     refreshCounts();
   }
-  async function openEditor(forOnline){
+  async function openEditor(){
     if(!isDeckSetup())return;
-    openedFromOnline=forOnline;
     botDeckEditorOpen=true;
-    selectTab(forOnline?2:0);
+    selectTab(0);
     showMatchScreen();
     if(!counts){
       notice.textContent="カードデータを読み込んでいます";
@@ -284,8 +283,7 @@ const connectDeckBuilder=(()=>{
     botDeckEditorOpen=false;
     showMatchScreen();
   }
-  get("openBotDeckEditor").onclick=()=>openEditor(false);
-  get("openOnlineDeckBuilder").onclick=()=>openEditor(true);
+  get("openBotDeckEditor").onclick=openEditor;
   get("closeBotDeckEditor").onclick=closeEditor;
   deckName.oninput=()=>{if(counts)refreshCounts()};
   tabs.forEach((tab,p)=>{tab.onclick=()=>selectTab(p)});
@@ -325,19 +323,9 @@ const connectDeckBuilder=(()=>{
       try{
         const title=deckName.value.trim();
         if(!title||!complete(summarize(currentDeck())))return;
-        const id=storeDeck(buildDeck(currentDeck(),title));
-        if(openedFromOnline&&newDeck()){
-          newDraft={};
-          deckName.value="";
-          closeEditor();
-          get("onlineControls").open=true;
-          onlineMatch?.refreshDecks();
-          get("onlineDeck").value=id;
-          get("onlineStatus").textContent="「"+title+"」を保存しました。ルームでこのデッキを選べます。";
-        }else{
-          refreshSavedDecks();
-          notice.textContent="「"+title+"」を共通のデッキ一覧に保存しました。";
-        }
+        storeDeck(buildDeck(currentDeck(),title));
+        refreshSavedDecks();
+        notice.textContent="「"+title+"」を共通のデッキ一覧に保存しました。";
       }catch(error){
         notice.textContent=error.message;
       }

@@ -2669,7 +2669,8 @@ test("ステラソラBot戦は集中0ヒットとキャンセルされたダメ�
 
 test("オンライン用の新規作成はBotデッキと独立し、50枚とCX8枚を満たすデッキを登録する",async()=>{
   const page=launch("",new Map(),null,100,null,true);
-  await page.click("openOnlineDeckBuilder");
+  await page.click("openBotDeckEditor");
+  page.click("editNewDeck");
   assert.equal(page.get("startEditedBotBattle").hidden,true);
   assert.match(page.get("botDeckTotals").textContent,/^0\/50枚/);
   page.get("builtOnlineDeckName").value="オンライン検証";
@@ -2684,8 +2685,8 @@ test("オンライン用の新規作成はBotデッキと独立し、50枚とCX8
   assert.equal(saved.deck.list.reduce((sum,card)=>sum+card.num,0),50);
   assert.equal(saved.deck.list.filter(card=>card.cx).reduce((sum,card)=>sum+card.num,0),8);
   assert.equal(saved.deck.list.find(card=>card.card_number==="STS/W140-038").num,1);
-  assert.equal(page.get("botDeckEditorScreen").hidden,true);
-  await page.click("openBotDeckEditor");
+  assert.equal(page.get("botDeckEditorScreen").hidden,false);
+  page.click("editOwnBotDeck");
   assert.equal(page.get("startEditedBotBattle").hidden,false);
   assert.match(page.get("botDeckTotals").textContent,/Bot 50\/50枚/);
   const kohaku=page.get("botDeckCardRows").children.find(row=>row.children[0].textContent==="銃弾のロンド コハク");

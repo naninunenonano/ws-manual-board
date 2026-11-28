@@ -197,6 +197,7 @@
     catch(e){message("登録済みデッキを読み込めません");return}
     if(!item){message("編集するデッキを選択してください");return}
     if(item.cloud?.conflict){message("先にクラウドの競合を解決してください");return}
+    if(botDeckEditorOpen)$("closeBotDeckEditor").click();
     const revision=++transferRevision;
     setEditing(item);
     pending=null;$("applyDeck").disabled=true;

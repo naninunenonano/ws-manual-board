@@ -298,7 +298,7 @@ async function checkBotDeckEditor(browser,url){
     }));
     await page.goto(url);
     await page.locator("#openBotDeckEditor").tap();
-    await page.getByRole("heading",{name:"デッキ作成・Bot戦"}).waitFor();
+    await page.getByRole("heading",{name:"デッキ作成・管理"}).waitFor();
     const start=page.locator("#startEditedBotBattle");
     await page.locator("#editNewDeck").tap();
     for(const [preset,title,count] of [["sakurarium","OSK",34],["r6d3n","OSK",34],["vhl0","OSK",34],["aogiri","AOH",18]]){
