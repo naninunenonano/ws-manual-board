@@ -127,7 +127,7 @@ function frierenHimmelCombo(p,source,done){
     const hits=milled.filter(card=>card.cx).length;
     function damage(left){
       if(!left||players[1-p].level.length>=4){done();return}
-      botAbilityDamage(1-p,2,()=>damage(left-1));
+      botAbilityDamage(1-p,2,()=>damage(left-1),source);
     }
     stellaShow(p,"久遠の愛情・相手の山札の下から控え室へ",milled,()=>damage(hits));
   });
@@ -386,7 +386,7 @@ function frierenFlowersDamage(p,source,done){
   function pay(cards){
     autoRulePay(p,3);
     for(const card of cards)stellaMove(board,"hand",card,"waiting");
-    botAbilityDamage(1-p,4,done);
+    botAbilityDamage(1-p,4,done,source);
   }
   if(p===1){
     if(board.hand.length<3&&players[0].level.length<3){done();return}
@@ -458,10 +458,10 @@ function frierenMethodeEntry(p,source,done){
   autoRuleAddTurnStat(source,"power",1500*stellaStage(1-p).length);
   done();
 }
-function frierenMethodeReverse(p,done){
+function frierenMethodeReverse(p,done,source){
   frierenMill(1-p,5,true,milled=>{
     stellaShow(p,"猛攻 メトーデ・相手の山札の下から控え室へ",milled,()=>{
-      if(players[1-p].level.length<4&&milled.some(card=>card.cx))botAbilityDamage(1-p,1,done);
+      if(players[1-p].level.length<4&&milled.some(card=>card.cx))botAbilityDamage(1-p,1,done,source);
       else done();
     });
   });
