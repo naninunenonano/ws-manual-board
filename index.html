@@ -128,7 +128,7 @@
 <button id="botBattleLog" type="button">対戦ログ</button>
 <span id="botStatus" role="status"></span></div><div id="boards"></div><div id="botRecovery" hidden></div><div id="playerActions" style="margin:8px 0"><div id="turnControls" style="border:1px solid #6581a5;border-radius:9px;padding:9px;margin:8px 0"><strong id="turnStatus"></strong><p id="stagePlacementHint" role="status" hidden></p><div class="toolbar"><button id="clearSelection" type="button" hidden>選択解除</button><button id="clockAction" hidden>選択した手札をクロックに置いて2枚ドロー</button><button id="clockSkip" hidden>クロックせずメインへ</button><button id="drawReminderResume" hidden>ドロー前確認に戻る</button><button id="nextPhase">次のフェイズへ</button></div></div><div class="toolbar"><label id="battleSideControl">操作する側 <select id="battleSide"><option value="0">プレイヤー1</option><option value="1">プレイヤー2</option></select></label><button id="viewDecks">自分のデッキ確認</button><button id="shuffle">山札シャッフル</button></div></div><p id="manualBattleHint" class="muted">カード画像は縦横比を維持して表示します。手札の🔍、盤面や一覧の「拡大」で公式画像を大きく確認できます。カード能力は手動で処理します。レベルアップはクロック下から7枚を対象とします。</p></section><section id="resultScreen" hidden><h2>対戦終了</h2><p id="battleResult" role="status"></p><button id="resultBattleLog" type="button" hidden>対戦ログ</button><button id="nextBattle">次の対戦へ</button></section></main>
 <dialog id="dialog"><h3 id="dialogTitle"></h3><div id="dialogBody"></div><div class="controls"><button id="close">閉じる</button></div></dialog>
-<script src="card-images.js?v=0.78"></script>
+<script src="card-images.js?v=0.81"></script>
 <script>
 "use strict";
 const cardCatalog = Object.freeze({
