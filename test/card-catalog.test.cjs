@@ -35,12 +35,32 @@ test("tournament recipe cards use their Card Labo prints when available",()=>{
   assert.equal(cards.length,52);
   for(const {cardNumber,type} of cards){
     if(cardNumber==="OSK/S133-P01"){
-      assert.equal(cardImageUrl(cardNumber),officialImageUrl(cardNumber));
+      assert.match(cardImageUrl(cardNumber),/tcgrepublic\.com.*822222\.png$/);
       continue;
     }
     assert.ok(cardLaboImageUrl(cardNumber),cardNumber);
     assert.equal(isKnownClimaxImage(cardNumber),type==="climax",cardNumber);
   }
+});
+
+test("Oshi no Ko printings use the same card definition and distinct images",()=>{
+  const catalog=require("../card-data/catalog.json");
+  const cards=catalog.cards.filter(card=>card.cardNumber.startsWith("OSK/"));
+  assert.equal(cards.length,34);
+  const imageUrls=new Set();
+  for(const card of cards){
+    assert.ok(card.variants.length,card.cardNumber);
+    for(const number of C.cardNumbers(card)){
+      assert.equal(C.findCard(cards,number),card,number);
+      const url=cardImageUrl(number);
+      assert.ok(url&&!imageUrls.has(url),number);
+      imageUrls.add(url);
+      assert.equal(isKnownClimaxImage(number),card.type==="climax",number);
+    }
+  }
+  assert.equal(imageUrls.size,76);
+  assert.match(cardImageUrl("OSK/S133-P01S"),/822221\.png$/);
+  assert.match(cardImageUrl("OSK/S133-P01EX"),/822224\.png$/);
 });
 
 test("image load failures first try the official printing",()=>{

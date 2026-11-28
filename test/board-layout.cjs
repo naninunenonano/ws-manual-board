@@ -292,7 +292,7 @@ async function checkBotDeckEditor(browser,url){
   const page=await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
   try {
     await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
-    await page.route("https://www.c-labo-online.jp/data/c-labo/product/**",route=>route.fulfill({
+    await page.route(/https:\/\/(?:www\.c-labo-online\.jp\/data\/c-labo\/product|tcgrepublic\.com\/media\/binary)\//,route=>route.fulfill({
       contentType:"image/svg+xml",
       body:'<svg xmlns="http://www.w3.org/2000/svg" width="459" height="640"><rect width="459" height="640" fill="#456"/></svg>'
     }));
@@ -308,6 +308,29 @@ async function checkBotDeckEditor(browser,url){
       assert.equal(await page.locator(".bot-deck-card-row").count(),count);
       assert.equal(await page.locator("#botDeckTotals").textContent(),"50/50枚（CX 8/8枚）");
     }
+    await page.locator("#botDeckPreset").selectOption("vhl0");
+    await page.locator("#applyBotDeckPreset").tap();
+    const promo=page.locator(".bot-deck-card-row").filter({hasText:"Happy New Year ルビー＆アクア"});
+    const promoPreview=promo.locator(".bot-deck-card-preview img");
+    const promoSelect=promo.getByRole("combobox");
+    assert.match(await promoPreview.getAttribute("src"),/822222\.png$/);
+    await promo.getByRole("button",{name:/1枚減らす$/}).tap();
+    await promoSelect.selectOption("OSK/S133-P01S");
+    assert.match(await promoPreview.getAttribute("src"),/822221\.png$/);
+    await promo.getByRole("button",{name:/1枚増やす$/}).tap();
+    await promoSelect.selectOption("OSK/S133-P01EX");
+    assert.match(await promoPreview.getAttribute("src"),/822224\.png$/);
+    const ai=page.locator(".bot-deck-card-row").filter({hasText:"吸い寄せられる天性の瞳 アイ"});
+    await ai.getByRole("combobox").selectOption("OSK/S107-044SP");
+    await ai.scrollIntoViewIfNeeded();
+    const aiPreview=ai.locator(".bot-deck-card-preview img");
+    assert.match(await aiPreview.getAttribute("src"),/wsosks107_\d+\.jpg$/);
+    await aiPreview.evaluate(async img=>{img.loading="eager";await img.decode()});
+    assert.equal(await aiPreview.isVisible(),true);
+    assert.equal(await ai.getByRole("button",{name:/1枚増やす$/}).isDisabled(),true);
+    assert.equal(await page.locator("#botDeckTotals").textContent(),"50/50枚（CX 8/8枚）");
+    await page.locator("#botDeckPreset").selectOption("aogiri");
+    await page.locator("#applyBotDeckPreset").tap();
     await page.locator("#builtOnlineDeckName").fill("あおぎり高校 テスト用");
     await page.locator("#saveBuiltOnlineDeck").tap();
     await page.locator("#editOwnBotDeck").tap();

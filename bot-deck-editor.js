@@ -157,7 +157,12 @@ const connectDeckBuilder=(()=>{
       if(card.catalogOnly)info.textContent+=" ／ Bot未対応";
       label.append(info);
       const editions=document.createElement("select");
-      const editionNames=ids.map(id=>({S:"SR",R:"RRR"}[id.slice(card.cardNumber.length)]??(id.slice(card.cardNumber.length)||"通常")));
+      const isPromo=card.cardNumber.split("-").at(-1).startsWith("P");
+      const editionNames=ids.map(id=>{
+        const suffix=id.slice(card.cardNumber.length);
+        if(isPromo)return {S:"PR（箔押し）",EX:"PR+（サイン）"}[suffix]??(suffix||"通常");
+        return {S:"SR",R:"RRR"}[suffix]??(suffix||"通常");
+      });
       if(ids.length>1){
         editions.className="bot-deck-edition";
         editions.setAttribute("aria-label",card.name+"のバージョン");
