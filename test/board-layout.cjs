@@ -200,6 +200,23 @@ async function main() {
     const climax = lowerMat.locator('[data-z="level"] img.rotated-cx-scan').first();
     await climax.waitFor();
     await assertAngle(climax,90);
+    await page.evaluate(()=>{
+      const card=players[0].level.find(card=>card.id.endsWith("-T09"));
+      const body=showResolution("画像の向き",[card]);
+      effectCardButton(body,card,"選択肢",()=>{});
+    });
+    for(const selector of [".modalcards .carddetail img.rotated-cx-scan",".effect-card-choice img.rotated-cx-scan"]){
+      const thumbnail=page.locator("#dialog "+selector);
+      await thumbnail.waitFor();
+      const rotation=await thumbnail.evaluate(img=>{
+        const {b,d}=new DOMMatrix(getComputedStyle(img).transform);
+        return Math.atan2(b,d)*180/Math.PI;
+      });
+      assert.equal(Math.round(rotation),-90);
+      const bounds=await thumbnail.boundingBox();
+      assert.ok(bounds.width>bounds.height);
+    }
+    await page.evaluate(()=>closeResolution());
     await page.evaluate(()=>showCardDetail(players[0].level.find(card=>card.id.endsWith("-T09"))));
     const zoom = page.locator("#dialog .card-zoom-image.rotated-cx-scan img");
     await zoom.waitFor();
