@@ -2,7 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const C = require("../card-catalog.js");
-const {officialImageUrl,effectChoiceImageUrl,cardLaboImageUrl,isKnownClimaxImage,setCardImage} = require("../card-images.js");
+const {officialImageUrl,cardImageUrl,effectChoiceImageUrl,cardLaboImageUrl,isKnownClimaxImage,setCardImage} = require("../card-images.js");
 
 const card = (number="TEST/S001-001",attrs={}) => ({cardNumber:number,type:"character",
   color:"青",title:"テストタイトル",product:"試験商品",stats:{level:0,cost:0,power:1000,soul:1},effects:[],...attrs});
@@ -28,6 +28,19 @@ test("implemented normal cards use matching Card Labo images and unavailable var
   assert.match(officialImageUrl("SFN/S128-003SP"),/sfn_s128_003sp\.png$/);
   assert.equal(isKnownClimaxImage("STS/W140-031R"),true);
   assert.equal(isKnownClimaxImage("SFN/S108-T04"),false);
+});
+
+test("the two tournament recipes use their Card Labo prints when available",()=>{
+  const cards=require("../card-data/catalog.json").cards.filter(card=>/^(OSK|AOH)\//.test(card.cardNumber));
+  assert.equal(cards.length,39);
+  for(const {cardNumber,type} of cards){
+    if(cardNumber==="OSK/S133-P01"){
+      assert.equal(cardImageUrl(cardNumber),officialImageUrl(cardNumber));
+      continue;
+    }
+    assert.ok(cardLaboImageUrl(cardNumber),cardNumber);
+    assert.equal(isKnownClimaxImage(cardNumber),type==="climax",cardNumber);
+  }
 });
 
 test("image load failures first try the official printing",()=>{

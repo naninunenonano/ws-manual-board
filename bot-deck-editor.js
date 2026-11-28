@@ -12,12 +12,28 @@ const connectDeckBuilder=(()=>{
       ["030",3],["031",4],["032",4]
     ].map(([number,num])=>({id:"STS/W140-"+number,num}))
   };
+  const recipeDeck=(titleCode,entries)=>({
+    cards:entries.map(([number,num])=>({id:titleCode+"/"+number,num}))
+  });
   const presets={
     daqbe:{deck:stellaDeck,url:"https://ws-tcg.com/deckrecipe/5855/"},
     sendai:{deck:sendaiDeck,url:"https://ws-tcg.com/deckrecipe/5856/"},
     trial:{deck:stellaTrialDeck},
     frierenGreen:{deck:frierenGreenDeck},
     frieren:{deck:frierenDeck,url:"https://ws-tcg.com/deckrecipe/5856/"},
+    sakurarium:{url:"https://ws-tcg.com/deckrecipe/5625/",deck:recipeDeck("OSK",[
+      ["S121-030",1],["S107-044",4],["S133-037",3],["S133-063",2],["S133-005",1],
+      ["S133-046",1],["S107-041",1],["S133-082",3],["S133-081",1],["S107-093",1],
+      ["S133-043",4],["S133-001",1],["S133-003",3],["S133-P01",1],["S121-027",4],
+      ["S107-035",3],["S133-061",4],["S121-065",2],["S133-095",2],["S133-059",4],
+      ["S133-060",4]
+    ])},
+    aogiri:{url:"https://ws-tcg.com/deckrecipe/5855/",deck:recipeDeck("AOH",[
+      ["W127-003",2],["W127-008",4],["W127-065",2],["W127-108",1],["W127-032",4],
+      ["W127-033",4],["W127-070",1],["W127-014",4],["W127-005",1],["W127-028",3],
+      ["W127-038",2],["W127-084",4],["W127-063",4],["W127-T09",3],["W127-102",2],
+      ["W127-109",1],["W127-025",4],["W127-058",4]
+    ])},
     empty:{deck:{cards:[]}}
   };
   const tabs=[get("editOwnBotDeck"),get("editOpponentBotDeck"),get("editNewDeck")];
@@ -73,9 +89,11 @@ const connectDeckBuilder=(()=>{
     }
   }
   const groups=deck=>new Set(Object.keys(deck).map(id=>id.split("/")[0]));
-  const gameTitle=deck=>groups(deck).has("SFN")?"葬送のフリーレン":"ステラソラ";
+  const titles={STS:"ステラソラ",SFN:"葬送のフリーレン",OSK:"【推しの子】",AOH:"あおぎり高校"};
+  const deckTitleCode=deck=>[...groups(deck)][0]??"STS";
+  const gameTitle=deck=>titles[deckTitleCode(deck)];
   function showDeckTitle(deck){
-    titleFilter.value=groups(deck).has("SFN")?"SFN":"STS";
+    titleFilter.value=deckTitleCode(deck);
   }
   function buildDeck(countsForDeck,title){
     return {
@@ -234,7 +252,7 @@ const connectDeckBuilder=(()=>{
         return;
       }
       if(!counts){
-        cards=botCatalog.cards.filter(card=>/^(STS|SFN)\//.test(card.cardNumber)).sort((a,b)=>
+        cards=botCatalog.cards.filter(card=>Object.hasOwn(titles,card.cardNumber.split("/")[0])).sort((a,b)=>
           Number(a.type==="climax")-Number(b.type==="climax")||a.cardNumber.localeCompare(b.cardNumber));
         counts=loadCounts();
       }
