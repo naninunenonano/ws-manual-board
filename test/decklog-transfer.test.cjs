@@ -3135,3 +3135,31 @@ test("Botは前列2枚と手札4枚があればクロックを省略する",asyn
   assert.equal(page.run("opponent.clock.length"),0);
   assert.equal(page.run("opponent.hand.length"),4);
 });
+
+test("Botは勝てる対面がなければ空き枠へ移動し、ソウルが高いサイドよりダイレクトを優先する",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    opponent.front0.push({...card("001","side"),botSoul:5});
+    opponent.front1.push(card("001","mover"));
+    own.front2.push(card("004","occupied0"));
+    own.front1.push(card("004","occupied1"));
+    match.turn.player=1;
+    match.turn.number=2;
+    match.bot.scenario="stella-sora-mirror";
+    setTurnPhase("main");
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("opponent.front2.length"),1);
+  page.run(`
+    opponent.front0.splice(0);
+    opponent.front1.splice(0);
+    opponent.front0.push({...card("001","side"),botSoul:8});
+    opponent.deck.push(card("001","reserve"),card("001","trigger"));
+    own.deck.push(card("001","reserve2"),card("001","damage"));
+    setTurnPhase("attack");
+    autoRuleBotStep();
+  `);
+  assert.equal(page.run("opponent.front2[0].orientation"),90);
+  assert.equal(page.run("opponent.front0[0].orientation"),0);
+  assert.match(page.run("match.bot.log.join()"),/ダイレクトを優先/);
+});

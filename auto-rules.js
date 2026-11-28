@@ -925,6 +925,11 @@ function autoRuleBotAttackPlan(p,slot){
     damage:Math.max(0,soul-Math.max(0,botEffectCard(target).level??0))};
 }
 
+function autoRuleBotAttackScore({wins,type,survives,damage}){
+  // Each higher priority outweighs the next across all three front slots.
+  return wins*10000+Number(type==="direct")*1000+survives*100+Math.min(damage,20);
+}
+
 function autoRuleArrangeBotFront(p){
   if(players.some(board=>board.level.length>=4))return;
   const board=players[p],slots=botSlots.slice(0,3);
@@ -936,7 +941,7 @@ function autoRuleArrangeBotFront(p){
     for(const order of orders){
       arrange(order);
       const plans=slots.map(slot=>autoRuleBotAttackPlan(p,slot)).filter(Boolean);
-      const scores=plans.map(({wins,survives,damage})=>wins*1000+survives*100+Math.min(damage,20));
+      const scores=plans.map(autoRuleBotAttackScore);
       const score=match.turn.number===1&&p===match.firstPlayer?
         Math.max(0,...scores):scores.reduce((total,value)=>total+value,0);
       if(score>bestScore){best=order;bestScore=score}
@@ -1087,11 +1092,11 @@ function autoRuleBotStep(){
       break;
     }
     case "attack":{
-      const priority={front:1,side:0,direct:2};
       const [plan]=botSlots.slice(0,3).map(slot=>autoRuleBotAttackPlan(p,slot)).filter(Boolean)
-        .sort((a,b)=>b.wins-a.wins||priority[b.type]-priority[a.type]||b.damage-a.damage);
+        .sort((a,b)=>autoRuleBotAttackScore(b)-autoRuleBotAttackScore(a));
       if(!plan){encoreAction("enter");break}
       if(plan.wins)autoRuleLog("Botは"+stellaName(plan.target)+"を倒せるフロントを優先");
+      if(plan.type==="direct")autoRuleLog("Botは空いている枠からダイレクトを優先");
       if(plan.type==="side")autoRuleLog("Botはサイドで"+stellaName(plan.attacker)+"を残す");
       autoRuleAttack(p,plan.slot,plan.attacker.uid,plan.type);
       break;
