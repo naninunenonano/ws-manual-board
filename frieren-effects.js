@@ -432,6 +432,8 @@ function frierenPartnerDeploy(p,source,done){
     },{optional:true});
   });
 }
+const frierenLawineAttackPower=4000;
+const frierenKanneAttackPower=2000;
 function frierenLawineAttack(p,source,done){
   const board=players[p];
   botLookUpTo(p,2,viewed=>{
@@ -440,14 +442,14 @@ function frierenLawineAttack(p,source,done){
         if(card!==top)stellaMove(board,"deck",card,"waiting");
       }
       if(top)stellaMove(board,"deck",top,"deck");
-      autoRuleAddTurnStat(source,"power",4000);
+      autoRuleAddTurnStat(source,"power",frierenLawineAttackPower);
       resolveBoardRules(p,done);
     });
   });
 }
 function frierenKanneAttack(p,source,done){
   frierenTopMove(p,p,true,()=>{
-    autoRuleAddTurnStat(source,"power",2000);
+    autoRuleAddTurnStat(source,"power",frierenKanneAttackPower);
     autoRuleAddTurnStat(source,"soul",1);
     done();
   });

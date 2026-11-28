@@ -905,6 +905,56 @@ function autoRuleAttack(p,zone,uid,type){
     });
   });
 }
+function autoRuleBotAttackPlan(p,slot){
+  const attacker=players[p][slot].at(-1);
+  if(!autoRuleAttackAllowed(p,slot,attacker))return null;
+  const target=players[1-p][autoRuleOpposite(slot)].at(-1);
+  const stats=botStats(p,attacker);
+  const lawine=frierenIs(attacker,"S136-033")&&frierenHasPartner(p,attacker);
+  const kanne=frierenIs(attacker,"S136-034")&&frierenHasPartner(p,attacker);
+  const soul=(stats.soul??0)+Number(kanne);
+  const power=stats.power+(lawine?frierenLawineAttackPower:kanne?frierenKanneAttackPower:0);
+  if(!target)return {slot,attacker,type:"direct",wins:0,survives:1,damage:Math.max(0,soul+1)};
+
+  const defence=botStats(1-p,target).power;
+  const wins=stats.power!=null&&defence!=null&&power>defence;
+  if(wins||!autoRuleAttackTypes(attacker,target).includes("side")){
+    return {slot,attacker,target,type:"front",wins:Number(wins),survives:Number(wins),damage:Math.max(0,soul)};
+  }
+  return {slot,attacker,target,type:"side",wins:0,survives:1,
+    damage:Math.max(0,soul-Math.max(0,botEffectCard(target).level??0))};
+}
+
+function autoRuleBotAttackScore({wins,type,survives,damage}){
+  // Each higher priority outweighs the next across all three front slots.
+  return wins*10000+Number(type==="direct")*1000+survives*100+Math.min(damage,20);
+}
+
+function autoRuleArrangeBotFront(p){
+  if(players.some(board=>board.level.length>=4))return;
+  const board=players[p],slots=botSlots.slice(0,3);
+  const positions=slots.map(slot=>board[slot]);
+  const orders=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+  let best=orders[0],bestScore=-1;
+  function arrange(order){slots.forEach((slot,i)=>{board[slot]=positions[order[i]]})}
+  try{
+    for(const order of orders){
+      arrange(order);
+      const plans=slots.map(slot=>autoRuleBotAttackPlan(p,slot)).filter(Boolean);
+      const scores=plans.map(autoRuleBotAttackScore);
+      const score=match.turn.number===1&&p===match.firstPlayer?
+        Math.max(0,...scores):scores.reduce((total,value)=>total+value,0);
+      if(score>bestScore){best=order;bestScore=score}
+    }
+  }finally{
+    arrange(orders[0]);
+  }
+  if(best!==orders[0]){
+    arrange(best);
+    autoRuleLog("Botは前列を入れ替えて有利な対面を作った");
+  }
+}
+
 function autoRuleBotMain(p,done){
   const board=players[p];
   const slots=["back0","back1","front0","front1","front2"];
@@ -952,13 +1002,13 @@ function autoRuleBotMain(p,done){
   }
   function ensureAttacker(){
     if(!isStellaDeck(match.bot.scenario)||players.some(b=>b.level.length>=4)){done();return}
-    const front=botSlots.slice(0,3),ready=card=>card?.faceUp&&card.orientation===0&&!botDefinition(card)?.cannotAttack;
+    const front=botSlots.slice(0,3),ready=card=>card?.faceUp&&card.orientation===0&&botDefinition(card)?.type==="character"&&!botDefinition(card)?.cannotAttack;
     if(front.some(slot=>ready(board[slot].at(-1)))){done();return}
     const target=front.find(slot=>!board[slot].length)??front[0];
     const playable=board.hand.findIndex(card=>!botDefinition(card)?.cannotAttack&&!autoRuleLegalPlay(p,card,"main","character"));
     if(playable>=0){autoRuleResolvePlay(p,playable,target,done);return}
     const rear=["back0","back1"].find(slot=>ready(board[slot].at(-1)));
-    if(rear&&!board[target].length)botMove(board,rear,board[rear].length-1,target);
+    if(rear)[board[target],board[rear]]=[board[rear],board[target]];
     done();
   }
   function playEvent(){
@@ -992,6 +1042,11 @@ function autoRuleBotStep(){
         const greenForClock=!hasGreen&&hasGreenPayoff&&board.level.length>0?
           board.hand.findIndex(card=>card.id.startsWith("SFN/")&&botDefinition(card)?.color==="緑"&&botDefinition(card).stats.level===0):-1;
         const spare=greenForClock>=0?greenForClock:board.hand.findIndex(card=>!card.cx&&!playable(card));
+        const frontReady=botSlots.slice(0,3).filter(slot=>autoRuleAttackAllowed(p,slot,board[slot].at(-1))).length;
+        if(greenForClock<0&&frontReady>=2&&board.hand.length>=4){
+          autoRuleLog("Botは前列と手札がそろっているためクロックをスキップ");
+          setTurnPhase("main");break;
+        }
         if(spare>=0)index=spare;
         else if(available===1)index=board.hand.filter(card=>card.cx).length>1?board.hand.findIndex(card=>card.cx):-1;
       }
@@ -1006,7 +1061,10 @@ function autoRuleBotStep(){
     }
     case "main":{
       if(isDeckMirror(match.bot.scenario)){
-        runRuleOperation(done=>autoRuleBotMain(p,()=>{setTurnPhase("climax");done()}));
+        runRuleOperation(done=>autoRuleBotMain(p,()=>{
+          autoRuleArrangeBotFront(p);
+          setTurnPhase("climax");done();
+        }));
         break;
       }
       for(const slot of botSlots.slice(0,3)){
@@ -1034,9 +1092,13 @@ function autoRuleBotStep(){
       break;
     }
     case "attack":{
-      const slot=botSlots.slice(0,3).find(s=>autoRuleAttackAllowed(p,s,board[s].at(-1)));
-      if(slot)autoRuleAttack(p,slot,board[slot].at(-1).uid,players[0][autoRuleOpposite(slot)].length?"front":"direct");
-      else encoreAction("enter");
+      const [plan]=botSlots.slice(0,3).map(slot=>autoRuleBotAttackPlan(p,slot)).filter(Boolean)
+        .sort((a,b)=>autoRuleBotAttackScore(b)-autoRuleBotAttackScore(a));
+      if(!plan){encoreAction("enter");break}
+      if(plan.wins)autoRuleLog("Botは"+stellaName(plan.target)+"を倒せるフロントを優先");
+      if(plan.type==="direct")autoRuleLog("Botは空いている枠からダイレクトを優先");
+      if(plan.type==="side")autoRuleLog("Botはサイドで"+stellaName(plan.attacker)+"を残す");
+      autoRuleAttack(p,plan.slot,plan.attacker.uid,plan.type);
       break;
     }
     case "encore":{

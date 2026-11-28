@@ -93,11 +93,19 @@ async function main() {
         const change = document.querySelector("#battleSide");
         change.value = String(p);
         change.dispatchEvent(new Event("change"));
+        const cards = players[p];
+        // Reserve the two exact artwork fixtures before the other draws can consume them.
+        for(const suffix of ["-T09","-022"]){
+          const pile=[cards.deck,cards.hand].find(zone=>zone.some(card=>card.id.endsWith(suffix)));
+          const index=pile.findIndex(card=>card.id.endsWith(suffix));
+          const [reserved]=pile.splice(index,1);
+          reserved.faceUp=false;
+          cards.deck.unshift(reserved);
+        }
         for(const z of destinations) {
-          const cards = players[p];
           if (z === "cx" || (z === "level" && cards.level.length === 0)) {
             const index = cards.deck.findIndex(card => card.id.endsWith(z==="level"?"-T09":"-022"));
-            if (index !== -1) cards.deck.push(...cards.deck.splice(index,1));
+            cards.deck.push(...cards.deck.splice(index,1));
           }
           takeTop(p,"deck","hand");
           move(p,"hand",cards.hand.length-1,z);
@@ -192,6 +200,23 @@ async function main() {
     const climax = lowerMat.locator('[data-z="level"] img.rotated-cx-scan').first();
     await climax.waitFor();
     await assertAngle(climax,90);
+    await page.evaluate(()=>{
+      const card=players[0].level.find(card=>card.id.endsWith("-T09"));
+      const body=showResolution("画像の向き",[card]);
+      effectCardButton(body,card,"選択肢",()=>{});
+    });
+    for(const selector of [".modalcards .carddetail img.rotated-cx-scan",".effect-card-choice img.rotated-cx-scan"]){
+      const thumbnail=page.locator("#dialog "+selector);
+      await thumbnail.waitFor();
+      const rotation=await thumbnail.evaluate(img=>{
+        const {b,d}=new DOMMatrix(getComputedStyle(img).transform);
+        return Math.atan2(b,d)*180/Math.PI;
+      });
+      assert.equal(Math.round(rotation),-90);
+      const bounds=await thumbnail.boundingBox();
+      assert.ok(bounds.width>bounds.height);
+    }
+    await page.evaluate(()=>closeResolution());
     await page.evaluate(()=>showCardDetail(players[0].level.find(card=>card.id.endsWith("-T09"))));
     const zoom = page.locator("#dialog .card-zoom-image.rotated-cx-scan img");
     await zoom.waitFor();
