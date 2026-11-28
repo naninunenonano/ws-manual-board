@@ -3672,3 +3672,26 @@ test("本番前ルビーの助太刀でリバースした相手を思い出へ�
   assert.equal(page.run("own.memory[0]?.uid"),"attacker");
   assert.equal(page.run("opponent.front2[0].turnPowerBonus"),3000);
 });
+
+test("Bot戦の実カードは能力情報があっても手札と拡大に選択した版の画像を表示する",async()=>{
+  const page=await launchStellaAbility();
+  const face=page.run(`
+    const christmasKana={id:"OSK/S133-001SSP",cx:false};
+    const handFace=document.createElement("div");
+    renderHandCardFace(handFace,christmasKana);
+    showCardDetail(christmasKana);
+    handFace;
+  `);
+  assert.equal(face.children.length,1);
+  assert.match(face.children[0].src,/wsosks133_002\.jpg$/);
+  const [holder,details]=page.get("dialogBody").children[0].children;
+  assert.equal(holder.children[0].src,face.children[0].src);
+  assert.ok(details.children.some(line=>line.className==="practice-card-effect"));
+
+  const img=face.children[0];
+  img.remove=()=>face.children.shift();
+  img.onerror();
+  assert.match(img.src,/osk_s133_001ssp\.png$/);
+  img.onerror();
+  assert.ok(face.children.some(child=>child.className==="practice-card-face"));
+});
