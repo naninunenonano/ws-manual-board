@@ -292,7 +292,7 @@ async function checkBotDeckEditor(browser,url){
   const page=await browser.newPage({...devices["iPhone 13"],deviceScaleFactor:1});
   try {
     await page.route("https://cdn.jsdelivr.net/npm/@supabase/**",route=>route.abort());
-    await page.route("https://heartofthecards.com/**",route=>route.fulfill({
+    await page.route("https://www.c-labo-online.jp/data/c-labo/product/**",route=>route.fulfill({
       contentType:"image/png",
       body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGZkAAAAASUVORK5CYII=","base64")
     }));
@@ -304,9 +304,9 @@ async function checkBotDeckEditor(browser,url){
     assert.equal(await start.isDisabled(),true);
     const kohaku=page.locator(".bot-deck-card-row").filter({hasText:"銃弾のロンド コハク"});
     const preview=kohaku.locator(".bot-deck-card-preview img");
-    assert.match(await preview.getAttribute("src"),/038\.png$/);
+    assert.match(await preview.getAttribute("src"),/wsstsw140_138\.jpg$/);
     await kohaku.getByRole("combobox",{name:"銃弾のロンド コハクのバージョン",exact:true}).selectOption("STS/W140-038SSP");
-    assert.match(await preview.getAttribute("src"),/038ssp\.png$/);
+    assert.match(await preview.getAttribute("src"),/wsstsw140_004\.jpg$/);
     await preview.waitFor();
     await page.getByRole("button",{name:"銃弾のロンド コハク（SSP）を1枚増やす",exact:true}).tap();
     assert.equal(await start.isEnabled(),true);

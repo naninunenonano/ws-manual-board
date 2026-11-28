@@ -226,8 +226,8 @@ function renderMulligan(){
       appendBotCardDetails(button,details);
     }else{
       const img=document.createElement("img");
-      const url=officialImageUrl(card.id);
-      if(url){img.src=url;img.alt=cardLabel(card);img.style.cssText="width:75px;height:105px;object-fit:contain";button.append(img);}
+      const url=cardImageUrl(card.id);
+      if(url){setCardImage(img,card.id);img.alt=cardLabel(card);img.style.cssText="width:75px;height:105px;object-fit:contain";button.append(img);}
       else button.textContent=cardLabel(card);
     }
     const label=document.createElement("span");
@@ -305,8 +305,9 @@ function showDeckContents(deck,p) {
       const row = document.createElement("div");
       row.style.cssText="width:105px;text-align:center";
       const img=document.createElement("img");
-      const url=officialImageUrl(id);
-      if(url){img.src=url;img.alt=cardCatalog[id]?.name||id;img.style.cssText="width:100%;aspect-ratio:0.71;object-fit:contain";img.onerror=()=>{img.replaceWith(document.createTextNode(id))};row.append(img)}
+      if(setCardImage(img,id,()=>img.replaceWith(document.createTextNode(id)))){
+        img.alt=cardCatalog[id]?.name||id;img.style.cssText="width:100%;aspect-ratio:0.71;object-fit:contain";row.append(img);
+      }
       else row.append(document.createTextNode(id));
       const count=document.createElement("strong");count.textContent=" ×"+num;row.append(count);
       row.classList.add("deck-preview-entry");

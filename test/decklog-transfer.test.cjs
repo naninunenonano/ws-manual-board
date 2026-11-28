@@ -1924,10 +1924,10 @@ test("魔王ちゃんの集中は4枚をめくり、CXの枚数まで控え室�
   ruleButton(page,"集中（1ストック・自身レスト）");
   const publicCards=page.get("dialogBody").children[0].children;
   assert.match(publicCards[0].textContent,/公開カード 4枚（CX 1枚）/);
-  assert.match(publicCards[1].children[2].children[0].src,/sts-w140-032\.png$/);
+  assert.match(publicCards[1].children[2].children[0].src,/wsstsw140_152\.jpg$/);
   const target=page.get("dialogBody").children.find(el=>el.textContent==="魂の取引 魔王ちゃん");
   assert.match(target.className,/effect-card-choice/);
-  assert.match(target.children[0].src,/sts-w140-008\.png$/);
+  assert.match(target.children[0].src,/wsstsw140_132\.jpg$/);
   ruleButton(page,"魂の取引 魔王ちゃん");
   ruleButton(page,"回収を確定");
   assert.equal(page.run("maouBoard.back0[0].orientation"),90);
@@ -2270,7 +2270,7 @@ test("黎明の刻 レイスは2回のカード選択でコストと山札サー
   assert.match(page.get("dialogTitle").textContent,/クロックの下/);
   ruleButton(page,"巡遊者 コゼット");
   const target=page.get("dialogBody").children.find(el=>el.textContent==="弾む小雨 シーミャオ");
-  assert.match(target.children[0].src,/sts-w140-071\.png$/);
+  assert.match(target.children[0].src,/wsstsw140_145\.jpg$/);
   assert.equal(page.get("dialogBody").children.some(el=>el.textContent==="爽風の才媛 ナツカ"),false);
   ruleButton(page,"弾む小雨 シーミャオ");
   assert.equal(page.run("ruleBusy"),false);
@@ -2623,12 +2623,12 @@ test("光り物と通常版で合計4枚を上限とし、光り物のカード�
   const row=page.get("botDeckCardRows").children.find(entry=>entry.children[0].textContent==="巡遊者 コゼット");
   const variants=row.children[0].children[1];
   const [minus,,plus]=row.children[1].children;
-  assert.match(row.children[2].children[0].src,/sts-w140-t03\.png$/);
+  assert.match(row.children[2].children[0].src,/wsstsw140t_026\.jpg$/);
   assert.equal(plus.disabled,true);
   minus.onclick();
   variants.value="STS/W140-T03SP";
   variants.onchange();
-  assert.match(row.children[2].children[0].src,/sts-w140-t03sp\.png$/);
+  assert.match(row.children[2].children[0].src,/wsstsw140t_002\.jpg$/);
   plus.onclick();
   assert.equal(plus.disabled,true);
   assert.equal(page.get("startEditedBotBattle").disabled,false);
@@ -2639,7 +2639,7 @@ test("光り物と通常版で合計4枚を上限とし、光り物のカード�
   assert.equal(reopened.run('match.decks[0].cards.find(c=>c.id==="STS/W140-T03SP").num'),1);
   assert.equal(reopened.run('match.decks[0].cards.find(c=>c.id==="STS/W140-T03").num'),3);
   assert.equal(reopened.run('botDefinition({id:"STS/W140-T03SP"}).cardNumber'),"STS/W140-T03");
-  assert.match(reopened.run('effectChoiceImageUrl("STS/W140-T03SP")'),/sts-w140-t03sp\.png$/);
+  assert.match(reopened.run('effectChoiceImageUrl("STS/W140-T03SP")'),/wsstsw140t_002\.jpg$/);
 });
 
 test("ステラソラBot戦は集中0ヒットとキャンセルされたダメージをその場で見せる",async()=>{

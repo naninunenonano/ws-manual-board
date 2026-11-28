@@ -2,7 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const C = require("../card-catalog.js");
-const {officialImageUrl,effectChoiceImageUrl,effectChoiceFallbackUrl,isFrierenTrialClimax} = require("../card-images.js");
+const {officialImageUrl,effectChoiceImageUrl,cardLaboImageUrl,isKnownClimaxImage,setCardImage} = require("../card-images.js");
 
 const card = (number="TEST/S001-001",attrs={}) => ({cardNumber:number,type:"character",
   color:"青",title:"テストタイトル",product:"試験商品",stats:{level:0,cost:0,power:1000,soul:1},effects:[],...attrs});
@@ -16,15 +16,29 @@ test("card numbers normalize and use the existing image URL convention",()=>{
   assert.equal(officialImageUrl("TEST/S001-001A*"),null);
 });
 
-test("Frieren trial print images use the larger scan and fall back to the same printing",()=>{
-  for(const [number,file] of [["T04","025"],["T04SP","001"],["T09","030"],["T09R","012"],["T11","032"],["T11SP","002"],["T13","034"],["T13R","015"]]){
-    const id="SFN/S108-"+number;
-    assert.equal(isFrierenTrialClimax(id),number.startsWith("T09"));
-    assert.equal(officialImageUrl(id),"https://www.c-labo-online.jp/data/c-labo/product/wssfns108t_"+file+".jpg");
-    assert.equal(effectChoiceImageUrl(id),officialImageUrl(id));
-    assert.equal(effectChoiceFallbackUrl(id),"https://heartofthecards.com/images/cards/ws/sfn-s108-"+number.toLowerCase()+".png");
+test("registered normal cards use matching Card Labo images and unavailable variants use the same official printing",()=>{
+  for(const {cardNumber} of require("../card-data/catalog.json").cards){
+    assert.ok(cardLaboImageUrl(cardNumber),cardNumber);
+    assert.equal(effectChoiceImageUrl(cardNumber),cardLaboImageUrl(cardNumber));
   }
-  assert.match(officialImageUrl("SFN/S128-003"),/sfn-s128-003\.png$/);
+  assert.equal(effectChoiceImageUrl("STS/W140-002"),"https://www.c-labo-online.jp/data/c-labo/product/wsstsw140_120.jpg");
+  assert.equal(effectChoiceImageUrl("STS/W140-002SP"),"https://www.c-labo-online.jp/data/c-labo/product/wsstsw140_007.jpg");
+  assert.equal(effectChoiceImageUrl("SFN/S128-003SP"),officialImageUrl("SFN/S128-003SP"));
+  assert.match(officialImageUrl("SFN/S128-003SP"),/sfn_s128_003sp\.png$/);
+  assert.equal(isKnownClimaxImage("STS/W140-031R"),true);
+  assert.equal(isKnownClimaxImage("SFN/S108-T04"),false);
+});
+
+test("image load failures first try the official printing",()=>{
+  const img={};
+  let missing=0;
+  assert.equal(setCardImage(img,"SFN/S108-T09R",()=>missing++),true);
+  assert.match(img.src,/wssfns108t_012\.jpg$/);
+  img.onerror();
+  assert.equal(img.src,officialImageUrl("SFN/S108-T09R"));
+  assert.equal(missing,0);
+  img.onerror();
+  assert.equal(missing,1);
 });
 
 test("type-dependent stats keep zero distinct from null and reject invalid numbers",()=>{
