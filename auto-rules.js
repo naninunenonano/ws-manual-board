@@ -414,7 +414,10 @@ function autoRuleHandLevel(p,card,definition){
   const level=bonus||early ? definition.stats.level+bonus+early : definition.stats.level;
   const reduction=definition.handLevelReduction;
   if(!reduction)return level;
-  if(reduction.maxWaitingCX!==undefined&&board.waiting.filter(card=>card.cx===true).length>reduction.maxWaitingCX)return level;
+  if(reduction.maxWaitingCX!==undefined){
+    const count=board.waiting.filter(card=>card.cx===true).length;
+    if(count>reduction.maxWaitingCX&&count<(reduction.orMinWaitingCX??Infinity))return level;
+  }
   if(reduction.stageTrait&&botSlots.flatMap(slot=>board[slot]).filter(card=>
     card.faceUp&&matchesPracticeTrait(card,reduction.stageTrait)).length<reduction.count)return level;
   return Math.max(0,level-reduction.amount);
@@ -606,7 +609,10 @@ function autoRuleAskAttack(p,zone,index){
 }
 
 function autoRuleStageChange(card,from,to,owner){
-  if(isStageZone(from)&&!isStageZone(to))delete card.gainedAbilities;
+  if(isStageZone(from)&&!isStageZone(to)){
+    delete card.gainedAbilities;
+    delete card.oshiLockedUntil;
+  }
   if(!isAutoRules()||isStageZone(from)===isStageZone(to))return;
   delete card.botEntryBattleBuff;
   delete card.botBackupReverse;
@@ -788,6 +794,7 @@ function autoRuleResolveReversals(reversals,done){
     return [
       ...effects.filter(Boolean).map(effect=>({owner,target,slot,...effect})),
       ...granted.map(()=>({owner:1-owner,target:source,slot:sourceSlot,clockSwap:true})),
+      ...oshiReverseActions(owner,source,target).map(action=>({owner,...action})),
       ...(methode?[{owner,methode:true}]:[]),
       ...(oshiIs(source,"S121-030")&&oshiOther(owner,source).length>=2?[{owner,source,oshiReturn:true}]:[]),
       ...(mage?[{owner:1-owner,target:source,slot:sourceSlot,zone:"deck",position:"bottom",optional:true,anyOrientation:true}]:[]),
@@ -800,6 +807,7 @@ function autoRuleResolveReversals(reversals,done){
   function resolve(effect,next){
     const {owner,target,slot,zone,stock=0}=effect;
     const rival=players[1-owner];
+    if(effect.run){effect.run(next);return}
     if(effect.oshiReturn){oshiAquaRubyReturn(owner,effect.source,next);return}
     if(effect.methode){frierenMethodeReverse(owner,next);return}
     if(effect.frierenRetreat){frierenRetreat(owner,effect.source,next);return}
@@ -836,8 +844,8 @@ function autoRuleResolveReversals(reversals,done){
   }
   const turn=match.turn.player;
   const actions=p=>pending.filter(effect=>effect.owner===p).map(effect=>({
-    label:effect.oshiReturn?stellaName(effect.source)+"・手札に戻す":effect.methode?"猛攻 メトーデ・相手の山札下5枚":effect.frierenRetreat?"仲間を後列へ移動":effect.retreat?stellaName(effect.source)+"・後列へ移動":
-      stellaName(effect.target)+"を"+(effect.position==="bottom"?"山札の下":labels[effect.clockSwap?"clock":effect.zone])+"へ",
+    label:effect.label??(effect.oshiReturn?stellaName(effect.source)+"・手札に戻す":effect.methode?"猛攻 メトーデ・相手の山札下5枚":effect.frierenRetreat?"仲間を後列へ移動":effect.retreat?stellaName(effect.source)+"・後列へ移動":
+      stellaName(effect.target)+"を"+(effect.position==="bottom"?"山札の下":labels[effect.clockSwap?"clock":effect.zone])+"へ"),
     run:next=>resolve(effect,next)
   }));
   botResolveTriggered(turn,actions(turn),()=>botResolveTriggered(1-turn,actions(1-turn),done));
@@ -871,11 +879,16 @@ function autoRuleAttack(p,zone,uid,type){
       });
     }
     function counter(){if(type==="front")autoRuleCounter(1-p,current(),defender(),damage);else damage()}
+    let completedChecks=0;
     function trigger(remaining){
-      if(!remaining){counter();return}
+      if(!remaining){
+        if(completedChecks===2&&oshiIs(attacker,"S107-035")&&board.stock.length)botMove(board,"stock",board.stock.length-1,"waiting");
+        counter();return
+      }
       let revealed;
       botRevealTop(p,card=>{revealed=card},found=>{
         if(!found){counter();return}
+        completedChecks++;
         const icons=botTriggerIcons(p,revealed);
         const souls=icons.filter(icon=>icon==="ソウル").length;
         function resolve(){
@@ -914,7 +927,10 @@ function autoRuleAttack(p,zone,uid,type){
       else afterLook();
     }
     botResolveTriggered(p,attackActions,()=>{
-      if(type==="front"&&defender())stellaLaarRetreat(1-p,defender(),afterAttackAbilities);
+      if(type==="front"&&defender())oshiAquaCover(1-p,defender(),()=>{
+        if(defender())stellaLaarRetreat(1-p,defender(),afterAttackAbilities);
+        else afterAttackAbilities();
+      });
       else afterAttackAbilities();
     });
   });
@@ -1154,8 +1170,8 @@ function autoRuleBotMain(p,done){
     if(players.some(b=>b.level.length>=4)||readyFront()>=attackLimit){done();return}
     const target=botSlots.slice(0,3).find(slot=>!autoRuleReadyAttacker(board[slot].at(-1)));
     if(!target){done();return}
-    const rear=["back0","back1"].find(slot=>autoRuleReadyAttacker(board[slot].at(-1)));
-    if(rear){
+    const rear=["back0","back1"].find(slot=>autoRuleReadyAttacker(board[slot].at(-1))&&oshiCanMove(board[slot].at(-1)));
+    if(rear&&oshiCanMove(board[target].at(-1))){
       [board[target],board[rear]]=[board[rear],board[target]];
       recordBotBattleAction(labels[rear]+" → "+labels[target]+"（攻撃に回す）",p,[board[target].at(-1)]);
       ensureAttacker();return;
@@ -1172,6 +1188,7 @@ function autoRuleBotMain(p,done){
     const hasRear=["back0","back1"].some(slot=>board[slot].length);
     const index=board.hand.findIndex(card=>{
       if(!autoRuleEventEffect(botDefinition(card))||autoRuleLegalPlay(p,card,"main","event"))return false;
+      if(oshiAuditionCard(card))return stellaStage(p).every(oshiAlly)&&board.hand.length<6;
       if(frierenIs(card,"S136-048"))return true;
       if(frierenIs(card,"S128-021"))return board.waiting.some(entry=>frierenIs(entry,"S128-017"))||!board.hand.some(entry=>entry.cx);
       return stellaIs(card,"030")?(hasRear||frontCount>1):players[1-p].stock.length>=2;
@@ -1257,8 +1274,13 @@ function autoRuleBotStep(){
       const attackers=botSlots.slice(0,3).map(slot=>board[slot].at(-1)).filter(autoRuleReadyAttacker);
       const combos=attackers.map(source=>({cx:autoRuleBotComboCx(source),level:botDefinition(source).stats.level}));
       const choices=board.hand.map((card,index)=>({card,index})).filter(({card})=>!autoRuleLegalPlay(p,card,"climax","climax"));
-      const score=card=>combos.reduce((sum,{cx,level})=>
-        sum+(sameBotCardNumber(cx,card.id)?(level===1?4:1):0),0);
+      const score=card=>{
+        const combo=combos.reduce((sum,{cx,level})=>sum+(sameBotCardNumber(cx,card.id)?(level===1?4:1):0),0);
+        const standby=botTriggerIcons(p,card).includes("スタンバイ")&&
+          botSlots.some(slot=>!board[slot].length)&&board.waiting.some(entry=>
+            botDefinition(entry)?.type==="character"&&oshiLevel(entry)<=board.level.length+1);
+        return combo+Number(standby);
+      };
       choices.sort((a,b)=>score(b.card)-score(a.card));
       const plan=autoRuleBotEarlyPlan(p);
       const choice=choices.find(({card})=>score(card)>0||isStellaDeck(match.bot.scenario)&&attackers.length&&
@@ -1315,7 +1337,7 @@ function activateBrainstorm(p,source,brainstorm){
   selected=null;
   runRuleOperation(done=>resolveBrainstorm(p,source,brainstorm,done));
 }
-function resolveBrainstorm(p,source,{stock,reveal,salvage,traits},done){
+function resolveBrainstorm(p,source,{stock,reveal,salvage,traits,lookEach},done){
   const board=players[p];
   autoRulePay(p,stock);
   source.orientation=90;
@@ -1332,6 +1354,10 @@ function resolveBrainstorm(p,source,{stock,reveal,salvage,traits},done){
       finishDraw(found?n-1:0);
     });
   }
+  function look(remaining){
+    if(!remaining||players.some(player=>player.level.length>=4)){done();return}
+    autoRuleLookTop(p,lookEach,"集中","カード",()=>true,()=>look(remaining-1));
+  }
   function confirm(){
     const max=revealed.filter(card=>card.cx===true).length;
     for(const card of revealed){card.faceUp=true;board.waiting.push(card)}
@@ -1341,6 +1367,7 @@ function resolveBrainstorm(p,source,{stock,reveal,salvage,traits},done){
       const title=(p===0?"自分":"Bot")+"の集中・CX "+max+"枚";
       const afterReveal=next=>isDeckMirror(match.bot.scenario)?showBotRevealResult(title,revealed,next):next();
       if(!max){afterReveal(done);return}
+      if(lookEach){afterReveal(()=>look(max));return}
       if(p===1){afterReveal(()=>salvage?resolveBrainstormSalvage(p,max,revealed,done,traits):finishDraw(max));return}
       if(salvage){resolveBrainstormSalvage(p,max,revealed,done,traits);return}
       const body=showResolution("集中・引く枚数を選ぶ（最大"+max+"枚）",revealed,effectChoiceImageUrl);

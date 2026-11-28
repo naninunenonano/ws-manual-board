@@ -79,6 +79,7 @@ function appendBotCardDetails(parent,detail){
   parent.append(box);
 }
 function botMove(board,from,index,to,position="top"){
+  if(from!==to&&isStageZone(from)&&isStageZone(to)&&!oshiCanMove(board[from][index]))return null;
   const card=board[from].splice(index,1)[0];
   if(!card)return null;
   card.faceUp=!["deck","stock"].includes(to);
@@ -387,6 +388,7 @@ function botTriggeredActions(p,card,timing,context={}){
     if(Object.hasOwn(stellaActions,effect.id))stellaActions[effect.id](p,card,resume,context);
     else if(Object.hasOwn(frierenActions,effect.id))frierenActions[effect.id](p,card,resume);
     else if(Object.hasOwn(oshiActions,effect.id))oshiActions[effect.id](p,card,resume);
+    else if(Object.hasOwn(oshiAdditionalActions,effect.id))oshiAdditionalActions[effect.id](p,card,resume,context);
     else if(effect.reorderTop)autoRuleReorderTop(p,resume);
     else if(effect.clockSearchCost)autoRuleClockSearch(p,card,effect,resume);
     else if(effect.traitLoot)autoRuleTraitLoot(p,card,effect,resume);

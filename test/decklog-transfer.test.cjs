@@ -3491,3 +3491,127 @@ test("個人間オーディションは山札上の1枚を手札に加え、青�
   assert.equal(page.run('opponent.waiting.map(card=>card.uid).sort().join()'),"blue,second,stock,third");
   assert.equal(page.run("opponent.deck[0].uid"),"unseen");
 });
+
+test("9KFNGの21種すべてで推しの子同士のBot戦を開始できる",async()=>{
+  const page=launch("",new Map(),null,100,null,true);
+  await page.settle();
+  page.click("openBotDeckEditor");
+  await page.settle();
+  for(const tab of ["editOwnBotDeck","editOpponentBotDeck"]){
+    page.click(tab);
+    page.get("botDeckPreset").value="sakurarium";
+    page.click("applyBotDeckPreset");
+  }
+  assert.equal(page.get("startEditedBotBattle").disabled,false);
+  page.click("startEditedBotBattle");
+  for(const p of [0,1]){
+    assert.equal(page.run(`match.decks[${p}].cards.length`),21);
+    assert.equal(page.run(`match.decks[${p}].cards.reduce((n,c)=>n+c.num,0)`),50);
+    assert.equal(page.run(`match.decks[${p}].cards.filter(c=>c.cx).reduce((n,c)=>n+c.num,0)`),8);
+  }
+  assert.equal(page.run('match.phase'),"mulligan");
+});
+
+test("聖夜のアイはリバース時にレベル0の相手もリバースできる",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const osk=(n,uid)=>({id:"OSK/S"+n,uid,faceUp:true,orientation:0,cx:false});
+    match.turn.player=0;
+    own.front0.push(osk("133-061","attacker"));
+    opponent.front2.push(osk("121-027","ai"));
+    autoRuleResolveReversals(botBattle(0,"front0","attacker","ai","front2"),()=>{});
+  `);
+  assert.equal(page.run("own.front0[0].orientation"),180);
+  assert.equal(page.run("opponent.front2[0].orientation"),180);
+});
+
+test("暗闇のアクアは自分を思い出に置き、別の芸能界キャラを手札へ戻す",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const osk=(n,uid)=>({id:"OSK/S"+n,uid,faceUp:true,orientation:0,cx:false});
+    opponent.back0.push(osk("107-035","aqua"));
+    opponent.front2.push(osk("133-061","target"));
+    opponent.stock.push(osk("133-003","payment"));
+    oshiAquaCover(1,opponent.front2[0],()=>{});
+  `);
+  assert.equal(page.run("opponent.memory[0].uid"),"aqua");
+  assert.equal(page.run("opponent.hand[0].uid"),"target");
+  assert.equal(page.run("opponent.stock.length"),0);
+});
+
+test("集中でCXをめくった分だけ上3枚から獲得し、残りを控え室へ置く",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const osk=(n,uid,cx=false)=>({id:"OSK/S"+n,uid,faceUp:true,orientation:0,cx});
+    opponent.back0.push(osk("133-P01","source"));
+    opponent.stock.push(osk("133-003","stock"));
+    for(let i=0;i<9;i++)opponent.deck.push(osk(i===7?"133-059":"133-003","deck-"+i,i===7));
+    const source=opponent.back0[0];
+    resolveBrainstorm(1,source,botDefinition(source).effects[0].brainstorm,()=>{});
+  `);
+  assert.equal(page.run("opponent.hand[0].uid"),"deck-4");
+  assert.equal(page.run("opponent.waiting.length"),7);
+  assert.equal(page.run("opponent.deck.length"),2);
+});
+
+test("クリスマスかなで移動を止められても舞台から控え室へは置ける",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const osk=(n,uid)=>({id:"OSK/S"+n,uid,faceUp:true,orientation:0,cx:false});
+    opponent.front0.push(osk("133-001","kana"));
+    own.front2.push(osk("133-061","akane"));
+    botDispatch(opponent.front0[0],"from_hand_to_stage",()=>{},1);
+  `);
+  assert.equal(page.run("botStats(1,opponent.front0[0]).power"),3500);
+  assert.equal(page.run('botMove(own,"front2",0,"front1")'),null);
+  assert.equal(page.run('botMove(own,"front2",0,"waiting").uid'),"akane");
+  assert.equal(page.run("own.waiting[0].oshiLockedUntil"),undefined);
+});
+
+test("暗闇のアクアは2回トリガーした後、上のストックだけを控え室へ置く",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const osk=(n,uid)=>({id:"OSK/S"+n,uid,faceUp:true,orientation:0,cx:false});
+    match.turn.player=1;
+    match.turn.phase="attack";
+    match.turn.number=3;
+    opponent.front0.push(osk("107-035","aqua"));
+    opponent.stock.push(osk("133-003","old"));
+    opponent.deck.push(osk("133-003","left"),osk("133-003","second"),osk("133-003","first"));
+    for(let i=0;i<5;i++)own.deck.push(osk("133-003","damage-"+i));
+    autoRuleAttack(1,"front0","aqua","direct");
+  `);
+  assert.equal(page.run('opponent.stock.map(card=>card.uid).join()'),"old,first");
+  assert.equal(page.run("opponent.waiting.at(-1).uid"),"second");
+  assert.equal(page.run("own.clock.length"),2);
+});
+
+test("バレンタインかなの早出しは控え室CXが2枚以下か6枚以上で有効になる",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const kana={id:"OSK/S133-063",uid:"kana",faceUp:true,orientation:0,cx:false};
+    const cx={id:"OSK/S133-059",faceUp:true,orientation:0,cx:true};
+    const kanaLevel=n=>{
+      opponent.waiting=Array.from({length:n},(_,i)=>({...cx,uid:"cx-"+i}));
+      return autoRuleHandLevel(1,kana,botDefinition(kana));
+    };
+  `);
+  assert.equal(page.run("[0,2,3,5,6,8].map(kanaLevel).join()"),"2,2,3,3,2,2");
+});
+
+test("共鳴の手札コストは、公開できる個人間オーディションを残す",async()=>{
+  const page=await launchStellaAbility();
+  page.run(`
+    const event={id:"OSK/S133-095",uid:"event",faceUp:true,orientation:0,cx:false};
+    const ruby={id:"OSK/S133-082",uid:"ruby",faceUp:true,orientation:0,cx:false};
+    opponent.hand.push(event);
+    let paid;
+    oshiHandCost(1,0,()=>true,result=>{paid=result},{resonance:true});
+    const declined=paid===false&&opponent.hand[0]===event;
+    opponent.hand.push(ruby);
+    oshiHandCost(1,0,()=>true,result=>{paid=result},{resonance:true});
+  `);
+  assert.equal(page.run("declined&&paid===true"),true);
+  assert.equal(page.run("opponent.waiting.at(-1).uid"),"ruby");
+  assert.equal(page.run("opponent.hand[0].uid"),"event");
+});
