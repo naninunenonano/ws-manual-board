@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.86</title>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WS Manual Board v0.88</title>
 <link rel="stylesheet" href="board-layout.css?v=0.59">
 <style>
 :root{font-family:system-ui,-apple-system,sans-serif;color:#edf1f8;background:#101827}*{box-sizing:border-box}body{margin:0}header{padding:12px 14px;background:#1a2840;display:flex;justify-content:space-between;align-items:center;gap:8px}h1{font-size:17px;margin:0}button,select{background:#263e61;color:white;border:1px solid #6581a5;border-radius:8px;padding:9px;font:inherit}button:disabled{opacity:.4}.shell{max-width:680px;margin:auto;padding:10px}.player{border:1px solid #49617e;border-radius:14px;margin:8px 0;padding:9px;background:#18243a}.player.active{border-color:#83b8ff}.player h2{font-size:14px;margin:0 0 8px;display:flex;justify-content:space-between}.modalcards .modal-card{display:flex;flex-direction:column;align-items:center;gap:4px;width:90px;min-height:128px;padding:5px;font-size:10px;overflow-wrap:anywhere}.modal-card img{height:100px;max-width:74px;object-fit:contain}.modal-card .card-back{height:100px;width:70px;background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px)}.zone.selected{outline:3px solid #f4cf73}.zone.empty{visibility:hidden}.stage{background:#30435e}.hand{display:flex;overflow-x:auto;gap:5px;padding:8px 0;min-height:80px}.card{flex:0 0 46px;height:66px;border:1px solid #9db3cc;border-radius:5px;background:#e4eaf1;color:#19273d;font-size:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:grab;user-select:none}.card.back{background:repeating-linear-gradient(45deg,#385b8e,#385b8e 6px,#223d65 6px,#223d65 12px);color:#fff}.card.selected{outline:3px solid #f4cf73}.card img{width:100%;height:100%;object-fit:contain;border-radius:4px;-webkit-touch-callout:none;-webkit-user-select:none}.card .cardlabel{font-size:9px;overflow-wrap:anywhere;padding:2px}.carddetail{display:grid;grid-template-columns:1fr;gap:7px;font-size:13px}.carddetail img{display:block;width:100%;max-width:100%;max-height:none;object-fit:contain;height:auto;-webkit-touch-callout:none;-webkit-user-select:none}.carddetail{max-width:100%}.carddetail .zoom-actions{display:flex;gap:8px;flex-wrap:wrap}.modalcards .modal-card img{object-fit:contain}#dialog{max-height:94dvh;overflow:auto}#dialog.zoom-mode{width:min(96vw,720px)}#dialog.zoom-mode .carddetail img{max-height:none}#dialog.zoom-mode{padding:8px}#dialog.zoom-mode #dialogTitle{font-size:14px;margin:2px 0 8px}.zone-zoom{border:0;background:#35557b;padding:2px 4px;font-size:10px;line-height:1.2;border-radius:4px;margin-top:2px}.card-zoom{position:absolute;right:0;bottom:0;background:#183453e8;border:0;border-radius:4px;padding:1px 3px;font-size:12px;line-height:1.4;color:white}.card{position:relative}.carddetail strong{color:#e7f0ff}.controls{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.controls button{font-size:12px}.notice{font-size:12px;color:#d3dfed;min-height:35px}.toolbar{display:flex;gap:5px;align-items:center;flex-wrap:wrap}.toolbar label{font-size:12px}dialog{background:#1a2840;color:white;border:1px solid #7191ba;border-radius:12px;max-width:95vw;width:420px}dialog::backdrop{background:#0009}.modalcards{display:flex;flex-wrap:wrap;gap:5px;max-height:50vh;overflow:auto}.muted{opacity:.7;font-size:11px}.count{font-size:11px;color:#bbd2f4}
@@ -25,7 +25,7 @@
 #botRecovery .modalcards li { flex:0 0 72px; justify-items:center; text-align:center; }
 #battleLogText { width:100%; min-height:min(52dvh,420px); resize:vertical; font:inherit; }
 </style><style>.bot-power{position:absolute;z-index:4;top:2px;left:2px;padding:2px 4px;border-radius:4px;background:#091426;color:white;font-size:.68rem;pointer-events:none}</style>
-</head><body><header><h1>WS 手動盤面 <small>Ver.0.86</small></h1></header>
+</head><body><header><h1>WS 手動盤面 <small>Ver.0.88</small></h1></header>
 <main class="shell"><p id="storageWarning" role="status" hidden></p><section id="setupScreen">
 <div class="screen-actions"><button id="openBotDeckEditor" type="button">デッキ作成・Bot戦</button></div>
 <details id="botSetup"><summary>Bot戦・確認パターン</summary>
@@ -136,7 +136,7 @@
 const cardCatalog = Object.freeze({
   "SFN/S128-003": {name:"旅立ちのきっかけ ヒンメル",level:3,cost:2,power:9500,type:"キャラ",rarity:"RR"}
 });
-function addCardImage(parent,card,alt,imageUrl=cardImageUrl){
+function addCardImage(parent,card,alt,imageUrl=cardImageUrl,onMissing){
   if(match?.bot&&card.id.startsWith("BOT/"))return false;
   const img=document.createElement("img");img.alt=alt||card.id;img.loading="lazy";img.draggable=false;
   img.onload=()=>{
@@ -148,7 +148,8 @@ function addCardImage(parent,card,alt,imageUrl=cardImageUrl){
   };
   if(!setCardImage(img,card.id,()=>{
     img.remove();
-    if(!parent.textContent.trim())parent.textContent=cardLabel(card);
+    if(onMissing)onMissing();
+    else if(!parent.textContent.trim())parent.textContent=cardLabel(card);
   },imageUrl))return false;
   parent.append(img);return true;
 }
@@ -160,18 +161,24 @@ function showCardDetail(card){
   document.getElementById("dialogTitle").textContent=details?.name??"カード情報";
   body.replaceChildren();
   d.classList.add("zoom-mode");
-  if(details){
+  if(card.id.startsWith("BOT/")&&details){
     appendPracticeCardFace(body,card);
     appendBotCardDetails(body,details);
     d.showModal();
     return;
   }
-  const m=cardInfo(card),wrap=document.createElement("div");wrap.className="carddetail";
+  const wrap=document.createElement("div");wrap.className="carddetail";
   const holder=document.createElement("div");holder.className="card-zoom-image";holder.style.textAlign="center";
-  if(!addCardImage(holder,card,m?.name||card.id))holder.textContent=card.id;
+  const fallback=()=>{
+    if(!appendPracticeCardFace(holder,card))holder.textContent=card.id;
+  };
+  if(!addCardImage(holder,card,cardInfo(card)?.name||card.id,cardImageUrl,fallback))fallback();
   wrap.append(holder);
-  const note=document.createElement("div");note.className="muted";note.textContent=card.id+" ・画像を見て能力を確認してください";
-  wrap.append(note);
+  if(details)appendBotCardDetails(wrap,details);
+  else{
+    const note=document.createElement("div");note.className="muted";note.textContent=card.id+" ・画像を見て能力を確認してください";
+    wrap.append(note);
+  }
   body.append(wrap);d.showModal();
 }
 const zones=["deck","hand","waiting","stock","clock","level","memory","cx","front0","front1","front2","back0","back1"];
@@ -523,11 +530,27 @@ function makeZoneCardButton(card,p,z,index,onChoose){
   const zoom=document.createElement("span");zoom.textContent="拡大";zoom.style.cssText="text-decoration:underline;font-size:11px";zoom.onclick=e=>{e.stopPropagation();document.getElementById("dialog").close();showCardDetail(card)};b.append(zoom);
   return b;
 }
+function renderHandCardFace(el,card){
+  const fallback=()=>{
+    const details=botCardDetails(card);
+    if(!details){
+      el.prepend(document.createTextNode(cardLabel(card)));
+      return;
+    }
+    el.classList.add("practice-hand-card");
+    appendPracticeCardFace(el,card);
+    const name=document.createElement("span");
+    name.className="practice-hand-name";
+    name.textContent=details.shortName;
+    el.append(name);
+  };
+  if(!addCardImage(el,card,cardInfo(card)?.name||card.id,cardImageUrl,fallback))fallback();
+}
 function render(){const root=document.getElementById("boards"),actions=document.getElementById("playerActions");root.replaceChildren();for(const p of (match?.online?[1-side,side]:[1,0])){const pl=players[p],section=document.createElement("section");section.className="player"+(p===side?" active":"");section.dataset.player=String(match?.online?Number(p!==side):p);section.innerHTML='<h2>プレイヤー'+(p+1)+' <span>山札 '+pl.deck.length+' / ストック '+pl.stock.length+' / クロック '+pl.clock.length+'</span></h2>';const board=document.createElement("div");
 board.className="board";
 board.dataset.player=section.dataset.player;
 for(const z of zones)if(z!=="hand")board.append(renderZone(p,z,pl[z]));
-section.append(board);const hand=document.createElement("div");hand.className="hand";const caption=document.createElement("div");caption.className="muted";caption.textContent="手札 "+pl.hand.length+"枚";section.append(caption);for(let i=0;i<pl.hand.length;i++){const c=pl.hand[i],el=document.createElement("div");el.className="card"+(p!==side?" back":"");if(p===side){const m=cardInfo(c);const details=botCardDetails(c);if(details){el.classList.add("practice-hand-card");appendPracticeCardFace(el,c);const name=document.createElement("span");name.className="practice-hand-name";name.textContent=details.shortName;el.append(name)}else if(!addCardImage(el,c,m?.name||c.id)){el.textContent=cardLabel(c)}el.title=cardLabel(c);if(selected?.p===p&&selected.z==="hand"&&selected.index===i)el.classList.add("selected")}else{el.textContent="WS"};el.draggable=p===side&&!match?.bot;
+section.append(board);const hand=document.createElement("div");hand.className="hand";const caption=document.createElement("div");caption.className="muted";caption.textContent="手札 "+pl.hand.length+"枚";section.append(caption);for(let i=0;i<pl.hand.length;i++){const c=pl.hand[i],el=document.createElement("div");el.className="card"+(p!==side?" back":"");if(p===side){renderHandCardFace(el,c);el.title=cardLabel(c);if(selected?.p===p&&selected.z==="hand"&&selected.index===i)el.classList.add("selected")}else{el.textContent="WS"};el.draggable=p===side&&!match?.bot;
 if(match?.bot)el.onclick=()=>cardClick(p,"hand",i);
 else{
   el.ondragstart=()=>{selected={p,z:"hand",index:i}};
