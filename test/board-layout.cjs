@@ -93,11 +93,19 @@ async function main() {
         const change = document.querySelector("#battleSide");
         change.value = String(p);
         change.dispatchEvent(new Event("change"));
+        const cards = players[p];
+        // Reserve the two exact artwork fixtures before the other draws can consume them.
+        for(const suffix of ["-T09","-022"]){
+          const pile=[cards.deck,cards.hand].find(zone=>zone.some(card=>card.id.endsWith(suffix)));
+          const index=pile.findIndex(card=>card.id.endsWith(suffix));
+          const [reserved]=pile.splice(index,1);
+          reserved.faceUp=false;
+          cards.deck.unshift(reserved);
+        }
         for(const z of destinations) {
-          const cards = players[p];
           if (z === "cx" || (z === "level" && cards.level.length === 0)) {
             const index = cards.deck.findIndex(card => card.id.endsWith(z==="level"?"-T09":"-022"));
-            if (index !== -1) cards.deck.push(...cards.deck.splice(index,1));
+            cards.deck.push(...cards.deck.splice(index,1));
           }
           takeTop(p,"deck","hand");
           move(p,"hand",cards.hand.length-1,z);
